@@ -1,0 +1,5 @@
+Test loss functions
+
+Add multiple elimination functionality
+
+Compute approximate message gradients in advance
