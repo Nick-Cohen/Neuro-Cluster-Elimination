@@ -41,11 +41,14 @@ class DataLoader:
         # In case I want to presave datasets to save time in testing
         pass
     
-    def load(self, num_samples, grad_informed = True, mg_hat_factors=None):
+    def load(self, num_samples = 0, grad_informed = True, mg_hat_factors=None, all=False):
         # generate the samples with the sample generator
         if self.sample_generator is None:
             raise ValueError("No sample generator provided")
-        assignments = self.sample_generator.sample_assignments(num_samples) # config in sg gives sample scheme
+        if all:
+            assignments = self.sample_generator.sample_assignments(sampling_scheme='all')
+        else:
+            assignments = self.sample_generator.sample_assignments(num_samples) # config in sg gives sample scheme
         mess_values = self.sample_generator.compute_message_values(assignments)
         if grad_informed:
             mg_values = self.sample_generator.compute_gradient_values(assignments, mg_hat_factors)
@@ -66,6 +69,15 @@ class DataLoader:
             }
             batches.append(batch)
         return batches
+    
+    # generate complete validation set with all assignments for testing
+    def load_all(self, num_samples = 0, grad_informed = True, mg_hat_factors=None, all=False):
+        data = self.load(num_samples, grad_informed, mg_hat_factors, all)
+        return [{
+            'x': data[0],
+            'y': data[1],
+            'mgh': data[2]
+        }]
     
 def create_data_loaders(signatures, values, mg_hat=None, batch_size=32, split_point=0.8):
     

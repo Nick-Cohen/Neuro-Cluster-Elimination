@@ -348,7 +348,7 @@ class FastGM:
     def get_large_message_buckets(self, iB, debug = False):
         self.calculate_message_scopes()
         for key in self.message_scopes:
-            if len(self.message_scopes[key]) > 19:
+            if len(self.message_scopes[key]) > iB:
                 if debug:
                     print('------------------------------------')
                     print('Key is ', key)
@@ -424,6 +424,9 @@ class FastGM:
         bucket = self.get_bucket(bucket_var)
         message = bucket.compute_message()
         bucket_scope = bucket.get_message_scope()
+        # if no downstream function
+        if gradient_factors == []:
+            return FastFactor(torch.tensor([0.0], device=self.device), []), message
         downstream_elim_order = wtminfill_order(gradient_factors, variables_not_eliminated=bucket_scope)
         # print("deo is ", downstream_elim_order)
         # device_copy=str(self.device)

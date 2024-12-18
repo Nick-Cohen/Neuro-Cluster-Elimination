@@ -97,6 +97,11 @@ class FastFactor:
         Orders the labels from least to greatest and permutes the tensor accordingly.
         Assumes labels are integers.
         """
+        
+        # for identity factor
+        if self.labels == []:
+            return
+        
         # Convert labels to integers and get the sorting order
         int_labels = [int(label) for label in self.labels]
         sorted_indices = torch.argsort(torch.tensor(int_labels))
@@ -177,6 +182,9 @@ class FastFactor:
         
         # Generate all possible assignments efficiently
         assignments = torch.cartesian_prod(*[torch.arange(size, device=device) for size in domain_sizes])
+        
+        if len(assignments.shape) == 1:
+            assignments = assignments.view(-1,1)
         
         # Create the input tensor efficiently
         all_inputs = torch.zeros((assignments.shape[0], total_inputs), device=device)

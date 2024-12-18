@@ -7,13 +7,14 @@ from inference.factor import FastFactor
 import copy
 
 class SampleGenerator:
-    def __init__(self, gm: FastGM, bucket: FastBucket, mess = None, mg = None):
+    def __init__(self, gm: FastGM, bucket: FastBucket, mess = None, mg = None, random_seed =None):
         self.config = gm.config
         self.gm = gm
         self.iB = gm.iB
         self.bucket = bucket
         self.mess = mess
         self.mg = mg
+        self.random_seed = random_seed
         self.factors = bucket.factors
         self.num_samples = self.config['num_samples']
         self.sampling_scheme = self.config['sampling_scheme']
@@ -31,11 +32,17 @@ class SampleGenerator:
         self.elim_vars = sorted(self.bucket.elim_vars, key=lambda v: v.label)
         self.elim_domain_sizes = [v.states for v in self.elim_vars]
         
-    def sample_assignments(self, num_samples: int, random_seed = None, sampling_scheme = None) -> torch.Tensor:
+    def sample_assignments(self, num_samples: int = -1, sampling_scheme = None) -> torch.Tensor:
+        self.random_seed += 1
+        seed = self.random_seed
+        if seed is not None:
+            torch.manual_seed(seed)
+            if self.gm.device == 'cuda':
+                torch.cuda.manual_seed(seed)
         if sampling_scheme is None:
             sampling_scheme = self.sampling_scheme
-        if random_seed is not None:
-            torch.manual_seed(random_seed)
+        if self.random_seed is not None:
+            torch.manual_seed(self.random_seed)
         if sampling_scheme == 'uniform':
             return self.sample_uniform(num_samples)
         elif sampling_scheme == 'mg':
@@ -47,12 +54,14 @@ class SampleGenerator:
         elif type(sampling_scheme) == tuple:
             samples = []
             for (scheme, ratio) in sampling_scheme:
-                samples.append(self.sample_assignments(int(num_samples * ratio), random_seed, scheme))
+                samples.append(self.sample_assignments(int(num_samples * ratio), self.random_seed, scheme))
             return torch.cat(samples, dim=0)
     
     def sample_all(self) -> torch.Tensor:
         # Generate all possible assignments
         assignments = torch.cartesian_prod(*[torch.arange(size) for size in self.domain_sizes])
+        if len(assignments.shape) == 1:
+            assignments = assignments.view(-1,1)
         return assignments
     
     @staticmethod
@@ -68,8 +77,9 @@ class SampleGenerator:
         # normalize the message gradient to be a probability distribution
         # first ensure mg has every variable in it
         mess_copy = copy.deepcopy(mess)
-        mess_copy.tensor = torch.ones_like(mess_copy.tensor)
+        mess_copy.tensor = torch.zeros_like(mess_copy.tensor)
         mg_expanded = mess_copy * mg
+        mg_expanded.order_indices()
         # convert tensor to base e
         ln10 = torch.tensor(math.log(10), device=self.gm.device)
         mg_expanded.tensor *= ln10
@@ -158,10 +168,17 @@ class SampleGenerator:
             # stretch out elimination indices to 1d
             # grab slices corresponding to slices
             view = tuple(int(dim) for dim in tensor.shape[:len(tensor.shape) - len(elim_vars)]) + (int(torch.prod(torch.tensor(tensor.shape[len(tensor.shape) - len(elim_vars):]))),)
-            if not projected_assignments.numel() == 0:
-                slices = tensor.view(view)[tuple(projected_assignments.t())]
-            else:
-                slices = tensor.unsqueeze(0).expand(len(assignments), len(tensor))
+            try:
+                if not projected_assignments.numel() == 0:
+                    slices = tensor.view(view)[tuple(projected_assignments.t())]
+                else:
+                    slices = tensor.unsqueeze(0).expand(len(assignments), len(tensor))
+            except:
+                print(tensor.shape)
+                print(view)
+                print(projected_assignments.shape)
+                print(projected_assignments.t().shape)
+                exit(1)
             
             # reshape slices to match elimination variables in order, e.g. (1,2,2,1) if 2nd and 3rd variables are in tensor
             unexpanded_slice_shape = (len(assignments),) + tuple([v.states if v.label in tensor_labels else 1 for v in elim_vars])
@@ -171,6 +188,9 @@ class SampleGenerator:
         return torch.logsumexp(unsummed_values * math.log(10), dim=tuple(range(1, unsummed_values.dim()))) / math.log(10)
 
     def sample_tensor_product(self, factors, assignments) -> torch.Tensor:
+        
+        if len(factors) == 1 and factors[0].labels == [] or len(factors) == 0:
+            return torch.zeros(len(assignments), device=self.gm.device)
         for factor in factors:
             factor.order_indices()
         scope = self.message_scope
