@@ -13,13 +13,24 @@ import matplotlib.pyplot as plt
 from adabelief_pytorch import AdaBelief
 
 class Net(nn.Module):
-    def __init__(self,
-                 input_size: int,
-                 hidden_sizes: List[int],
-                 use_gradient_values: bool,
-                 device: torch.device = torch.device('cuda')
-                 ):
+    def __init__(self, nn_config):
+        
+        input_size = nn_config['input_size']
+        hidden_sizes = nn_config['hidden_sizes']
+        use_gradient_values = nn_config['use_gradient_values']
+        device = nn_config['device']
+        seed = nn_config['seed']
+        if 'memorizer' in nn_config:
+            self.memorizer = nn_config['memorizer']
+                 
+        
+        if seed is not None:
+            torch.manual_seed(seed)
+            if device == 'cuda':
+                torch.cuda.manual_seed(seed)
+                
         super().__init__()
+        
         self.use_gradient_values = use_gradient_values
         self.device = device
         
@@ -38,3 +49,12 @@ class Net(nn.Module):
         
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.network(x)
+    
+    def get_sum_grad(self) -> torch.Tensor:
+        total_grad = torch.tensor(0.0, device=self.device)
+        
+        for param in self.parameters():
+            if param.grad is not None:
+                total_grad += abs(param.grad.sum())
+        
+        return total_grad

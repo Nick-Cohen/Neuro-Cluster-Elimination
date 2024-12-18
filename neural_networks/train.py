@@ -4,13 +4,17 @@ import torch.nn.functional as F
 import torch.nn as nn
 import torch.optim as optim
 import matplotlib.pyplot as plt
+import sys
 
 
 class Trainer:
     def __init__(self, model, dataloader, config):
         self.model = model
         self.dataloader = dataloader
-        self.config=config
+        self.config = config
+        self.debug = config['debug']
+        self.tracked = {'parameters': [], 'gradients': []}
+        
         # Set optimizer
         if self.config['optimizer'] == 'adam' or self.config['optimizer'] == 'Adam':
             self.optimizer = torch.optim.Adam(
@@ -65,6 +69,10 @@ class Trainer:
             return logspace_mse_mgIS
         elif loss_fn_name == "logspace_mse_pathIS":
             return logspace_mse_pathIS
+        elif loss_fn_name == "l1":
+            return l1
+        elif loss_fn_name == "l1c":
+            return l1c
         else:
             raise ValueError(f"Loss function {self.config['loss_fn']} not recognized")
         
@@ -77,15 +85,25 @@ class Trainer:
         outputs = self.model(x_batch)
         
         # Compute loss
-        if mg_hat_batch is not None or self.loss_fn == logspace_mse:
-            mg_hat_batch.detach()
-            loss = self.loss_fn(outputs.squeeze(), y_batch, mg_hat_batch)
-        else:
-            # print(outputs.shape,y_batch.shape)
-            loss = self.loss_fn(outputs.squeeze(), y_batch)
+        mg_hat_batch.detach()
+        loss = self.loss_fn(outputs.squeeze(), y_batch, mg_hat_batch)
+        # if mg_hat_batch is not None or self.loss_fn == logspace_mse:
+        #     mg_hat_batch.detach()
+        #     loss = self.loss_fn(outputs.squeeze(), y_batch, mg_hat_batch)
+        # else:
+        #     # print(outputs.shape,y_batch.shape)
+        #     loss = self.loss_fn(outputs.squeeze(), y_batch)
             
         # Backward pass and optimize
+        
+        if self.debug:
+            self.tracked['parameters'].append([p.data.clone() for p in self.model.parameters()])
         loss.backward()
+        if self.debug:
+            self.tracked['gradients'].append([p.grad.clone() for p in self.model.parameters()])
+        
+        print("Batch loss: ", loss.item(), " grad sum: ", self.model.get_sum_grad().item())
+        
         self.optimizer.step()
         return loss
     
@@ -95,7 +113,7 @@ class Trainer:
             x_batch, y_batch, mgh_batch = batch['x'], batch['y'], batch['mgh']
             losses.append(self.train_batch(x_batch, y_batch, mgh_batch))
         if self.loss_fn == logspace_mse:
-                loss = sum(losses) / len(losses) / len(x_batch)
+                loss = sum(losses) / len(losses)
         else:
             loss = self._aggregate_batch_losses(losses)
         return loss
@@ -104,6 +122,8 @@ class Trainer:
         with torch.no_grad():
             self.model.eval()
             # Forward pass
+            print('debug')
+            print('x_batch is ', x_batch)
             outputs = self.model(x_batch)
             # Compute loss
             loss_fn = self._get_loss_fn(loss_fn_name)
@@ -135,7 +155,7 @@ class Trainer:
         for (loss_fn_name,loss) in zip(loss_fns, losses):
             print(f'{loss_fn_name} loss: {loss.item()}')
     
-    def train(self, mgh_factors=None, traced_loss_fns = []):
+    def train(self, mgh_factors=None, traced_loss_fns = [], val_set = None):
         traced_losses_data = []
         num_samples = self.config['num_samples']
         batch_size = self.config['batch_size']
@@ -143,7 +163,7 @@ class Trainer:
         set_size = self.config['set_size']
         num_sets = num_samples // set_size
         num_batches_per_set = set_size // batch_size
-        if num_samples % set_size != 0:
+        if set_size % batch_size != 0:
             print('Warning: set_size is not a multiple of batch_size. Only using ', batch_size * num_batches_per_set, ' samples per set.')
         if num_samples % set_size != 0:
             print('Warning: num_samples is not a multiple of set_size. Only using ', num_sets * batch_size * num_batches_per_set, ' total samples.')
@@ -159,14 +179,20 @@ class Trainer:
                 # initial losses------------
                 if initialize_loss:
                     initialize_loss = False
-                    all_losses = self.evaluate_epoch(traced_loss_fns, set_batches)
+                    if val_set is None:
+                        all_losses = self.evaluate_epoch(traced_loss_fns, set_batches)
+                    else:
+                        all_losses = self.evaluate_epoch(traced_loss_fns, val_set)
                     traced_losses_data.append([0] + [loss.item() for loss in all_losses])
                 #---------------------------
                 loss = self.train_epoch(set_batches)
                 print(f"Set {s+1}/{num_sets}, Epoch {epoch+1}/{num_epochs}, Loss: {loss.item()}")
                 
                 # track different losses-------------------
-                all_losses = self.evaluate_epoch(traced_loss_fns, set_batches)
+                if val_set is None:
+                    all_losses = self.evaluate_epoch(traced_loss_fns, set_batches)
+                else:
+                    all_losses = self.evaluate_epoch(traced_loss_fns, val_set)
                 num_samples_trained_on = (s * num_epochs + epoch + 1) * set_size
                 traced_losses_data.append([num_samples_trained_on] + [loss.item() for loss in all_losses])
                 # self.print_epoch_losses(traced_loss_fns, set_batches, losses=all_losses)
