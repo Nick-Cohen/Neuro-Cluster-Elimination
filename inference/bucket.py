@@ -1,5 +1,6 @@
 from .factor import FastFactor
 from typing import List
+import numpy as np
 
 class FastBucket:
     
@@ -7,6 +8,7 @@ class FastBucket:
     
     def __init__(self, gm, label, factors, device, elim_vars, isRoot = False):
         self.gm = gm
+        self.config = gm.config
         self.label = label
         self.factors = factors
         self.device = device
@@ -18,7 +20,15 @@ class FastBucket:
         for factor in self.factors:
             assert self.device in str(factor.device), f"Factor device {factor.device} does not match bucket device type {self.device}"
     
-    def compute_message(self):
+    def compute_message_nn(self):
+        from NCE.neural_networks.net import Net
+        from NCE.neural_networks.train import Trainer
+        net = Net(self)
+        t=Trainer(net=net, bucket=self)
+        return t.train()
+        pass
+    
+    def compute_message_exact(self):
         # Multiply all factors
         if not self.factors:
             raise ValueError("No factors in the bucket to send message from")
@@ -62,6 +72,13 @@ class FastBucket:
                 wmb_factors.append(eliminated_factor)
         
         return wmb_factors
+    
+    def _get_nn_input_size(self):
+        dimensions = self.get_message_dimension()
+        out = 0
+        for nstates in dimensions:
+            out += nstates - 1
+        return out
 
     def _create_mini_buckets(self, iB: int) -> List[List[FastFactor]]:
         """
@@ -123,6 +140,13 @@ class FastBucket:
         scope.discard(self.label)
         return sorted(list(scope))
     
-    def get_message_size(self):
+    def get_width(self):
+        return len(self.get_message_scope())
+    
+    def get_message_dimension(self):
         return [self.gm.matching_var(idx).states for idx in self.get_message_scope()]
+    
+    def get_message_size(self):
+        scopes = self.get_message_dimension()
+        return np.prod(scopes)
      

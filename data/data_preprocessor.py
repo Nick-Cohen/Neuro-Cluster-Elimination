@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 from typing import List, Tuple
-from inference.bucket import FastBucket
+from NCE.inference.bucket import FastBucket
 
 class DataPreprocessor:
     def __init__(self, y: torch.Tensor, mg: torch.Tensor, is_logspace: bool, device = None) -> None:
@@ -137,7 +137,7 @@ class DataPreprocessor:
         
     
     def one_hot_encode(self, bucket: FastBucket, assignments: torch.IntTensor, lower_dim = True):
-        domain_sizes = bucket.get_message_size()
+        domain_sizes = bucket.get_message_dimension()
         num_samples, num_vars = assignments.shape
         
         if lower_dim: # send n domain variables to n-1 vector

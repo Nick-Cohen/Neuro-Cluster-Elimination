@@ -12,11 +12,29 @@ from typing import List
 
 
 class FastGM:
-    def __init__(self, iB=10000, elim_order=None, buckets=None, factors=None, uai_file=None, device="cuda", reference_fastgm=None):
+    def __init__(self, iB=10000, elim_order=None, buckets=None, factors=None, uai_file=None, device="cuda", reference_fastgm=None, nn_config=None):
         self.iB = iB
+        self.uai_file = uai_file
         self.device = device
         self.vars = []
         self.elim_order = None
+        self.config = nn_config
+        if nn_config is not None:
+            self.sampling_scheme = nn_config['sampling_scheme']
+            self.traced_losses = nn_config['traced_losses']
+            self.hidden_sizes = nn_config['hidden_sizes']
+            self.loss_fn = nn_config['loss_fn']
+            self.optimizer = nn_config['optimizer']
+            self.lr = nn_config['lr']
+            self.lr_decay = nn_config['lr_decay']
+            self.patience = nn_config['patience']
+            self.min_lr = nn_config['min_lr']
+            self.num_samples = nn_config['num_samples']
+            self.num_epochs = nn_config['num_epochs']
+            self.batch_size = nn_config['batch_size']
+            self.set_size = nn_config['set_size']
+            self.seed = nn_config['seed']
+            
 
         if uai_file is not None:
             self._load_from_uai(uai_file)
@@ -224,17 +242,27 @@ class FastGM:
         return FastFactor(result_tensor, new_labels)
     
     def process_bucket(self, bucket):
-        """Process a bucket by multiplying all factors and eliminating the bucket's variable."""
-        if not bucket.factors:
-            raise ValueError("No factors in the bucket to process")
+        if bucket.get_width() <= self.iB:
+            return self._process_bucket_exact(bucket)
+        else:
+            return self._process_bucket_nn(bucket)
+    
+    def _process_bucket_exact(self, bucket):
+        return bucket.compute_message_exact()
+        # """Process a bucket by multiplying all factors and eliminating the bucket's variable."""
+        # if not bucket.factors:
+        #     raise ValueError("No factors in the bucket to process")
         
-        message = bucket.factors[0]
-        for factor in bucket.factors[1:]:
-            message = message * factor
+        # message = bucket.factors[0]
+        # for factor in bucket.factors[1:]:
+        #     message = message * factor
 
-        # Eliminate the bucket's variable
-        message = message.eliminate(bucket.elim_vars)
-        return message
+        # # Eliminate the bucket's variable
+        # message = message.eliminate(bucket.elim_vars)
+        # return message
+    
+    def _process_bucket_nn(self, bucket):
+        pass
     
     def calculate_message_scopes(self):
         """Calculate and save the message scope for each bucket."""
@@ -422,7 +450,7 @@ class FastGM:
                 for factor in bucket_factors:
                     gradient_factors.append(factor)
         bucket = self.get_bucket(bucket_var)
-        message = bucket.compute_message()
+        message = bucket.compute_message_exact()
         bucket_scope = bucket.get_message_scope()
         # if no downstream function
         if gradient_factors == []:
@@ -662,7 +690,6 @@ class FastGM:
             result += stacked_factor
         
         return result
-
 
     @staticmethod
     def _create_stacked_slice(factor, sample_assignments, device):

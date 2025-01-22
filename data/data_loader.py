@@ -1,4 +1,4 @@
-from inference import FastBucket
+from NCE.inference import FastBucket
 import torch
 import torch.nn.functional as F
 from .data_preprocessor import DataPreprocessor
@@ -16,7 +16,10 @@ class DataLoader:
         # self.domain_sizes = torch.IntTensor(list(self.assignments.shape))
         self.bucket = bucket
         self.sample_generator = sample_generator
+        self.message_size = self.sample_generator.message_size
         self.data_preprocessor = data_preprocessor
+        sampling_scheme = self.sample_generator.gm.config['sampling_scheme']
+        self.grad_informed = (sampling_scheme != 'uniform') or sampling_scheme != 'all'
         
     # def __len__(self):
     #     """Required: Returns the total number of samples"""
@@ -41,7 +44,7 @@ class DataLoader:
         # In case I want to presave datasets to save time in testing
         pass
     
-    def load(self, num_samples = 0, grad_informed = True, mg_hat_factors=None, all=False):
+    def load(self, num_samples = 0, mg_hat_factors=None, all=False):
         # generate the samples with the sample generator
         if self.sample_generator is None:
             raise ValueError("No sample generator provided")
@@ -50,14 +53,14 @@ class DataLoader:
         else:
             assignments = self.sample_generator.sample_assignments(num_samples) # config in sg gives sample scheme
         mess_values = self.sample_generator.compute_message_values(assignments)
-        if grad_informed:
+        if self.grad_informed:
             mg_values = self.sample_generator.compute_gradient_values(assignments, mg_hat_factors)
-        # format the samples with the data preprocessor
+        # format the samples with the data preprocessor    
         return self.data_preprocessor.one_hot_encode(self.bucket, assignments), *self.data_preprocessor._normalize_logspace2(y_vals=mess_values, mg_vals=mg_values)
     
-    def load_batches(self, batch_size, num_batches, grad_informed = True, mgh_factors=None):
+    def load_batches(self, batch_size, num_batches, mgh_factors=None):
         num_samples = num_batches * batch_size
-        data = self.load(num_samples, grad_informed, mgh_factors)
+        data = self.load(num_samples, mg_hat_factors=mgh_factors)
         batches = []
         for i in range(num_batches):
             start = i * batch_size
@@ -72,7 +75,7 @@ class DataLoader:
     
     # generate complete validation set with all assignments for testing
     def load_all(self, num_samples = 0, grad_informed = True, mg_hat_factors=None, all=False):
-        data = self.load(num_samples, grad_informed, mg_hat_factors, all)
+        data = self.load(num_samples, mg_hat_factors, all)
         return [{
             'x': data[0],
             'y': data[1],
