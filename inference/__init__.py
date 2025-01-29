@@ -1,4 +1,5 @@
 from .factor import FastFactor
+from .factor_nn import FactorNN
 from .bucket import FastBucket
 from .graphical_model import FastGM
 from .elimination_order import wtminfill_order

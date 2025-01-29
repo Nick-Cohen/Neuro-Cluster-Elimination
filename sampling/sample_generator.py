@@ -1,5 +1,6 @@
 import torch
 import math
+import numpy as np
 from typing import *
 from inference.graphical_model import FastGM
 from inference.bucket import FastBucket
@@ -19,6 +20,7 @@ class SampleGenerator:
         self.num_samples = self.config['num_samples']
         self.sampling_scheme = self.config['sampling_scheme']
         self.message_scope, self.domain_sizes = self.get_message_scope_and_dims()
+        self.message_size = np.prod([d.item() for d in self.domain_sizes])
         if bucket.approximate_downstream_factors is not None:
             # only consider factors that have a scope that intersects with the message scope
             self.gradient_factors = [factor for factor in bucket.approximate_downstream_factors if bool(set(factor.labels) & set(self.message_scope))]
@@ -85,6 +87,8 @@ class SampleGenerator:
         mg_expanded.tensor *= ln10
         logsumexp = torch.logsumexp(mg_expanded.tensor.reshape(-1), dim=0)
         dist = torch.exp(mg_expanded.tensor - logsumexp)
+        # ensure the distribution is normalized
+        assert(torch.allclose(dist.sum(), torch.tensor(1.0, device=self.gm.device)), f"Sum of distribution is {dist.sum()}")
         samples = torch.multinomial(dist.flatten(), num_samples, replacement=replacement)
         samples = SampleGenerator._unravel_index(samples, dist.shape)
         return samples
@@ -136,55 +140,56 @@ class SampleGenerator:
     def sample_tensor_product_elimination(self, factors, assignments) -> torch.Tensor:
         for factor in factors:
             factor.order_indices()
-        scope = self.message_scope
-        elim_vars = self.elim_vars
         unsummed_shape = (*self.elim_domain_sizes,)
         unsummed_values = torch.zeros((len(assignments),) + unsummed_shape, device=self.gm.device)
         for fast_factor in factors:
-            tensor = fast_factor.tensor
-            tensor_labels = fast_factor.labels
-            
-            # indices in assignments that correspond to dimensions in the tensor
-            assignment_indices = [i for i, idx in enumerate(scope) if idx in tensor_labels]
-            
-            # indices of the assignment in the tensor
-            tensor_assignment_indices = [i for i, idx in enumerate(tensor_labels) if idx not in elim_vars]
-            # indices of eliminated variables in the tensor
-            tensor_elim_indices = [i for i, idx in enumerate(tensor_labels) if idx in elim_vars]
-            
-            # put elimination indices at end of tensor
-            permutation = (*tensor_assignment_indices, *tensor_elim_indices)
-            # permute tensor
-            tensor = tensor.permute(permutation)
-            # reordered labels
-            tensor_labels = [tensor_labels[i] for i in permutation]
-            
-            # get assignments from permuted tensor
-            # assertation necessary for indexing
-            assert(all(tensor_labels[i] < tensor_labels[i+1] for i in range(len(tensor_labels)-len(elim_vars)-1)))
-            permuted_assignment_indices = [i for i, idx in enumerate(scope) if idx in tensor_labels]
-            projected_assignments = assignments[:,permuted_assignment_indices]
+            if True:
+                unsummed_values += fast_factor._get_slices(assignments=assignments, elim_vars=self.elim_vars, elim_domain_sizes = self.elim_domain_sizes, message_scope=self.message_scope)
+            if False:
+                tensor = fast_factor.tensor
+                tensor_labels = fast_factor.labels
+                
+                # indices in assignments that correspond to dimensions in the tensor
+                assignment_indices = [i for i, idx in enumerate(scope) if idx in tensor_labels]
+                
+                # indices of the assignment in the tensor
+                tensor_assignment_indices = [i for i, idx in enumerate(tensor_labels) if idx not in elim_vars]
+                # indices of eliminated variables in the tensor
+                tensor_elim_indices = [i for i, idx in enumerate(tensor_labels) if idx in elim_vars]
+                
+                # put elimination indices at end of tensor
+                permutation = (*tensor_assignment_indices, *tensor_elim_indices)
+                # permute tensor
+                tensor = tensor.permute(permutation)
+                # reordered labels
+                tensor_labels = [tensor_labels[i] for i in permutation]
+                
+                # get assignments from permuted tensor
+                # assertation necessary for indexing
+                assert(all(tensor_labels[i] < tensor_labels[i+1] for i in range(len(tensor_labels)-len(elim_vars)-1)))
+                permuted_assignment_indices = [i for i, idx in enumerate(scope) if idx in tensor_labels]
+                projected_assignments = assignments[:,permuted_assignment_indices]
 
-            # stretch out elimination indices to 1d
-            # grab slices corresponding to slices
-            view = tuple(int(dim) for dim in tensor.shape[:len(tensor.shape) - len(elim_vars)]) + (int(torch.prod(torch.tensor(tensor.shape[len(tensor.shape) - len(elim_vars):]))),)
-            try:
-                if not projected_assignments.numel() == 0:
-                    slices = tensor.view(view)[tuple(projected_assignments.t())]
-                else:
-                    slices = tensor.unsqueeze(0).expand(len(assignments), len(tensor))
-            except:
-                print(tensor.shape)
-                print(view)
-                print(projected_assignments.shape)
-                print(projected_assignments.t().shape)
-                exit(1)
-            
-            # reshape slices to match elimination variables in order, e.g. (1,2,2,1) if 2nd and 3rd variables are in tensor
-            unexpanded_slice_shape = (len(assignments),) + tuple([v.states if v.label in tensor_labels else 1 for v in elim_vars])
-            reshaped_slices = slices.reshape(unexpanded_slice_shape)
-            expanded_slice_shape = (len(assignments),) + tuple([v.states for v in elim_vars])
-            unsummed_values += reshaped_slices.expand(expanded_slice_shape)
+                # stretch out elimination indices to 1d
+                # grab slices corresponding to assignments
+                view = tuple(int(dim) for dim in tensor.shape[:len(tensor.shape) - len(elim_vars)]) + (int(torch.prod(torch.tensor(tensor.shape[len(tensor.shape) - len(elim_vars):]))),)
+                try:
+                    if not projected_assignments.numel() == 0:
+                        slices = tensor.view(view)[tuple(projected_assignments.t())]
+                    else:
+                        slices = tensor.unsqueeze(0).expand(len(assignments), len(tensor))
+                except:
+                    print(tensor.shape)
+                    print(view)
+                    print(projected_assignments.shape)
+                    print(projected_assignments.t().shape)
+                    exit(1)
+                
+                # reshape slices to match elimination variables in order, e.g. (1,2,2,1) if 2nd and 3rd variables are in tensor
+                unexpanded_slice_shape = (len(assignments),) + tuple([v.states if v.label in tensor_labels else 1 for v in elim_vars])
+                reshaped_slices = slices.reshape(unexpanded_slice_shape)
+                expanded_slice_shape = (len(assignments),) + tuple([v.states for v in elim_vars])
+                unsummed_values += reshaped_slices.expand(expanded_slice_shape) # it will broadcast over dimensions not in the factor
         return torch.logsumexp(unsummed_values * math.log(10), dim=tuple(range(1, unsummed_values.dim()))) / math.log(10)
 
     def sample_tensor_product(self, factors, assignments) -> torch.Tensor:

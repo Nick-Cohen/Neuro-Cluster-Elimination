@@ -14,6 +14,8 @@ from adabelief_pytorch import AdaBelief
 
 class Net(nn.Module):
     def __init__(self, bucket):
+        self.bucket = bucket
+        self.gm = self.bucket.gm
         nn_config = bucket.config
         input_size = bucket._get_nn_input_size()
         hidden_sizes = nn_config['hidden_sizes']

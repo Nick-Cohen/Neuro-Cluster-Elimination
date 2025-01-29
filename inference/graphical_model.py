@@ -12,8 +12,8 @@ from typing import List
 
 
 class FastGM:
-    def __init__(self, iB=10000, elim_order=None, buckets=None, factors=None, uai_file=None, device="cuda", reference_fastgm=None, nn_config=None):
-        self.iB = iB
+    def __init__(self, elim_order=None, buckets=None, factors=None, uai_file=None, device="cuda", reference_fastgm=None, nn_config=None):
+        self.iB = nn_config['iB']
         self.uai_file = uai_file
         self.device = device
         self.vars = []
