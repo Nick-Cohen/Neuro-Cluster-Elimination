@@ -1,4 +1,5 @@
 from .factor import FastFactor
+from .factor_nn import FactorNN
 from typing import List
 import numpy as np
 
@@ -25,16 +26,21 @@ class FastBucket:
         from NCE.neural_networks.train import Trainer
         net = Net(self)
         t=Trainer(net=net, bucket=self)
-        return t.train()
-        pass
+        t.train()
+        return FactorNN(net, t.data_preprocessor)
     
     def compute_message_exact(self):
         # Multiply all factors
         if not self.factors:
             raise ValueError("No factors in the bucket to send message from")
         
-        message = self.factors[0]
+        if self.factors[0].is_nn:
+            message = self.factors[0].to_exact()
+        else:
+            message = self.factors[0]
         for factor in self.factors[1:]:
+            if factor.is_nn:
+                factor = factor.to_exact()
             message = message * factor
 
         # Eliminate variables
@@ -128,7 +134,7 @@ class FastBucket:
         Receive a message (factor) from another bucket and append it to this bucket's factors.
         """
         # Assert that the incoming message is on the correct device
-        assert str(self.device) in str(message.device), f"Message device {message.device} does not match bucket device {self.device}"
+        # assert str(self.device) in str(message.device), f"Message device {message.device} does not match bucket device {self.device}"
 
         # Append the message to the factors list
         self.factors.append(message)

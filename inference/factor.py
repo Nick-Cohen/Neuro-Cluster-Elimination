@@ -6,6 +6,10 @@ import time
 class FastFactor:
     def __init__(self, tensor, labels):
         self.tensor = tensor
+        if self.tensor is None:
+            self.device = None
+        else:
+            self.device = self.tensor.device
         self.labels = labels
         self.vars = labels
         self.is_nn = False
@@ -24,10 +28,6 @@ class FastFactor:
     @classmethod
     def check_memory_usage(cls):
         pass
-    
-    @property
-    def device(self):
-        return self.tensor.device
 
     def __mul__(self, other):
         if not isinstance(other, FastFactor):
@@ -293,3 +293,32 @@ class FastFactor:
         reshaped_slices = slices.reshape(unexpanded_slice_shape)
         expanded_slice_shape = (len(assignments),) + tuple([v.states for v in elim_vars])
         return reshaped_slices.expand(expanded_slice_shape)
+    
+    def _get_values(self, assignments, message_scope):
+        tensor = self.tensor
+        tensor_labels = self.labels
+        
+        # indices in assignments that correspond to dimensions in the tensor
+        assignment_indices = [i for i, idx in enumerate(message_scope) if idx in tensor_labels]
+        
+        # get assignments from tensor
+        permuted_assignment_indices = [i for i, idx in enumerate(message_scope) if idx in tensor_labels]
+        projected_assignments = assignments[:,permuted_assignment_indices]
+
+        try:
+            if not projected_assignments.numel() == 0:
+                values = tensor[tuple(projected_assignments.t())].reshape(-1,1)
+                return values
+            else:
+                slices = tensor.unsqueeze(0).expand(len(assignments), len(tensor))
+        except:
+            print(tensor.shape)
+            print(projected_assignments.shape)
+            print(projected_assignments.t().shape)
+            exit(1)
+        
+        # reshape slices to match elimination variables in order, e.g. (1,2,2,1) if 2nd and 3rd variables are in tensor
+        # unexpanded_slice_shape = (len(assignments),) + tuple([v.states if v.label in tensor_labels else 1 for v in elim_vars])
+        # reshaped_slices = slices.reshape(unexpanded_slice_shape)
+        # expanded_slice_shape = (len(assignments),) + tuple([v.states for v in elim_vars])
+        # return reshaped_slices.expand(expanded_slice_shape)

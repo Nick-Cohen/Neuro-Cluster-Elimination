@@ -11,7 +11,6 @@ import sys
 
 
 class Trainer:
-    # def __init__(self, model, dataloader, config, mgh_factors = None):
     def __init__(self, net, bucket):
         self.config = bucket.gm.config
         self.bucket = bucket
@@ -20,7 +19,7 @@ class Trainer:
         self.message_size = self.dataloader.message_size
         self.debug = self.config['debug']
         self.tracked = {'parameters': [], 'gradients': []}
-        self.mgh_factors = [self._get_mgh()] # TODO: will need to grab list of factors in the future
+        # self.mgh_factors = [self._get_mgh()] # TODO: will need to grab list of factors in the future
         
         # Set optimizer
         if self.config['optimizer'] == 'adam' or self.config['optimizer'] == 'Adam':
@@ -49,16 +48,16 @@ class Trainer:
         sg = SampleGenerator(gm=self.bucket.gm, bucket=self.bucket, random_seed=self.config['seed'])
         sample_assignments = sg.sample_assignments(1000)
         sample_values = sg.compute_message_values(sample_assignments)
-        sample_mg_values = sg.compute_gradient_values(sample_assignments, [self._get_mgh()]) # TODO: will need to accept list of factors in the future
+        sample_mg_values = sg.compute_gradient_values(sample_assignments) 
         data_preprocessor = DataPreprocessor(y=sample_values, mg=sample_mg_values, is_logspace=True, device = self.config['device'])
         return sg, data_preprocessor, DataLoader(self.bucket, sample_generator=sg, data_preprocessor=data_preprocessor)
     
-    def _get_mgh_factors(self):
-        pass
+    # def _get_mgh_factors(self):
+    #     return self.bucket.approximate_downstream_factors
     
-    def _get_mgh(self):
+    # def _get_mgh(self):
         from inference import FastGM
-        fastgm_copy = FastGM(uai_file=self.bucket.gm.uai_file, device=self.config['device'])
+        fastgm_copy = FastGM(uai_file=self.bucket.gm.uai_file, device=self.config['device'], nn_config = self.config)
         mg_hat = fastgm_copy.get_wmb_message_gradient(bucket_var=self.bucket.label, i_bound=self.config['iB_backwards'], weights='max')
         return mg_hat
 
@@ -66,7 +65,7 @@ class Trainer:
         if self.config['val_set'] is None:
             return None
         elif self.config['val_set'] == 'all':
-            return self.dataloader.load_all(mg_hat_factors = self.mgh_factors, all=True)          
+            return self.dataloader.load_all()          
    
     def _get_loss_fn(self, loss_fn_name):
         if loss_fn_name == "mse" or loss_fn_name == "MSE":
@@ -131,7 +130,7 @@ class Trainer:
         outputs = self.net(x_batch)
         
         # Compute loss
-        mg_hat_batch.detach()
+        mg_hat_batch = mg_hat_batch.detach()
         weights = self._get_weights(mg_hat_batch)
         loss = self.loss_fn(outputs.squeeze(), y_batch, mg_hat_batch)
         # if mg_hat_batch is not None or self.loss_fn == logspace_mse:
@@ -145,7 +144,17 @@ class Trainer:
         
         if self.debug:
             self.tracked['parameters'].append([p.data.clone() for p in self.net.parameters()])
-        loss.backward()
+        # debug-------------------------
+        # print(f"Loss grad_fn before backward: {loss.grad_fn}")
+        # for name, param in self.net.named_parameters():
+        #     print(f"Param {name} requires_grad: {param.requires_grad}, grad_fn: {param.grad_fn}")
+        #     print(f"Loss memory address: {id(loss)}")
+        # print(f"Loss requires_grad: {loss.requires_grad}")
+        # print(f"Loss grad_fn: {loss.grad_fn}")
+
+        # debug-------------------------
+        # with torch.autograd.detect_anomaly():
+        loss.backward(retain_graph=True)
         if self.debug:
             self.tracked['gradients'].append([p.grad.clone() for p in self.net.parameters()])
         
@@ -160,7 +169,7 @@ class Trainer:
                 print(f"After Step - {name}: Param: {param.data}")
         else:
             self.optimizer.step()
-        return loss
+        return loss.detach().cpu().item()
     
     def train_epoch(self, batches):
         losses = []
@@ -168,6 +177,10 @@ class Trainer:
             x_batch, y_batch, mgh_batch = batch['x'], batch['y'], batch['mgh']
             # print('first ten mg_hat values: ', mgh_batch[:10])
             losses.append(self.train_batch(x_batch, y_batch, mgh_batch))
+            # Free references to batch tensors
+            del x_batch, y_batch, mgh_batch
+            torch.cuda.empty_cache()  # If running on GPU
+            
         if self.loss_fn == logspace_mse:
                 loss = sum(losses) / len(losses)
         else:
@@ -226,9 +239,8 @@ class Trainer:
     
     def train(self):
         dataloader = self.dataloader
-        mgh_factors = self.mgh_factors
         traced_loss_fns = self.config['traced_losses']
-        val_set = self._get_val_set()
+        # val_set = self._get_val_set()
         
         traced_losses_data = []
         num_samples = self.config['num_samples']
@@ -255,30 +267,30 @@ class Trainer:
         
         # Main train loop-------------------------------
         for s in range(num_sets):
-            set_batches = self.dataloader.load_batches(batch_size, num_batches_per_set, mgh_factors = mgh_factors)
+            set_batches = self.dataloader.load_batches(batch_size, num_batches_per_set)
             # print first 3 inputs
             # debug
             # print(set_batches[0]['x'][:3])
             for epoch in range(num_epochs):
                 # initial losses------------
-                if initialize_loss:
-                    initialize_loss = False
-                    if val_set is None:
-                        all_losses = self.evaluate_epoch(traced_loss_fns, set_batches)
-                    else:
-                        all_losses = self.evaluate_epoch(traced_loss_fns, val_set)
-                    traced_losses_data.append([0] + [loss.item() for loss in all_losses])
+                # if initialize_loss:
+                #     initialize_loss = False
+                #     if val_set is None:
+                #         all_losses = self.evaluate_epoch(traced_loss_fns, set_batches)
+                #     else:
+                #         all_losses = self.evaluate_epoch(traced_loss_fns, val_set)
+                #     traced_losses_data.append([0] + [loss.item() for loss in all_losses])
                 #---------------------------
                 loss = self.train_epoch(set_batches)
                 print(f"Set {s+1}/{num_sets}, Epoch {epoch+1}/{num_epochs}, Loss: {loss.item()}")
                 
                 # track different losses-------------------
-                if val_set is None:
-                    all_losses = self.evaluate_epoch(traced_loss_fns, set_batches)
-                else:
-                    all_losses = self.evaluate_epoch(traced_loss_fns, val_set)
+                # if val_set is None:
+                #     all_losses = self.evaluate_epoch(traced_loss_fns, set_batches)
+                # else:
+                #     all_losses = self.evaluate_epoch(traced_loss_fns, val_set)
                 num_samples_trained_on = (s * num_epochs + epoch + 1) * set_size
-                traced_losses_data.append([num_samples_trained_on] + [loss.item() for loss in all_losses])
+                # traced_losses_data.append([num_samples_trained_on] + [loss.item() for loss in all_losses])
                 # self.print_epoch_losses(traced_loss_fns, set_batches, losses=all_losses)
                 #-------------------------------------------
                 
@@ -293,6 +305,7 @@ class Trainer:
                     
     def _aggregate_batch_losses(self, losses, is_logspace = True):
         # print('losses are ', losses)
+        losses = torch.tensor(losses, dtype=torch.float32, device=self.config['device']).detach()
         if is_logspace:
             return torch.logsumexp(torch.tensor(losses), dim=0) - torch.log(torch.tensor(len(losses)))
            

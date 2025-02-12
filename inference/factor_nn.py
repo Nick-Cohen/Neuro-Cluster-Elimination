@@ -1,4 +1,5 @@
 import torch
+import time
 from torch import nn
 from typing import List
 from inference.factor import FastFactor
@@ -8,11 +9,14 @@ class FactorNN(FastFactor):
     """
     A subclass of FastFactor that integrates a neural network for more flexible message computation.
     """
-    def __init__(self, net, labels):
+    def __init__(self, net, data_processor):
+        labels = net.bucket.get_message_scope()
         super().__init__(None, labels)
         self.is_nn = True
         self.net = net
+        self.data_processor = data_processor
         self.gm = self.net.gm
+        self.device = self.gm.device
         self.domain_sizes = [self.gm.matching_var(label).states for label in self.labels]
         
     def eliminate(self, elim_labels, elimination_scheme='sum'):
@@ -27,7 +31,7 @@ class FactorNN(FastFactor):
         remaining_indices = [self.labels.index(label) for label in remaining_labels]
 
         # Compute the shape of the reduced tensor
-        domain_sizes = [var.states for var in self.labels]
+        domain_sizes = [var.states for var in [self.gm.matching_var(label) for label in self.labels]]
         reduced_shape = [domain_sizes[idx] for idx in remaining_indices]
 
         # Initialize reduced FastFactor tensor
@@ -132,14 +136,17 @@ class FactorNN(FastFactor):
         
         for i,elim_assignment in enumerate(all_elim_assignments):
             # get the assignments in the nn_factor we need for a given elim assignment
-            fixed_factor_assignment = self._filter_and_fix_assignments(assignments_tensor=assignments, assignments_column_labels=message_scope, summation_assignment=elim_assignment, summation_assignment_labels=elim_vars)
+            fixed_factor_assignment = self._filter_and_fix_assignments(assignments_tensor=assignments, assignments_column_labels=message_scope, summation_assignment=elim_assignment, summation_assignment_labels=[var.label for var in elim_vars])
             # fill in the fixed elim assignment assignments in the nn-assignments
             nn_assignments[i*len(assignments):(i+1)*len(assignments)] = fixed_factor_assignment
         
         # convert nn_assignments to a one-hot-encoded version
-        one_hot_encoded_samples = torch.cat([F.one_hot(assignments[:, i], num_classes=self.domain_sizes[i])[:, 1:] for i in range(len(self.labels))], dim=-1)
+        one_hot_encoded_samples = torch.cat([F.one_hot(nn_assignments[:, i], num_classes=self.domain_sizes[i])[:, 1:] for i in range(len(self.labels))], dim=-1)
         one_hot_encoded_samples = one_hot_encoded_samples.float().to(self.net.device)
-        values = self.net(one_hot_encoded_samples)
+        
+        # get the values and convert them back to unnormalized version, all within logspace
+        # print(self.labels)
+        values = self.data_processor.undo_normalization(self.net(one_hot_encoded_samples))
         return values.view(len(all_elim_assignments), len(assignments)).T
         
         
@@ -175,7 +182,7 @@ class FactorNN(FastFactor):
         assignments_label_to_index = {label: idx for idx, label in enumerate(assignments_column_labels)}
 
         # Create a mapping from summation_assignment_labels to values
-        summation_label_to_value = {label: value for label, value in zip(summation_assignment_labels, summation_assignment)}
+        summation_label_to_value = {label: value for label, value in zip(summation_assignment_labels, summation_assignment.view(-1))}
 
         # Iterate over self.labels to populate the output tensor
         for i, slice_label in enumerate(self.labels):
@@ -190,5 +197,78 @@ class FactorNN(FastFactor):
                 raise ValueError(f"Label {slice_label} not found in assignments_column_labels or summation_assignment_labels")
 
         return output_tensor
+    
+    def to_exact(self):
+        return FactorNN.nn_to_FastFactor(fastGM=self.gm, jit_file = None, net = self.net, device=self.device, debug=False, data_processor=self.data_processor)
+      
+    def order_indices(self):
+        assert self.labels == sorted(self.labels), "Labels must be sorted"
+    
+    @staticmethod    
+    def nn_to_FastFactor(fastGM, jit_file = None, net = None, device='cuda', debug=False, data_processor=None):
+        if jit_file is None and net is None or jit_file is not None and net is not None:
+            raise ValueError("Exactly one of a JIT file or a PyTorch net must be provided")
+        if debug:
+            start_time = time.time()
+
+        # Load the JIT model
+        if debug:
+            load_start = time.time()
+        if jit_file is not None:
+            model = torch.jit.load(jit_file).to(device)
+        else:
+            model = net
+        if debug:
+            load_end = time.time()
+            print(f"Loading model took {load_end - load_start:.4f} seconds")
+
+        # Get the scope and domain sizes
+        scope = net.bucket.get_message_scope()
+        domain_sizes = torch.tensor([fastGM.vars[fastGM.matching_var(v)].states for v in scope], device=device)
         
+        # Calculate the total number of inputs
+        total_inputs = (domain_sizes - 1).sum().item()
         
+        if debug:
+            input_creation_start = time.time()
+        
+        # Generate all possible assignments efficiently
+        assignments = torch.cartesian_prod(*[torch.arange(size, device=device) for size in domain_sizes])
+        
+        # Create the input tensor efficiently
+        all_inputs = torch.zeros((assignments.shape[0], total_inputs), device=device)
+        
+        offset = 0
+        for i, size in enumerate(domain_sizes):
+            if size > 1:
+                mask = assignments[:, i].unsqueeze(1) == torch.arange(1, size, device=device)
+                all_inputs[:, offset:offset+size-1] = mask.float()
+                offset += size - 1
+
+        if debug:
+            input_creation_end = time.time()
+            print(f"Creating input tensor took {input_creation_end - input_creation_start:.4f} seconds")
+
+        # Query the model for all inputs
+        if debug:
+            query_start = time.time()
+        with torch.no_grad():
+            outputs = model(all_inputs).reshape(tuple(domain_sizes.tolist()))
+        if debug:
+            query_end = time.time()
+            print(f"Querying model took {query_end - query_start:.4f} seconds")
+
+        outputs = data_processor.undo_normalization(outputs)
+        # Create and return the FastFactor
+        if debug:
+            factor_creation_start = time.time()
+        fast_factor = FastFactor(outputs, scope)
+        if debug:
+            factor_creation_end = time.time()
+            print(f"Creating FastFactor took {factor_creation_end - factor_creation_start:.4f} seconds")
+
+        if debug:
+            end_time = time.time()
+            print(f"Total time for nn_to_FastFactor: {end_time - start_time:.4f} seconds")
+
+        return fast_factor

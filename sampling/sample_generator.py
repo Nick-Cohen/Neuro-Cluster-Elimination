@@ -5,6 +5,7 @@ from typing import *
 from inference.graphical_model import FastGM
 from inference.bucket import FastBucket
 from inference.factor import FastFactor
+from inference.message_gradient_factors import get_wmb_message_gradient_factors
 import copy
 
 class SampleGenerator:
@@ -23,7 +24,8 @@ class SampleGenerator:
         self.message_size = np.prod([d.item() for d in self.domain_sizes])
         if bucket.approximate_downstream_factors is not None:
             # only consider factors that have a scope that intersects with the message scope
-            self.gradient_factors = [factor for factor in bucket.approximate_downstream_factors if bool(set(factor.labels) & set(self.message_scope))]
+            downstream_factors = [factor for factor in bucket.approximate_downstream_factors if bool(set(factor.labels) & set(self.message_scope))]
+            self.gradient_factors = get_wmb_message_gradient_factors(downstream_factors, self.message_scope, self.config)
         else:
             self.gradient_factors = None
         for factor in self.factors:
@@ -88,7 +90,9 @@ class SampleGenerator:
         logsumexp = torch.logsumexp(mg_expanded.tensor.reshape(-1), dim=0)
         dist = torch.exp(mg_expanded.tensor - logsumexp)
         # ensure the distribution is normalized
-        assert(torch.allclose(dist.sum(), torch.tensor(1.0, device=self.gm.device)), f"Sum of distribution is {dist.sum()}")
+        s = dist.sum()
+        st = f"Sum of distribution is {s}"
+        assert torch.allclose(s, torch.tensor(1.0, device=self.gm.device)), st
         samples = torch.multinomial(dist.flatten(), num_samples, replacement=replacement)
         samples = SampleGenerator._unravel_index(samples, dist.shape)
         return samples
@@ -134,7 +138,7 @@ class SampleGenerator:
             factors = self.gradient_factors
         else:
             factors = gradient_factors
-        return self.sample_tensor_product(factors, assignments)
+        return self.sample_tensor_product(factors=factors,  assignments=assignments)
     
     # TODO: Combine factor slices in pairs to reduce number of tensor operations
     def sample_tensor_product_elimination(self, factors, assignments) -> torch.Tensor:
@@ -200,47 +204,16 @@ class SampleGenerator:
             factor.order_indices()
         scope = self.message_scope
         elim_vars = self.elim_vars
-        unsummed_shape = (1,)
-        unsummed_values = torch.zeros((len(assignments),) + unsummed_shape, device=self.gm.device)
+        output = torch.zeros((len(assignments),1), device=self.gm.device)
         for fast_factor in factors:
-            tensor = fast_factor.tensor
-            tensor_labels = fast_factor.labels
-            
-            # indices in assignments that correspond to dimensions in the tensor
-            assignment_indices = [i for i, idx in enumerate(scope) if idx in tensor_labels]
-            
-            # indices of the assignment in the tensor
-            tensor_assignment_indices = [i for i, idx in enumerate(tensor_labels) if idx not in elim_vars]
-            # indices of eliminated variables in the tensor
-            tensor_elim_indices = [i for i, idx in enumerate(tensor_labels) if idx in elim_vars]
-            
-            # put elimination indices at end of tensor
-            permutation = (*tensor_assignment_indices, *tensor_elim_indices)
-            # permute tensor
-            tensor = tensor.permute(permutation)
-            # reordered labels
-            tensor_labels = [tensor_labels[i] for i in permutation]
-            
-            # get assignments from permuted tensor
-            # assertation necessary for indexing
-            assert(all(tensor_labels[i] < tensor_labels[i+1] for i in range(len(tensor_labels)-len(elim_vars)-1)))
-            permuted_assignment_indices = [i for i, idx in enumerate(scope) if idx in tensor_labels]
-            projected_assignments = assignments[:,permuted_assignment_indices]
-
-            # stretch out elimination indices to 1d
-            # grab slices corresponding to slices
-            view = tuple(int(dim) for dim in tensor.shape[:len(tensor.shape) - len(elim_vars)]) + (int(torch.prod(torch.tensor(tensor.shape[len(tensor.shape) - len(elim_vars):]))),)
-            if not projected_assignments.numel() == 0:
-                slices = tensor.view(view)[tuple(projected_assignments.t())]
-            else:
-                slices = tensor.unsqueeze(0).expand(len(assignments), len(tensor))
-            
-            # reshape slices to match elimination variables in order, e.g. (1,2,2,1) if 2nd and 3rd variables are in tensor
-            unexpanded_slice_shape = (len(assignments),) + tuple([v.states if v.label in tensor_labels else 1 for v in elim_vars])
-            reshaped_slices = slices.reshape(unexpanded_slice_shape)
-            expanded_slice_shape = (len(assignments),) + tuple([1 for v in elim_vars])
-            unsummed_values += reshaped_slices.expand(expanded_slice_shape)
-        return torch.logsumexp(unsummed_values * math.log(10), dim=tuple(range(1, unsummed_values.dim()))) / math.log(10)
+            try:
+                output += fast_factor._get_values(assignments=assignments, message_scope=self.message_scope)
+            except:
+                print(fast_factor._get_values(assignments=assignments, message_scope=self.message_scope).shape)
+                print(assignments.shape)
+                exit(1)
+        return (output / math.log(10)).squeeze(1)
+        # return torch.logsumexp(unsummed_values * math.log(10), dim=tuple(range(1, unsummed_values.dim()))) / math.log(10)
         
             
         

@@ -56,6 +56,12 @@ class DataPreprocessor:
         
         return self.y, self.mg
     
+    def undo_normalization(self, outputs: torch.Tensor) -> torch.Tensor:
+        with torch.no_grad():
+            outputs += self.y_max
+            outputs /= torch.log(torch.tensor(10.0)).to(outputs.device)
+            return outputs
+    
     def convert_back_message_logspace(self, outputs):
         outputs = outputs * self.y_std
         outputs = outputs + self.y_mean

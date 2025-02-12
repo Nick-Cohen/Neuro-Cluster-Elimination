@@ -242,27 +242,11 @@ class FastGM:
         return FastFactor(result_tensor, new_labels)
     
     def process_bucket(self, bucket):
+        # print(bucket.label)
         if bucket.get_width() <= self.iB:
-            return self._process_bucket_exact(bucket)
+            return bucket.compute_message_exact()
         else:
-            return self._process_bucket_nn(bucket)
-    
-    def _process_bucket_exact(self, bucket):
-        return bucket.compute_message_exact()
-        # """Process a bucket by multiplying all factors and eliminating the bucket's variable."""
-        # if not bucket.factors:
-        #     raise ValueError("No factors in the bucket to process")
-        
-        # message = bucket.factors[0]
-        # for factor in bucket.factors[1:]:
-        #     message = message * factor
-
-        # # Eliminate the bucket's variable
-        # message = message.eliminate(bucket.elim_vars)
-        # return message
-    
-    def _process_bucket_nn(self, bucket):
-        pass
+            return bucket.compute_message_nn()
     
     def calculate_message_scopes(self):
         """Calculate and save the message scope for each bucket."""
@@ -372,6 +356,51 @@ class FastGM:
             print()
 
         print(f"Maximum width: {max_width}")
+
+    def get_senders_receivers(self):
+        vars_to_eliminate = self.elim_order
+
+        elimination_scheme = []
+        max_width = 0
+
+        for var in self.elim_order:
+            if var not in vars_to_eliminate:
+                continue
+            
+            bucket_factors = self.buckets[var].factors
+            incoming_messages = []
+            outgoing_message_vars = set()
+
+            # Determine incoming messages from previous buckets
+            for prev_bucket in elimination_scheme:
+                if prev_bucket['sends_to'] is not None and prev_bucket['sends_to'] == var.label:
+                    incoming_messages.append(prev_bucket['outgoing_message'])
+                    outgoing_message_vars.update(prev_bucket['outgoing_message'])
+
+            # Determine variables in the outgoing message
+            for factor in bucket_factors:
+                outgoing_message_vars.update(factor.labels)
+            outgoing_message_vars.discard(var)
+
+            # Find the next bucket to send the message to
+            next_var = self.find_next_bucket(list(outgoing_message_vars), var)
+
+            width = len(list(outgoing_message_vars))
+            max_width = max(max_width, width)
+
+            bucket_info = {
+                'var': var,
+                'factors': [f"f{i}({', '.join(map(str, factor.labels))})" for i, factor in enumerate(bucket_factors)],
+                'receives': [f"mess_to_{var}({', '.join(map(str, sorted(msg)))})" for msg in incoming_messages],
+                'sends_to': next_var.label if next_var is not None else None,
+                'outgoing_message': sorted(list(outgoing_message_vars)),
+                'width': width
+            }
+
+            elimination_scheme.append(bucket_info)
+
+        return elimination_scheme
+
 
     def get_large_message_buckets(self, iB, debug = False):
         self.calculate_message_scopes()
@@ -503,6 +532,10 @@ class FastGM:
             bucket = self.buckets[var]
             gradient_factors.extend(bucket.factors)
 
+        # if there are no gradient factors return a scalar factor
+        if len(gradient_factors) == 0:
+            return FastFactor(tensor=torch.tensor([0.0], device=self.device), labels=[])
+        
         # confirm no variables that should have been eliminated are in gradient factors
         should_have_been_eliminated = set([v.label for v in self.elim_order[0:self.elim_order.index(self.matching_var(bucket_var))]])
         
@@ -530,11 +563,11 @@ class FastGM:
         downstream_elim_order = [self.matching_var(var) for var in downstream_elim_order]
 
         # Create the downstream graphical model
-        downstream_gm = FastGM(factors=gradient_factors, elim_order=downstream_elim_order, device=self.device)
+        downstream_gm = FastGM(factors=gradient_factors, elim_order=downstream_elim_order, device=self.device, nn_config=self.config)
 
         return self._wmb_eliminate(downstream_gm, bucket_scope, i_bound, weights)
 
-    def _wmb_eliminate(self, gm, target_scope, i_bound, weights):
+    def _wmb_eliminate(gm, target_scope, i_bound, weights, combine_factors=False):
         """
         Perform Weighted Mini-Bucket elimination.
 
@@ -579,27 +612,39 @@ class FastGM:
             
             if not bucket.factors:  # Skip empty buckets
                 continue
-
+            
+            # debug
+            # print('var: ', var.label, end='')
             if len(bucket.factors[0].labels) <= i_bound:
-                message = self._compute_weighted_message(bucket.factors, var, weight_map[var.label])
+                message = FastGM._compute_weighted_message(bucket.factors, var, weight_map[var.label])
                 gm.removeFactors(bucket.factors)
                 gm.addFactors([message])
-                # dprint(message.labels)
+                # debug
+                # print('message labels: ', message.labels)
             else:
-                mini_buckets = self._create_mini_buckets(bucket.factors, i_bound)
+                mini_buckets = FastGM._create_mini_buckets(bucket.factors, i_bound)
                 for i, mini_bucket in enumerate(mini_buckets):
                     mini_weight = weight_map[var.label] / len(mini_buckets)
                     if i == len(mini_buckets) - 1:  # Adjust the last mini-bucket weight
                         mini_weight = weight_map[var.label] - (len(mini_buckets) - 1) * mini_weight
-                    mini_message = self._compute_weighted_message(mini_bucket, var, mini_weight)
+                    mini_message = FastGM._compute_weighted_message(mini_bucket, var, mini_weight)
                     gm.removeFactors(mini_bucket)
                     gm.addFactors([mini_message])
+                    # debug
+                    # print('mini_message labels: ', mini_message.labels)
                     # dprint(mini_message.labels)
 
         # After elimination, combine all remaining factors
         remaining_factors = []
         for bucket in gm.buckets.values():
             remaining_factors.extend(bucket.factors)
+            # debug
+            for factor in bucket.factors:
+                if 54 in factor.labels:
+                    print('got here')
+            
+        if not combine_factors:
+            return remaining_factors
         
         if remaining_factors:
             result = remaining_factors[0]
@@ -622,13 +667,13 @@ class FastGM:
                     raise ValueError("inf found")
         else:
             # If no factors remain, return a scalar factor with value 0 (in log space)
-            result = FastFactor(torch.tensor([0.0], device=self.device), [])
+            result = FastFactor(torch.tensor([0.0], device=gm.device), [])
         if (result.tensor == float('inf')).any():
             print("inf found")
             raise ValueError("inf found")
         return result
 
-    def _create_mini_buckets(self, factors, i_bound):
+    def _create_mini_buckets(factors, i_bound):
         """
         Partition factors into mini-buckets respecting the i-bound.
         """
@@ -645,7 +690,7 @@ class FastGM:
                 mini_buckets.append([factor])
         return mini_buckets
 
-    def _compute_weighted_message(self, factors, var, weight):
+    def _compute_weighted_message(factors, var, weight):
         # Multiply factors using the FastFactor multiplication method
         product = factors[0]
         for factor in factors[1:]:
@@ -653,20 +698,20 @@ class FastGM:
 
         # Proceed with elimination based on the weight
         if weight == 0:  # max-product
-            out = self._eliminate_max(product, var)
+            out = FastGM._eliminate_max(product, var)
         elif weight == 1:  # sum-product
             out = product.eliminate([var])
         else:  # weighted sum-product
-            out = self._eliminate_weighted_sum(product, var, weight)
+            out = FastGM._eliminate_weighted_sum(product, var, weight)
         return out
 
-    def _eliminate_max(self, factor, var):
+    def _eliminate_max(factor, var):
         """Eliminate a variable using max-product in log10 space."""
         dim = factor.labels.index(var.label)
         max_values, _ = torch.max(factor.tensor, dim=dim)
         return FastFactor(max_values, [label for label in factor.labels if label != var.label])
 
-    def _eliminate_weighted_sum(self, factor, var, weight):
+    def _eliminate_weighted_sum(factor, var, weight):
         dim = factor.labels.index(var.label)
         # Convert from log10 to natural log, perform weighted sum, then convert back to log10
         natural_log_tensor = factor.tensor * math.log(10)
