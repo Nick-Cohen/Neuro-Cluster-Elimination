@@ -12,7 +12,7 @@ def wtminfill_order(factors_or_buckets, variables_not_eliminated=None):
     
     Returns:
     list: The elimination order for the specified variables (first eliminated first).
-    """
+    """   
     # Extract factors from buckets if necessary
     if isinstance(factors_or_buckets[0], FastBucket):
         factors = [factor for bucket in factors_or_buckets for factor in bucket.factors]
@@ -24,7 +24,8 @@ def wtminfill_order(factors_or_buckets, variables_not_eliminated=None):
     for factor in factors:
         all_variables.update(factor.labels)
     all_variables = list(all_variables)
-
+    
+        
     # If variables_to_eliminate is not specified, use all variables
     if variables_not_eliminated is None:
         variables_to_eliminate = all_variables
@@ -66,8 +67,10 @@ def wtminfill_order(factors_or_buckets, variables_not_eliminated=None):
                 for _, v in pq if v in variables_to_eliminate]
         pq.sort(reverse=True)
 
+
     # Add variables not eliminated to the end of the elimination order
     elimination_order.extend(variables_not_eliminated)
+
     
     return elimination_order
 

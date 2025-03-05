@@ -9,6 +9,7 @@ from pyGMs import Var
 import torch
 import math
 from typing import List
+from tqdm.notebook import tqdm
 
 
 class FastGM:
@@ -19,6 +20,7 @@ class FastGM:
         self.vars = []
         self.elim_order = None
         self.config = nn_config
+        self.traced_losses_data = []
         if nn_config is not None:
             self.sampling_scheme = nn_config['sampling_scheme']
             self.traced_losses = nn_config['traced_losses']
@@ -159,7 +161,7 @@ class FastGM:
             raise ValueError("Elimination order must be a list of Var objects or integers")
         # print(self.elim_order)
             
-    def eliminate_variables(self, elim_vars=None, up_to=None, through=None, all=False, all_but=None):
+    def eliminate_variables(self, elim_vars=None, up_to=None, through=None, all=False, all_but=None, exact=False):
         if sum(map(bool, [elim_vars, up_to, through, all, all_but])) != 1:
             raise ValueError("Exactly one of elim_vars, up_to, through, or all must be specified")
 
@@ -180,29 +182,49 @@ class FastGM:
         
         max_width = 0
 
-        for var in vars_to_eliminate:
-            # if type(var) != int:
-            #     var = var.label
-            current_bucket = self.buckets[var]
-            # print(current_bucket.label)
-            message = self.process_bucket(current_bucket)
-            
-            if message.labels:  # If the message is not a scalar
-                # Find the next appropriate bucket
-                if len(message.labels) > max_width:
-                    max_width = len(message.labels)
-                next_bucket = self.find_next_bucket(message.labels, var)
-                if next_bucket:
-                    next_bucket.receive_message(message)
+        self.calculate_message_scopes()
+        
+        num_trained = 0
+        for key in self.message_scopes:
+            if key in vars_to_eliminate and len(self.message_scopes[key]) > self.iB:
+                num_trained += 1
+        with tqdm(total=num_trained, desc="Num NNs to train") as pbar:
+            for var in vars_to_eliminate:
+                # if type(var) != int:
+                #     var = var.label
+                current_bucket = self.buckets[var]
+                
+                # debug test
+                # print(var)
+                # fs = self.get_bucket(59).factors
+                # fails_test = False
+                # for f in fs:
+                #     if f.tensor is None:
+                #         fails_test = True
+                #         print("fails")
+                
+                # print(current_bucket.label)
+                message = self.process_bucket(current_bucket, exact=exact)
+                if not message.is_nn:
+                    assert message.tensor is not None
                 else:
-                    # If no appropriate bucket found, send to root
+                    pbar.update(1)
+                if message.labels:  # If the message is not a scalar
+                    # Find the next appropriate bucket
+                    if len(message.labels) > max_width:
+                        max_width = len(message.labels)
+                    next_bucket = self.find_next_bucket(message.labels, var)
+                    if next_bucket:
+                        next_bucket.receive_message(message)
+                    else:
+                        # If no appropriate bucket found, send to root
+                        root_bucket.receive_message(message)
+                else:
+                    # If the message is a scalar, send to root
                     root_bucket.receive_message(message)
-            else:
-                # If the message is a scalar, send to root
-                root_bucket.receive_message(message)
-            
-            # Remove the eliminated variable's bucket
-            del self.buckets[var]
+                
+                # Remove the eliminated variable's bucket
+                del self.buckets[var]
 
         # Process the root bucket
         if root_bucket.factors:
@@ -241,11 +263,16 @@ class FastGM:
         
         return FastFactor(result_tensor, new_labels)
     
-    def process_bucket(self, bucket):
-        # print(bucket.label)
-        if bucket.get_width() <= self.iB:
+    def process_bucket(self, bucket, exact=False):
+        print("Processing bucket: ",bucket.label)
+        if exact or bucket.get_width() <= self.iB:
+        # if bucket.label != 29:
             return bucket.compute_message_exact()
         else:
+            # if not bucket.label == 47:
+            #     print("using debug memorizer")
+            #     return bucket.compute_dummy_nn()
+            print("Training NN for bucket: ", bucket.label)
             return bucket.compute_message_nn()
     
     def calculate_message_scopes(self):
@@ -401,7 +428,6 @@ class FastGM:
 
         return elimination_scheme
 
-
     def get_large_message_buckets(self, iB, debug = False):
         self.calculate_message_scopes()
         for key in self.message_scopes:
@@ -466,12 +492,12 @@ class FastGM:
                     gradient_factors.append(factor)
         return gradient_factors
     
-    def get_message_gradient(self, bucket_var, gradient_factors=None):
+    def get_message_gradient(self, bucket_var, gradient_factors=None, iB = 100):
         # function should do elimination up to, but not including bucket_var.
         # function should gather all factors from all buckets that come after bucket_var and create a new fastGM from them.
         # function should eliminate all bucket the variables in the scope of bucket_var's bucket's scope
-        self.eliminate_variables(up_to=bucket_var)
         if gradient_factors is None:
+            self.eliminate_variables(up_to=bucket_var, exact=True)
             gradient_factors = []
             for var in self.elim_order[self.elim_order.index(self.matching_var(bucket_var))+1:]:
                 bucket = self.buckets[var]
@@ -483,11 +509,12 @@ class FastGM:
         bucket_scope = bucket.get_message_scope()
         # if no downstream function
         if gradient_factors == []:
-            return FastFactor(torch.tensor([0.0], device=self.device), []), message
+            return FastFactor(torch.tensor([0.0], device=self.device), [], requires_grad=False), message
         downstream_elim_order = wtminfill_order(gradient_factors, variables_not_eliminated=bucket_scope)
         # print("deo is ", downstream_elim_order)
         # device_copy=str(self.device)
-        downstream_gm = FastGM(factors=gradient_factors, elim_order=downstream_elim_order, reference_fastgm=self, device=self.device)
+        downstream_gm = FastGM(factors=gradient_factors, elim_order=downstream_elim_order, reference_fastgm=self, device=self.device, nn_config=self.config)
+        downstream_gm.iB = iB
         downstream_gm.eliminate_variables(all_but=bucket_scope)
         return downstream_gm.get_joint_distribution(), message
 
@@ -534,7 +561,7 @@ class FastGM:
 
         # if there are no gradient factors return a scalar factor
         if len(gradient_factors) == 0:
-            return FastFactor(tensor=torch.tensor([0.0], device=self.device), labels=[])
+            return FastFactor(tensor=torch.tensor([0.0], device=self.device, requires_grad=False), labels=[])
         
         # confirm no variables that should have been eliminated are in gradient factors
         should_have_been_eliminated = set([v.label for v in self.elim_order[0:self.elim_order.index(self.matching_var(bucket_var))]])
@@ -615,7 +642,7 @@ class FastGM:
             
             # debug
             # print('var: ', var.label, end='')
-            if len(bucket.factors[0].labels) <= i_bound:
+            if bucket.get_width() <= i_bound:
                 message = FastGM._compute_weighted_message(bucket.factors, var, weight_map[var.label])
                 gm.removeFactors(bucket.factors)
                 gm.addFactors([message])
@@ -667,7 +694,7 @@ class FastGM:
                     raise ValueError("inf found")
         else:
             # If no factors remain, return a scalar factor with value 0 (in log space)
-            result = FastFactor(torch.tensor([0.0], device=gm.device), [])
+            result = FastFactor(torch.tensor([0.0], device=gm.device, requires_grad=False), [])
         if (result.tensor == float('inf')).any():
             print("inf found")
             raise ValueError("inf found")
@@ -695,6 +722,8 @@ class FastGM:
         product = factors[0]
         for factor in factors[1:]:
             product = product * factor  # Correctly handles label alignment and tensor operations
+            if product.tensor.numel() > 2**30:
+                print('product is the problem')
 
         # Proceed with elimination based on the weight
         if weight == 0:  # max-product

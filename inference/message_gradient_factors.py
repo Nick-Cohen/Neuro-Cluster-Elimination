@@ -103,10 +103,13 @@ def populate_gradient_factors(base_gm: FastGM, iB: int) -> None:
         # Compute the message
         if approximate_bucket.get_width() <= iB:
             # Compute exact message if scope is below or equal to iB
-            messages =[copied_gm.process_bucket(approximate_bucket)]
+            # messages = [copied_gm.process_bucket(approximate_bucket)]
+            messages = [approximate_bucket.compute_message_exact()]
         else:
             # Use WMB if scope is above iB
             messages = approximate_bucket.compute_wmb_message(iB)
+        for message in messages:
+            assert message.tensor is not None, f"{current_var}"
         # also accumulate each factor in the does_not_have_summation_var set to the bucket indicated by the scheme
         messages += does_not_have_summation_var
         # send to the correct bucket in copied gm
@@ -126,8 +129,18 @@ def get_wmb_message_gradient_factors(factors: List[FastFactor], message_scope, c
     # determine the elimination order
     # i) Put scope vars at end of elim order, all other = elim vars
     # ii) Use min fill heuristic to order elim vars
+    if not factors:
+        return []
     elim_order = []
-    elim_order = wtminfill_order(factors, variables_not_eliminated=message_scope)
+    vars_in_grad_factors = set()
+    for f in factors:
+        for label in f.labels:
+            vars_in_grad_factors.add(label)
+    variables_not_eliminated = [var for var in message_scope if var in vars_in_grad_factors]
+    elim_order = wtminfill_order(factors, variables_not_eliminated=variables_not_eliminated)
+
+        
+        
     # Create a graphical model with the factors
     gm = FastGM(factors=factors, nn_config=config, elim_order=elim_order)
     # Check if factors is empty

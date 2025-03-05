@@ -61,25 +61,23 @@ class Net(nn.Module):
     
     
 class Memorizer(Net):
-    def __init__(self, nn_config, x, y):
+    def __init__(self, bucket, all_x, all_y):
         # Call parent nn.Module constructor first
-        super().__init__(nn_config)
-        
-        # Store device and sample info
-        self.device = nn_config.get('device', 'cuda')
-        self.nsamples = len(x)
+        super().__init__(bucket)
+
+        self.nsamples = len(all_x)
         
         # Create a dictionary to store all input-output pairs
         self.memory = {}
         
         # Populate the memory dictionary
         for i in range(self.nsamples):
-            input_vector = tuple(x[i].tolist())
-            value = y[i].item()
+            input_vector = tuple(all_x[i].tolist())
+            value = all_y[i].item()
             self.memory[input_vector] = value
         
         # Create a simple linear layer for unseen inputs
-        self.linear = nn.Linear(len(x[0]), 1)
+        self.linear = nn.Linear(len(all_x[0]), 1)
         self.to(self.device)
 
     def forward(self, x):

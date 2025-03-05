@@ -44,7 +44,7 @@ class DataLoader:
         # In case I want to presave datasets to save time in testing
         pass
     
-    def load(self, num_samples = 0, mg_hat_factors=None, all=False):
+    def load(self, num_samples = 0, all=False):
         # generate the samples with the sample generator
         if self.sample_generator is None:
             raise ValueError("No sample generator provided")
@@ -53,14 +53,15 @@ class DataLoader:
         else:
             assignments = self.sample_generator.sample_assignments(num_samples) # config in sg gives sample scheme
         mess_values = self.sample_generator.compute_message_values(assignments)
+        assert not mess_values.requires_grad
         if self.grad_informed:
-            mg_values = self.sample_generator.compute_gradient_values(assignments, mg_hat_factors)
+            mg_values = self.sample_generator.compute_gradient_values(assignments)
         # format the samples with the data preprocessor    
         return self.data_preprocessor.one_hot_encode(self.bucket, assignments), *self.data_preprocessor._normalize_logspace2(y_vals=mess_values, mg_vals=mg_values)
     
-    def load_batches(self, batch_size, num_batches, mgh_factors=None):
+    def load_batches(self, batch_size, num_batches):
         num_samples = num_batches * batch_size
-        data = self.load(num_samples, mg_hat_factors=mgh_factors)
+        data = self.load(num_samples)
         batches = []
         for i in range(num_batches):
             start = i * batch_size
@@ -74,8 +75,8 @@ class DataLoader:
         return batches
     
     # generate complete validation set with all assignments for testing
-    def load_all(self, num_samples = 0, grad_informed = True, mg_hat_factors=None, all=False):
-        data = self.load(num_samples, mg_hat_factors, all)
+    def load_all(self, num_samples = 0, grad_informed = True, all=True):
+        data = self.load(num_samples, all)
         return [{
             'x': data[0],
             'y': data[1],

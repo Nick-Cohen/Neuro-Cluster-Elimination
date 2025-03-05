@@ -141,13 +141,20 @@ class FactorNN(FastFactor):
             nn_assignments[i*len(assignments):(i+1)*len(assignments)] = fixed_factor_assignment
         
         # convert nn_assignments to a one-hot-encoded version
-        one_hot_encoded_samples = torch.cat([F.one_hot(nn_assignments[:, i], num_classes=self.domain_sizes[i])[:, 1:] for i in range(len(self.labels))], dim=-1)
-        one_hot_encoded_samples = one_hot_encoded_samples.float().to(self.net.device)
+        
+        #debug
+        try:
+            one_hot_encoded_samples = torch.cat([F.one_hot(nn_assignments[:, i], num_classes=self.domain_sizes[i])[:, 1:] for i in range(len(self.labels))], dim=-1)
+            one_hot_encoded_samples = one_hot_encoded_samples.float().to(self.net.device)
+        except:
+            print('domain sizes: ', self.domain_sizes)
+            print('assignments: ', assignments[:25])
+            exit(1)
         
         # get the values and convert them back to unnormalized version, all within logspace
         # print(self.labels)
         values = self.data_processor.undo_normalization(self.net(one_hot_encoded_samples))
-        return values.view(len(all_elim_assignments), len(assignments)).T
+        return values.view(len(all_elim_assignments), len(assignments)).T.detach()
         
         
     def _filter_and_fix_assignments(self, assignments_tensor: torch.Tensor,

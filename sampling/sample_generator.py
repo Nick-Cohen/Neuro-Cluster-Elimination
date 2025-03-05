@@ -18,6 +18,8 @@ class SampleGenerator:
         self.mg = mg
         self.random_seed = random_seed
         self.factors = bucket.factors
+        # for factor in self.factors:
+        #     assert factor.tensor is not None
         self.num_samples = self.config['num_samples']
         self.sampling_scheme = self.config['sampling_scheme']
         self.message_scope, self.domain_sizes = self.get_message_scope_and_dims()
@@ -127,7 +129,8 @@ class SampleGenerator:
         for factor in self.bucket.factors:
             scope = scope.union(factor.labels)
         scope.discard(self.bucket.label)
-        return sorted(list(scope)), torch.tensor([self.gm.vars[self.gm.matching_var(v)].states for v in scope])
+        scope = sorted(list(scope))
+        return scope, torch.tensor([self.gm.vars[self.gm.matching_var(v)].states for v in scope])
     
     def compute_message_values(self, assignments: torch.Tensor) -> torch.Tensor:
         factors = self.factors
@@ -140,14 +143,14 @@ class SampleGenerator:
             factors = gradient_factors
         return self.sample_tensor_product(factors=factors,  assignments=assignments)
     
-    # TODO: Combine factor slices in pairs to reduce number of tensor operations
     def sample_tensor_product_elimination(self, factors, assignments) -> torch.Tensor:
         for factor in factors:
             factor.order_indices()
         unsummed_shape = (*self.elim_domain_sizes,)
-        unsummed_values = torch.zeros((len(assignments),) + unsummed_shape, device=self.gm.device)
+        unsummed_values = torch.zeros((len(assignments),) + unsummed_shape, device=self.gm.device, requires_grad=False)
         for fast_factor in factors:
             if True:
+                # assert not fast_factor.tensor.requires_grad
                 unsummed_values += fast_factor._get_slices(assignments=assignments, elim_vars=self.elim_vars, elim_domain_sizes = self.elim_domain_sizes, message_scope=self.message_scope)
             if False:
                 tensor = fast_factor.tensor
@@ -198,13 +201,14 @@ class SampleGenerator:
 
     def sample_tensor_product(self, factors, assignments) -> torch.Tensor:
         
-        if len(factors) == 1 and factors[0].labels == [] or len(factors) == 0:
+
+        if factors is None or len(factors) == 1 and factors[0].labels == [] or len(factors) == 0:
             return torch.zeros(len(assignments), device=self.gm.device)
         for factor in factors:
             factor.order_indices()
         scope = self.message_scope
         elim_vars = self.elim_vars
-        output = torch.zeros((len(assignments),1), device=self.gm.device)
+        output = torch.zeros((len(assignments),1), device=self.gm.device, requires_grad=False)
         for fast_factor in factors:
             try:
                 output += fast_factor._get_values(assignments=assignments, message_scope=self.message_scope)
@@ -212,7 +216,9 @@ class SampleGenerator:
                 print(fast_factor._get_values(assignments=assignments, message_scope=self.message_scope).shape)
                 print(assignments.shape)
                 exit(1)
-        return (output / math.log(10)).squeeze(1)
+        assert not output.requires_grad
+        return (output).squeeze(1)
+        # return (output / math.log(10)).squeeze(1)
         # return torch.logsumexp(unsummed_values * math.log(10), dim=tuple(range(1, unsummed_values.dim()))) / math.log(10)
         
             

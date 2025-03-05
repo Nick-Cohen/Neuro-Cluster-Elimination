@@ -6,14 +6,18 @@ import torch
 import torch.nn.functional as F
 import torch.nn as nn
 import torch.optim as optim
+# from torchviz import make_dot
 import matplotlib.pyplot as plt
 import sys
+from tqdm.notebook import tqdm
 
 
 class Trainer:
     def __init__(self, net, bucket):
         self.config = bucket.gm.config
         self.bucket = bucket
+        for factor in bucket.factors:
+            assert not(factor.tensor is None and not factor.is_nn), f"{bucket.label}"
         self.net = net
         self.sample_generator, self.data_preprocessor, self.dataloader = self._make_dataloader()
         self.message_size = self.dataloader.message_size
@@ -38,7 +42,7 @@ class Trainer:
             mode='min',           # Minimize loss
             factor=self.config['lr_decay'],           # Reduce LR by this factor
             patience=self.config['patience'],          # Number of epochs with no improvement before reducing LR
-            verbose=True,         # Print updates
+            verbose=False,         # Print updates
             min_lr=self.config['min_lr']          # Minimum learning rate
         )
             
@@ -130,9 +134,12 @@ class Trainer:
         outputs = self.net(x_batch)
         
         # Compute loss
-        mg_hat_batch = mg_hat_batch.detach()
-        weights = self._get_weights(mg_hat_batch)
+        # mg_hat_batch = mg_hat_batch.detach()
+        # weights = self._get_weights(mg_hat_batch)
+        #debug for squared loss
         loss = self.loss_fn(outputs.squeeze(), y_batch, mg_hat_batch)
+        
+        
         # if mg_hat_batch is not None or self.loss_fn == logspace_mse:
         #     mg_hat_batch.detach()
         #     loss = self.loss_fn(outputs.squeeze(), y_batch, mg_hat_batch)
@@ -154,22 +161,26 @@ class Trainer:
 
         # debug-------------------------
         # with torch.autograd.detect_anomaly():
-        loss.backward(retain_graph=True)
+        # loss.backward(retain_graph=True)
+        loss.backward(retain_graph=False)
         if self.debug:
             self.tracked['gradients'].append([p.grad.clone() for p in self.net.parameters()])
         
-        print("Batch loss: ", loss.item(), " grad sum: ", self.net.get_sum_grad().item())
+        # print("Batch loss: ", loss.item(), " grad sum: ", self.net.get_sum_grad().item())
         
-        if self.debug:
-            for name, param in self.net.named_parameters():
-                if param.grad is not None:
-                    print(f"Before Step - {name}: Grad: {param.grad}, Param: {param.data}")
+        # if self.debug:
+        #     for name, param in self.net.named_parameters():
+        #         if param.grad is not None:
+        #             print(f"Before Step - {name}: Grad: {param.grad}, Param: {param.data}")
+        #     self.optimizer.step()
+        #     for name, param in self.net.named_parameters():
+        #         print(f"After Step - {name}: Param: {param.data}")
+        if True:
             self.optimizer.step()
-            for name, param in self.net.named_parameters():
-                print(f"After Step - {name}: Param: {param.data}")
-        else:
-            self.optimizer.step()
-        return loss.detach().cpu().item()
+            loss_copy = loss.cpu().item()
+            del x_batch, y_batch, mg_hat_batch, loss
+            torch.cuda.empty_cache()
+        return loss_copy
     
     def train_epoch(self, batches):
         losses = []
@@ -186,6 +197,7 @@ class Trainer:
         else:
             if self.debug:
                 print('losses are ', losses)
+            # debug, uncomment below after debugging
             loss = self._aggregate_batch_losses(losses)
             if self.debug:
                 print('loss is ', loss)
@@ -240,7 +252,7 @@ class Trainer:
     def train(self):
         dataloader = self.dataloader
         traced_loss_fns = self.config['traced_losses']
-        # val_set = self._get_val_set()
+        val_set = self._get_val_set()
         
         traced_losses_data = []
         num_samples = self.config['num_samples']
@@ -266,48 +278,59 @@ class Trainer:
         #---------------------------
         
         # Main train loop-------------------------------
-        for s in range(num_sets):
-            set_batches = self.dataloader.load_batches(batch_size, num_batches_per_set)
-            # print first 3 inputs
-            # debug
-            # print(set_batches[0]['x'][:3])
-            for epoch in range(num_epochs):
-                # initial losses------------
-                # if initialize_loss:
-                #     initialize_loss = False
-                #     if val_set is None:
-                #         all_losses = self.evaluate_epoch(traced_loss_fns, set_batches)
-                #     else:
-                #         all_losses = self.evaluate_epoch(traced_loss_fns, val_set)
-                #     traced_losses_data.append([0] + [loss.item() for loss in all_losses])
-                #---------------------------
-                loss = self.train_epoch(set_batches)
-                print(f"Set {s+1}/{num_sets}, Epoch {epoch+1}/{num_epochs}, Loss: {loss.item()}")
-                
-                # track different losses-------------------
-                # if val_set is None:
-                #     all_losses = self.evaluate_epoch(traced_loss_fns, set_batches)
-                # else:
-                #     all_losses = self.evaluate_epoch(traced_loss_fns, val_set)
-                num_samples_trained_on = (s * num_epochs + epoch + 1) * set_size
-                # traced_losses_data.append([num_samples_trained_on] + [loss.item() for loss in all_losses])
-                # self.print_epoch_losses(traced_loss_fns, set_batches, losses=all_losses)
-                #-------------------------------------------
-                
-                # see if learning rate should be decreased
-                self.scheduler.step(loss)
-                # stop training if loss is at minimum
-                current_lr = self.optimizer.param_groups[0]['lr']
-                if current_lr <= self.config['min_lr']:
-                    print('Learning rate is at minimum. Stopping training.')
-                    return traced_losses_data
+        num_progress_steps = num_sets * num_epochs
+        with tqdm(total=num_progress_steps, desc="Bucket "+str(self.bucket.label) + " training") as pbar:
+            for s in range(num_sets):
+                set_batches = self.dataloader.load_batches(batch_size, num_batches_per_set)
+                # print first 3 inputs
+                # debug
+                # print(set_batches[0]['x'][:3])
+                for epoch in range(num_epochs):
+                    # initial losses------------
+                    if initialize_loss:
+                        initialize_loss = False
+                        if val_set is None:
+                            all_losses = self.evaluate_epoch(traced_loss_fns, set_batches)
+                        else:
+                            all_losses = self.evaluate_epoch(traced_loss_fns, val_set)
+                        traced_losses_data.append([0] + [loss.item() for loss in all_losses])
+                    #---------------------------
+                    loss = self.train_epoch(set_batches)
+                    #debug
+                    
+                    
+                    # track different losses-------------------
+                    if val_set is None:
+                        all_losses = self.evaluate_epoch(traced_loss_fns, set_batches)
+                    else:
+                        all_losses = self.evaluate_epoch(traced_loss_fns, val_set)
+                    num_samples_trained_on = (s * num_epochs + epoch + 1) * set_size
+                    traced_losses_data.append([num_samples_trained_on] + [loss.item() for loss in all_losses])
+                    # self.print_epoch_losses(traced_loss_fns, set_batches, losses=all_losses)
+                    #-------------------------------------------
+                    
+                    # see if learning rate should be decreased
+                    self.scheduler.step(loss)
+                    # stop training if loss is at minimum
+                    current_lr = self.optimizer.param_groups[0]['lr']
+                    postfix = {
+                        "Loss": f"{loss.item():.5f}",
+                        "LR": f"{current_lr:.5f}",
+                    }
+                    pbar.set_postfix(postfix)
+                    pbar.update(1)
+                    if current_lr <= self.config['min_lr'] * 10:
+                        print('Learning rate is at minimum. Stopping training.')
+                        self.bucket.gm.traced_losses_data.append((self.bucket.label, traced_losses_data))
+                        return traced_losses_data
+        self.bucket.gm.traced_losses_data.append((self.bucket.label, traced_losses_data))
         return traced_losses_data
                     
     def _aggregate_batch_losses(self, losses, is_logspace = True):
         # print('losses are ', losses)
         losses = torch.tensor(losses, dtype=torch.float32, device=self.config['device']).detach()
         if is_logspace:
-            return torch.logsumexp(torch.tensor(losses), dim=0) - torch.log(torch.tensor(len(losses)))
+            return torch.logsumexp(losses, dim=0) - torch.log(torch.tensor(len(losses)))
            
     def train_epoch_depricated(self):
         self.net.train()

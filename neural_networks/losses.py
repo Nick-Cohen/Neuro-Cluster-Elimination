@@ -3,7 +3,7 @@ import torch.nn as nn
 import math
     
 
-def gil1(outputs, targets, mg_hat):
+def gil1_linear_space(outputs, targets, mg_hat):
     # compute difference of outputs and targets
     diff = torch.abs(outputs - targets)
     # weight by the grad
@@ -87,7 +87,7 @@ def from_logspace_gil2(outputs, targets, mg_hat):
     out = torch.log10(out) + 2 * max_elt
     return out
 
-def from_logspace_gil1(outputs, targets, mg_hat):
+def gil1(outputs, targets, mg_hat):
     # get the exponentiated difference of the outputs and targets
     # convert to linear space to take the difference of the products
     # adding mgh in first for numerical stability to prevent really tiny differences being swallowed even when mg_hat is very large
@@ -118,6 +118,10 @@ def gil1c(outputs, targets, mg_hat):
     # adding mgh in first for numerical stability to prevent really tiny differences being swallowed even when mg_hat is very large
     
     # mg_hat = 0 # debug
+    
+    # print(mg_hat[:10])
+    # exit(1)
+    
     s1 = outputs + mg_hat
     s2 = targets + mg_hat
     
@@ -141,7 +145,6 @@ def z_err(outputs, targets, mg_hat):
     target_sampled_Z = torch.logsumexp((s2 - max_s).flatten(), dim=0)
     output_sampled_Z = torch.logsumexp((s1 - max_s).flatten(), dim=0)
     
-    # return output_sampled_Z - target_sampled_Z without abs
     return target_sampled_Z - output_sampled_Z
 
 # just the square of the gil1c err, has different grads

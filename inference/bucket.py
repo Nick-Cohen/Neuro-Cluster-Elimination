@@ -29,6 +29,16 @@ class FastBucket:
         t.train()
         return FactorNN(net, t.data_preprocessor)
     
+    def compute_dummy_nn(self):
+        from NCE.neural_networks.net import Net, Memorizer
+        from NCE.neural_networks.train import Trainer
+        net = Net(self)
+        t=Trainer(net=net, bucket=self)
+        # use trainer to make dataloader
+        x_all, y_all, _ = t.dataloader.load(all=True)
+        mem = Memorizer(self, x_all, y_all)
+        return FactorNN(mem, t.data_preprocessor)
+    
     def compute_message_exact(self):
         # Multiply all factors
         if not self.factors:
@@ -36,6 +46,7 @@ class FastBucket:
         
         if self.factors[0].is_nn:
             message = self.factors[0].to_exact()
+            assert message.tensor is not None
         else:
             message = self.factors[0]
         for factor in self.factors[1:]:
@@ -45,6 +56,7 @@ class FastBucket:
 
         # Eliminate variables
         message = message.eliminate(self.elim_vars)
+        assert not (message.tensor is None and len(message.labels) > 0), f"{self.label}"
         return message
     
     def compute_wmb_message(self, iB: int, debug=False) -> List[FastFactor]:

@@ -4,7 +4,7 @@ import torch
 
 def nn_to_FastFactor(idx, fastGM, jit_file = None, net = None, device='cuda', debug=False):
     if jit_file is None and net is None or jit_file is not None and net is not None:
-        raise ValueError("Exacgtly one of a JIT file or a PyTorch net must be provided")
+        raise ValueError("Exactly one of a JIT file or a PyTorch net must be provided")
     if debug:
         start_time = time.time()
 
