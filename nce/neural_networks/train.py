@@ -18,15 +18,25 @@ from tqdm.notebook import tqdm
 def should_use_convex_early_stopping(config):
     """
     Check if convex early stopping should be activated based on config.
-    
+
     Args:
         config: The nn_config dictionary
-        
+
     Returns:
         bool: True if should use convex early stopping
     """
-    return (config.get('convex_early_stopping', False) and 
-            (config.get('loss_fn') == 'logspace_mse_fdb' or config.get('loss_fn') == 'linspace_mse_fdb' or config.get('loss_fn') == 'weighted_logspace_mse') and
+    loss_fn = config.get('loss_fn', '')
+    # Check if loss function supports early stopping
+    supported_losses = (
+        loss_fn == 'logspace_mse_fdb' or
+        loss_fn == 'linspace_mse_fdb' or
+        loss_fn == 'weighted_logspace_mse' or
+        loss_fn == 'ukf_sequential' or
+        'ukf_seq' in loss_fn
+    )
+
+    return (config.get('convex_early_stopping', False) and
+            supported_losses and
             config.get('hidden_sizes', []) == [])
 
 class Trainer:
@@ -42,7 +52,15 @@ class Trainer:
         self.message_size = self.dataloader.message_size
         self.debug = self.config['debug']
         self.tracked = {'parameters': [], 'gradients': []}
-        # self.mgh_factors = [self._get_mgh()] # TODO: will need to grab list of factors in the future
+        self.losses = []
+        self.val_losses = []
+        # self.bw_factors = [self._get_mgh()] # TODO: will need to grab list of factors in the future
+
+        # For elp_least_squares_v2: track expansion point
+        self.expansion_point = None
+        self.dL_moving_avg = None
+        self.d2L_moving_avg = None
+        self.momentum = 0.9  # For moving average of derivatives
         
         # Set optimizer
         if net is not None:
@@ -92,8 +110,11 @@ class Trainer:
             self.loss_fn = loss_fn
         self.normalizer = torch.tensor(0.0, device=self.config['device'])
          
-    def train(self, new_loss_fn=None, override_epochs=0, override_optimizer=None):
-        
+    def train(self, new_loss_fn=None, override_epochs=-1, override_optimizer=None):
+        from nce.inference.factor_nn import FactorNN
+        from nce.utils.plots import plot_fastfactor_comparison
+
+
         original_optimizer = None
         # if override_optimizer is not None:
         #     # Store current optimizer state
@@ -123,22 +144,57 @@ class Trainer:
                 verbose=self.config.get('debug', True)
             )
             if self.config.get('debug', True):
-                print("Convex early stopping activated for linear logspace_mse_fdb")
+                print(f"Convex early stopping activated for linear {self.config.get('loss_fn')}")
         
         dataloader = self.dataloader
         traced_loss_fns = self.config['traced_losses']
-        val_set = self._get_val_set()
-        
+        val_set = None
+
+        use_nbe_early_stopping = self.config.get('nbe_early_stopping', False)
+        nbe_val_set = None
+        nbe_val_losses = []
+        nbe_warmup_epochs = 5  # Don't check early stopping until after this many epochs
+
+        # IMPORTANT: Initialize normalizing constant from TRAINING data, not validation data
+        # This ensures that max(y + bw) from training is used to prevent overflow in UKL loss
+        # We load a small training sample first just to trigger the normalization computation
+        batch_size = self.config['batch_size']
+        num_batches_per_set = self.config['set_size'] // batch_size
+        stratify = self.config.get('stratify_samples', False)
+        init_batches = self.dataloader.load_batches(batch_size, num_batches_per_set, stratify_samples=stratify)
+        print(f"Initialized normalizing constant from training data: {self.data_preprocessor.normalizing_constant:.4f}")
+        if self.data_preprocessor.bw_normalizing_constant is not None:
+            print(f"  bw_normalizing_constant (bw at argmax(y+bw)): {self.data_preprocessor.bw_normalizing_constant:.4f}")
+
+        # Now generate validation set (which will use the same normalizing constant)
+        nbe_val_size = max(1, self.config['num_samples'] // 9)
+        nbe_val_set = self._generate_validation_set_nbe(nbe_val_size)
+        self.nbe_val_set = nbe_val_set  # Store for later use (plotting, etc.)
+
+        if use_nbe_early_stopping:
+            nbe_warmup_epochs = self.config.get('nbe_warmup_epochs', nbe_warmup_epochs)
+            print(f"NBE early stopping enabled: validation set size = {len(nbe_val_set[0]['x'])}, warmup = {nbe_warmup_epochs} epochs")
+        else:
+            # Validation set was generated but won't be used for early stopping
+            print(f"Validation set generated: {len(nbe_val_set[0]['x'])} samples")
+
+        # For mini-batch learning, create validation set for early stopping
+        use_validation_early_stopping = False
+        if self.config.get('use_validation_early_stopping', False):
+            use_validation_early_stopping = True
+            val_set = self._generate_validation_set()
+            print(f"Validation-based early stopping enabled: checking every 10 epochs on {len(val_set[0]['x'])} samples")
+
         traced_losses_data = []
         num_samples = self.config['num_samples']
         batch_size = self.config['batch_size']
-        if override_epochs > 0:
+        if override_epochs >= 0:
             num_epochs = override_epochs
         else:
             num_epochs = self.config['num_epochs']
         set_size = self.config['set_size']
-        num_sets = num_samples // set_size
-        num_batches_per_set = set_size // batch_size
+
+        # Check for full data batch mode BEFORE using set_size
         if self.dataloader.sample_generator.sampling_scheme == 'all':
             print("Overwriting batch size and num sets for full data batches...")
             set_size = self.message_size
@@ -146,6 +202,9 @@ class Trainer:
             num_sets = 1
             num_batches_per_set = self.config['num_batches_per_set']
             batch_size = self.message_size // num_batches_per_set
+        else:
+            num_sets = num_samples // set_size
+            num_batches_per_set = set_size // batch_size
         if set_size % batch_size != 0:
             print('Warning: set_size is not a multiple of batch_size. Only using ', batch_size * num_batches_per_set, ' samples per set.')
         if num_samples % set_size != 0:
@@ -161,10 +220,55 @@ class Trainer:
 
         # Main train loop-------------------------------
         num_progress_steps = num_sets * num_epochs
+
+        # Determine if we need to pass scaling_factor to data loader
+        scaling_factor = None
+        if self.config['loss_fn'] == 'scaled_mse' or self.config.get('loss_fn2') == 'scaled_mse':
+            # Get forward/backward stats for scaling
+            try:
+                sigma_f, sigma_g, rho = self.bucket.get_fw_bw_stats()
+                scaling_factor = (sigma_f ** 2) / (sigma_f ** 2 + sigma_g ** 2 + 1e-12)
+            except Exception as e:
+                print(f"Warning: Could not get fw/bw stats for scaled_mse: {e}")
+                scaling_factor = None
+
+        # Note: scaling_factor logic removed - normalization is now computed once at init
+
+        # Initialize validation-based early stopping tracking
+        val_loss_history = []  # Store (epoch, val_loss) tuples for validation-based early stopping
+
+        # Display initial state before any training if display_intermediate is enabled
+        if self.config.get('display_intermediate'):
+            try:
+                from nce.inference.factor_nn import FactorNN
+                from nce.utils.plots import plot_fastfactor_comparison, plot_validation_comparison
+                logSS = getattr(self.bucket.gm, 'logSS', 0)
+                if logSS <= 6:
+                    # Full message comparison
+                    intermediate_factor = FactorNN(self.net, self.data_preprocessor)
+                    intermediate_factor = intermediate_factor.to_exact()
+                    exact_message_here = self.bucket.compute_message_exact()
+                    plot_fastfactor_comparison(exact_message_here, intermediate_factor, title=f'Bucket {self.bucket.label} BEFORE training (epoch 0)')
+                else:
+                    # Validation set comparison
+                    val_batch = self.nbe_val_set[0]
+                    x_val = val_batch['x']
+                    y_val = val_batch['y']
+                    with torch.no_grad():
+                        y_pred = self.net(x_val).squeeze()
+                    plot_validation_comparison(
+                        y_val, y_pred,
+                        title=f'Bucket {self.bucket.label} BEFORE training (epoch 0) (Validation Set)',
+                        show=True, show_loss_curve=False
+                    )
+            except Exception as e:
+                print(f"WARNING: display_intermediate (initial) failed: {e}")
+
         with tqdm(total=num_progress_steps, desc="Bucket "+str(self.bucket.label) + " training") as pbar:
             for s in range(num_sets):
-                set_batches = self.dataloader.load_batches(batch_size, num_batches_per_set)
-                
+                stratify = self.config.get('stratify_samples', False)
+                set_batches = self.dataloader.load_batches(batch_size, num_batches_per_set, stratify_samples=stratify)
+
                 def debug_uniformity_histogram():
                     print('debugging uniformity')
                     data = {}
@@ -178,7 +282,88 @@ class Trainer:
                 # print first 3 inputs
                 # debug
                 # print(set_batches[0]['x'][:3])
+                loss1000 = 1000000
                 for epoch in range(num_epochs):
+                    if self.config.get('display_intermediate') and (epoch % self.config['display_intermediate'] == 0) and epoch > 0:
+                        plot = False # debug
+                        try:
+                            logSS = getattr(self.bucket.gm, 'logSS', 0)
+                            if logSS <= 6:
+                                # Full message comparison
+                                intermediate_factor = FactorNN(self.net, self.data_preprocessor)
+                                intermediate_factor = intermediate_factor.to_exact()
+                                exact_message_here = self.bucket.compute_message_exact()
+                                plot_fastfactor_comparison(exact_message_here, intermediate_factor, title=f'Bucket {self.bucket.label} Intermediate after {s*num_epochs+epoch} epochs', pred_alpha=0.0)
+                            else:
+                                # Validation set comparison - use stored validation set
+                                from nce.utils.plots import plot_validation_comparison
+                                val_batch = self.nbe_val_set[0]
+                                x_val = val_batch['x']
+                                y_val = val_batch['y']
+                                with torch.no_grad():
+                                    y_pred = self.net(x_val).squeeze()
+                                plot_validation_comparison(
+                                    y_val, y_pred,
+                                    title=f'Bucket {self.bucket.label} Intermediate after {s*num_epochs+epoch} epochs (Validation Set)',
+                                    show=True, show_loss_curve=True,
+                                    losses=self.losses, val_losses=self.val_losses
+                                )
+                        except Exception as e:
+                            print(f"WARNING: display_intermediate failed: {e}")
+
+                        # UKF Sequential: Display statistics if using this loss
+                        if hasattr(self, 'ukf_Lmu') and self.ukf_Lmu is not None:
+                            print(f"\n{'='*70}")
+                            print(f"UKF Sequential Statistics at Epoch {s*num_epochs+epoch}")
+                            print(f"{'='*70}")
+
+                            # Display Gaussian statistics
+                            mu0 = self.ukf_Lmu[0].item()
+                            mu1 = self.ukf_Lmu[1].item()
+                            print(f"Mean vector (Lmu):")
+                            print(f"  E[Φ]  (exact log Z)  : {mu0:.6f}")
+                            print(f"  E[Φ̂] (approx log Z) : {mu1:.6f}")
+
+                            print(f"\nCovariance matrix (Lsig):")
+                            print(f"  Var[Φ]        : {self.ukf_Lsig[0, 0].item():.6f}")
+                            print(f"  Var[Φ̂]       : {self.ukf_Lsig[1, 1].item():.6f}")
+                            print(f"  Cov[Φ, Φ̂]    : {self.ukf_Lsig[0, 1].item():.6f}")
+                            print(f"  Correlation   : {self.ukf_Lsig[0, 1].item() / (torch.sqrt(self.ukf_Lsig[0, 0] * self.ukf_Lsig[1, 1]).item() + 1e-12):.6f}")
+
+                            # Compute loss decomposition
+                            bias_squared = (mu0 - mu1)**2
+                            variance_term = (self.ukf_Lsig[0, 0].item() + self.ukf_Lsig[1, 1].item() - 2 * self.ukf_Lsig[0, 1].item())
+                            total_loss = bias_squared + variance_term
+
+                            print(f"\nLoss Decomposition:")
+                            print(f"  Bias² term            : {bias_squared:.6f}")
+                            print(f"  Variance term         : {variance_term:.6f}")
+                            print(f"  Total loss (E[(Φ-Φ̂)²]): {total_loss:.6f}")
+
+                            # Compute derived metrics
+                            expected_error = abs(mu0 - mu1)
+                            rmse = total_loss ** 0.5
+                            partition_ratio = expected_error  # exp(expected_error) for actual ratio
+
+                            print(f"\nDerived Metrics:")
+                            print(f"  Expected log partition error (|E[Φ] - E[Φ̂]|): {expected_error:.6f}")
+                            print(f"  RMSE (√loss)                                 : {rmse:.6f}")
+                            print(f"  Partition function ratio (exp({expected_error:.3f}))      : {torch.exp(torch.tensor(expected_error)).item():.3f}x")
+
+                            # Display forward/backward stats
+                            print(f"\nForward/Backward Message Statistics:")
+                            print(f"  σ_f (forward std)  : {self.ukf_sigma_f:.6f}")
+                            print(f"  σ_g (backward std) : {self.ukf_sigma_g:.6f}")
+                            print(f"  ρ (correlation)    : {self.ukf_rho:.6f}")
+
+                            print(f"{'='*70}\n")
+
+                        # Z_hat = (intermediate_factor * self.bucket.mg).sum_all_entries()
+                        # Z_here = (exact_message_here * self.bucket.mg).sum_all_entries()
+                        # Z_original = (self.bucket.exact_message * self.bucket.mg).sum_all_entries()
+                        # print('Z_hat: ', Z_hat, ' Z_here: ', Z_here, ' Z original: ', Z_original)
+                    else:
+                        plot = False
                     #debug
                     # if epoch > 0:
                     #     set_batches = shuffle_batches(set_batches)
@@ -187,16 +372,105 @@ class Trainer:
                     # initial losses------------
                     if initialize_loss:
                         initialize_loss = False
+
                         if val_set is None:
                             all_losses = self.evaluate_epoch(traced_loss_fns, set_batches)
                         else:
                             all_losses = self.evaluate_epoch(traced_loss_fns, val_set)
+
                         traced_losses_data.append([0] + [loss.item() for loss in all_losses])
                     
                     
-                    #debug---------------------------
-                    loss = self.train_epoch(set_batches)
-                    
+                    loss = self.train_epoch(set_batches, plot=plot, epoch=epoch)
+                    global_epoch_num = s * num_epochs + epoch
+                    self.losses.append((global_epoch_num, loss.item()))
+
+                    # Validation-based early stopping for mini-batch learning
+                    if use_validation_early_stopping and not self.config['skip_early_stopping'] and epoch > 0 and epoch % 10 == 0:
+                        # Evaluate validation loss every 10 epochs
+                        with torch.no_grad():
+                            val_loss = self.compute_epoch_loss(val_set, self.loss_fn)
+                        val_loss_value = val_loss.item()
+                        val_loss_history.append((epoch, val_loss_value))
+
+                        if epoch % 100 == 0:
+                            print(f'Epoch {epoch}: Validation loss = {val_loss_value:.6e}')
+
+                        # Check if validation loss is very low - stop immediately
+                        if val_loss_value < 0.0001:
+                            print(f'Validation loss {val_loss_value:.6e} is below 0.0001 threshold. Stopping training at epoch {epoch}.')
+                            return traced_losses_data
+
+                        # Check for improvement every 100 epochs (10 validation checks)
+                        if epoch > 0 and epoch % 100 == 0:
+                            # Get validation losses from 100 epochs ago
+                            baseline_val_loss = None
+                            for e, v in val_loss_history:
+                                if e == epoch - 100:
+                                    baseline_val_loss = v
+                                    break
+
+                            if baseline_val_loss is not None:
+                                # Get last 10 validation losses
+                                recent_val_losses = [v for e, v in val_loss_history[-10:]]
+
+                                # Check if any recent validation loss improved by >= 1% vs baseline
+                                any_improved = any(v <= 0.99 * baseline_val_loss for v in recent_val_losses)
+
+                                if not any_improved:
+                                    # No significant improvement detected
+                                    if val_loss_value < 0.01:
+                                        # Loss is good enough, stop
+                                        print(f'Validation loss {val_loss_value:.6e} is below 0.01 threshold. Stopping training at epoch {epoch}.')
+                                        return traced_losses_data
+                                    else:
+                                        # Loss is still high - check for weak improvement
+                                        any_weak_improvement = any(v <= 0.9995 * baseline_val_loss for v in recent_val_losses)
+
+                                        if not any_weak_improvement:
+                                            # No improvement at all, even with weak threshold - stop
+                                            print(f'Validation loss {val_loss_value:.6e} not decreasing after {epoch} epochs (no weak improvement).')
+                                            return traced_losses_data
+                                        else:
+                                            print(f'Epoch {epoch}: Validation loss {val_loss_value:.6e} still high but showing weak improvement. Continuing...')
+
+                    # Standard early stopping for non-validation mode
+                    elif not use_validation_early_stopping and not self.config['skip_early_stopping'] and epoch > 0:
+                        # Check if loss is very low - stop immediately
+                        if loss.item() < 0.0001:
+                            print(f'Loss {loss.item():.6e} is below 0.0001 threshold. Stopping training at epoch {epoch}.')
+                            return traced_losses_data
+
+                        # Check every 1000 epochs for improvement
+                        if epoch % 1000 == 0:
+                            baseline = loss1000                 # loss from 1000 epochs ago
+                            recent_vals = [v for _, v in self.losses[-10:]]  # last 10 logged losses
+                            current_loss = loss.item()
+
+                            # Did any of the last 10 improve by >=1% vs baseline?
+                            any_improved = any(v <= 0.99 * baseline for v in recent_vals)
+
+                            if not any_improved and baseline < float('inf'):
+                                # No significant improvement detected
+                                if current_loss < 0.01:
+                                    # Loss is good enough, stop
+                                    print(f'Loss {current_loss:.6e} is below 0.01 threshold. Stopping training at epoch {epoch}.')
+                                    return traced_losses_data
+                                else:
+                                    # Loss is still high - check for weak improvement
+                                    # Use weaker threshold (0.05% improvement instead of 1%)
+                                    any_weak_improvement = any(v <= 0.9995 * baseline for v in recent_vals)
+
+                                    if not any_weak_improvement:
+                                        # No improvement at all, even with weak threshold - stop
+                                        print(f'Loss {current_loss:.6e} not decreasing after {epoch} epochs (no weak improvement).')
+                                        return traced_losses_data
+                                    else:
+                                        # Weak improvement detected and loss is high - be patient, continue training
+                                        print(f'Epoch {epoch}: Loss {current_loss:.6e} still high but showing weak improvement. Continuing...')
+
+                            # set baseline for the next 1000-epoch window
+                            loss1000 = loss.item()
                     if early_stopper is not None:
                         epoch_number = s * num_epochs + epoch
                         if early_stopper(loss, epoch_number):
@@ -204,7 +478,74 @@ class Trainer:
                                 print(f'Convex early stopping triggered at epoch {epoch_number}')
                             self.bucket.gm.traced_losses_data.append((self.bucket.label, traced_losses_data))
                             return traced_losses_data
-                    
+
+                    # NBE early stopping check
+                    if use_nbe_early_stopping and nbe_val_set is not None:
+                        global_epoch = s * num_epochs + epoch
+
+                        # Compute validation loss on entire set (no batching)
+                        with torch.no_grad():
+                            val_batch = nbe_val_set[0]
+                            x_val = val_batch['x']
+                            y_val = val_batch['y']
+                            mgh_val = val_batch.get('mgh', None)
+                            # print("x_val.shape, y_val.shape:", x_val.shape, y_val.shape)
+                            outputs_val = self.net(x_val).squeeze()
+                            # print("outputs_val.shape:", outputs_val.shape)
+                            if mgh_val is not None:
+                                nbe_val_loss = self.loss_fn(outputs_val, y_val, mgh_val)
+                            else:
+                                nbe_val_loss = self.loss_fn(outputs_val, y_val)
+                            # Handle case where loss returns per-sample values
+                            if nbe_val_loss.dim() > 0:
+                                nbe_val_loss = nbe_val_loss.mean()
+                            nbe_val_loss_value = nbe_val_loss.item()
+                        nbe_val_losses.append(nbe_val_loss_value)
+                        # Store validation losses on self for access in plotting
+                        self.val_losses.append((global_epoch, nbe_val_loss_value))
+
+                        # Simple early stopping: stop if validation loss increased 3 times in a row
+                        if global_epoch >= nbe_warmup_epochs and len(nbe_val_losses) >= 4:
+                            # Check if loss increased for 3 consecutive epochs
+                            v_curr = nbe_val_losses[-1]
+                            v_prev1 = nbe_val_losses[-2]
+                            v_prev2 = nbe_val_losses[-3]
+                            v_prev3 = nbe_val_losses[-4]
+
+                            # Stop if: v_curr > v_prev1 > v_prev2 > v_prev3 (3 consecutive increases)
+                            if v_curr > v_prev1 and v_prev1 > v_prev2 and v_prev2 > v_prev3:
+                                print(f'NBE early stopping at epoch {global_epoch}: '
+                                      f'val_loss increased 3 times in a row: {v_prev3:.6e} -> {v_prev2:.6e} -> {v_prev1:.6e} -> {v_curr:.6e}')
+                                self.bucket.gm.traced_losses_data.append((self.bucket.label, traced_losses_data))
+                                return traced_losses_data
+
+                        # OLD two-phase early stopping (temporarily disabled):
+                        # Phase 1 (high loss > threshold): Strict - compare running averages over window
+                        # Phase 2 (low loss <= threshold): Lenient - 3 consecutive epochs of non-improvement
+                        # nbe_plateau_threshold = self.config.get('nbe_plateau_threshold', 0.1)
+                        # nbe_plateau_window = self.config.get('nbe_plateau_window', 25)
+                        # nbe_plateau_min_improvement = self.config.get('nbe_plateau_min_improvement', 0.01)
+                        # if global_epoch >= nbe_warmup_epochs:
+                        #     v_curr = nbe_val_losses[-1]
+                        #     if v_curr > nbe_plateau_threshold:
+                        #         # Phase 1: High loss - use strict plateau detection
+                        #         if len(nbe_val_losses) >= 2 * nbe_plateau_window:
+                        #             recent_avg = sum(nbe_val_losses[-nbe_plateau_window:]) / nbe_plateau_window
+                        #             previous_avg = sum(nbe_val_losses[-2*nbe_plateau_window:-nbe_plateau_window]) / nbe_plateau_window
+                        #             improvement = (previous_avg - recent_avg) / (abs(previous_avg) + 1e-10)
+                        #             if improvement < nbe_plateau_min_improvement:
+                        #                 print(f'NBE early stopping (plateau) at epoch {global_epoch}')
+                        #                 return traced_losses_data
+                        #     else:
+                        #         # Phase 2: Low loss - use lenient 3-consecutive-epochs criteria
+                        #         if len(nbe_val_losses) >= 4:
+                        #             v_prev1 = nbe_val_losses[-2]
+                        #             v_prev2 = nbe_val_losses[-3]
+                        #             v_base = nbe_val_losses[-4]
+                        #             if v_curr > v_base and v_prev1 > v_base and v_prev2 > v_base:
+                        #                 print(f'NBE early stopping (converged) at epoch {global_epoch}')
+                        #                 return traced_losses_data
+
                     # track different losses-------------------
                     if val_set is None:
                         all_losses = self.evaluate_epoch(traced_loss_fns, set_batches)
@@ -221,10 +562,12 @@ class Trainer:
                     #     self.scheduler.step(s*num_epochs+epoch)
                     # stop training if loss is at minimum
                     # current_lr = self.optimizer.param_groups[0]['lr']
-                    postfix = {
-                        "Loss": f"{loss.item():.5f}",
-                        #"LR": f"{current_lr:.5f}",
-                    }
+                    train_loss_str = f"{loss.item():.5f}" if loss.item() >= 0.01 else f"{loss.item():.4e}"
+                    postfix = {"TrLoss": train_loss_str}
+                    # Add validation loss if NBE early stopping is enabled
+                    if use_nbe_early_stopping and nbe_val_losses:
+                        val_loss_str = f"{nbe_val_losses[-1]:.5f}" if nbe_val_losses[-1] >= 0.01 else f"{nbe_val_losses[-1]:.4e}"
+                        postfix["ValLoss"] = val_loss_str
                     pbar.set_postfix(postfix)
                     pbar.update(1)
                     # if current_lr <= self.config['min_lr'] * 10:
@@ -239,30 +582,87 @@ class Trainer:
             
         return traced_losses_data
               
-    def train_batch(self, x_batch, y_batch, mg_hat_batch=None):
+    def train_batch(self, x_batch, y_batch, bw_hat_batch=None, plot_message=False, epoch=None):
         self.net.train()
+
         # Zero the parameter gradients
         if isinstance(self.optimizer, list):
             for opt in self.optimizer:
                 opt.zero_grad()
         else:
             self.optimizer.zero_grad()
-        
+
         # Forward pass
         outputs = self.net(x_batch)
+
+        # UKF Sequential: Periodically recompute Lmu, Lsig
+        if hasattr(self, 'ukf_resample_period'):
+            if self.ukf_batch_count % self.ukf_resample_period == 0:
+                # Recompute Gaussian statistics
+                from .ukf_helpers import estimate_gaussian
+
+                # Compute adjusted backward message parameters
+                # Ensure all scalars are tensors on the correct device
+                sf = torch.tensor(self.ukf_sigma_f + 1e-12, device=outputs.device, dtype=outputs.dtype)
+                sb = torch.tensor(self.ukf_sigma_g + 1e-12, device=outputs.device, dtype=outputs.dtype)
+                Sx = torch.tensor(self.ukf_rho * self.ukf_sigma_f * self.ukf_sigma_g, device=outputs.device, dtype=outputs.dtype)
+                al_ = 1.0 + Sx / (sf ** 2)
+                sb_ = torch.sqrt((1.0 - Sx**2 / (sb**2 * sf**2)) * sb**2)
+                mb = (al_ - 1.0) * (y_batch - y_batch.mean())
+
+                # Estimate p(Φ, Φ̂)
+                Lmu_, Lsig_ = estimate_gaussian(
+                    y_batch.detach(),
+                    outputs.detach(),
+                    mb,
+                    sb_,
+                    n_samp=self.ukf_m_per
+                )
+
+                # Update stored values (with exponential smoothing if not first time)
+                if self.ukf_Lmu is None:
+                    self.ukf_Lmu = Lmu_
+                    self.ukf_Lsig = Lsig_
+                else:
+                    # Exponential smoothing: gamma = 0.9 (like the notebook)
+                    gamma = 0.9
+                    self.ukf_Lmu = gamma * self.ukf_Lmu + (1 - gamma) * Lmu_
+                    # For covariance, also account for change in mean
+                    self.ukf_Lsig = (gamma * self.ukf_Lsig +
+                                    (1 - gamma) * (Lsig_ + (Lmu_ - self.ukf_Lmu)[:,None] * (Lmu_ - self.ukf_Lmu)[None,:]))
+
+            self.ukf_batch_count += 1
+
+        if plot_message:
+            from nce.utils.plots import plot_fastfactor_comparison
+            from nce.inference.factor import FastFactor
+            # Compute exact message and NN approximation for full comparison
+            exact_message = self.bucket.compute_message_exact()
+            nn_factor = self.bucket.compute_message_nn(train=False)
+            nn_exact = nn_factor.to_exact()
+            # Attach losses to the approx factor for loss curve display
+            nn_exact.losses = self.losses
+            nn_exact.val_losses = self.val_losses
+            plot_fastfactor_comparison(
+                exact_message, nn_exact,
+                title=f'Bucket {self.bucket.label} at epoch {epoch}',
+                show_loss_curve=True
+            )
+            
+            
         
         # Compute loss
-        # mg_hat_batch = mg_hat_batch.detach()
-        # weights = self._get_weights(mg_hat_batch)
+        # bw_hat_batch = bw_hat_batch.detach()
+        # weights = self._get_weights(bw_hat_batch)
         #debug for squared loss
         # if self.loss_fn == w_gil1c or self.loss_fn == gil1c_linear:
-        #     loss = self.loss_fn(outputs.squeeze(), y_batch, mg_hat_batch, self.normalizer)
+        #     loss = self.loss_fn(outputs.squeeze(), y_batch, bw_hat_batch, self.normalizer)
         # else:
         
         
-        # if mg_hat_batch is not None or self.loss_fn == logspace_mse:
-        #     mg_hat_batch.detach()
-        #     loss = self.loss_fn(outputs.squeeze(), y_batch, mg_hat_batch)
+        # if bw_hat_batch is not None or self.loss_fn == logspace_mse:
+        #     bw_hat_batch.detach()
+        #     loss = self.loss_fn(outputs.squeeze(), y_batch, bw_hat_batch)
         # else:
         #     # print(outputs.shape,y_batch.shape)
         #     loss = self.loss_fn(outputs.squeeze(), y_batch)
@@ -287,16 +687,44 @@ class Trainer:
         
         if self.config.get('optimizer') == "muon":
             with torch.cuda.amp.autocast(enabled=True):
-                loss = self.loss_fn(outputs.reshape(-1), y_batch, mg_hat_batch)
-                self.scaler.scale(loss).backward()
-        else:
-            loss = self.loss_fn(outputs.reshape(-1), y_batch, mg_hat_batch)
-            loss.backward()
+                if 'elp_least_squares_v2' in str(self.loss_fn):
+                    loss_result = self.loss_fn(outputs.reshape(-1), y_batch, bw_hat_batch, expansion_point=self.expansion_point)
+                    if isinstance(loss_result, tuple):
+                        loss, self.expansion_point, dL, d2L = loss_result
 
-        # loss.backward(retain_graph=False)
+                        # Update moving averages of derivatives
+                        if self.dL_moving_avg is None:
+                            self.dL_moving_avg = dL.detach()
+                            self.d2L_moving_avg = d2L.detach()
+                        else:
+                            self.dL_moving_avg = self.momentum * self.dL_moving_avg + (1 - self.momentum) * dL.detach()
+                            self.d2L_moving_avg = self.momentum * self.d2L_moving_avg + (1 - self.momentum) * d2L.detach()
+                    else:
+                        loss = loss_result
+                else:
+                    loss = self.loss_fn(outputs.reshape(-1), y_batch, bw_hat_batch)
+                self.scaler.scale(loss).backward()
+        else: # not using muon
+            if 'elp_least_squares_v2' in str(self.loss_fn):
+                loss_result = self.loss_fn(outputs.reshape(-1), y_batch, bw_hat_batch, expansion_point=self.expansion_point)
+                if isinstance(loss_result, tuple):
+                    loss, self.expansion_point, dL, d2L = loss_result
+
+                    # Update moving averages of derivatives
+                    if self.dL_moving_avg is None:
+                        self.dL_moving_avg = dL.detach()
+                        self.d2L_moving_avg = d2L.detach()
+                    else:
+                        self.dL_moving_avg = self.momentum * self.dL_moving_avg + (1 - self.momentum) * dL.detach()
+                        self.d2L_moving_avg = self.momentum * self.d2L_moving_avg + (1 - self.momentum) * d2L.detach()
+                else:
+                    loss = loss_result
+            else:
+                loss = self.loss_fn(outputs.reshape(-1), y_batch, bw_hat_batch)
+            loss.backward()
         #-----------------------------------------------------------
         if self.debug:
-            self.tracked['gradients'].append([p.grad.clone() for p in self.net.parameters()])
+            self.tracked['gradients'].append([p.grad.clone() if p.grad is not None else None for p in self.net.parameters()])
         
         # print("Batch loss: ", loss.item(), " grad sum: ", self.net.get_sum_grad().item())
         
@@ -308,12 +736,11 @@ class Trainer:
         #     for name, param in self.net.named_parameters():
         #         print(f"After Step - {name}: Param: {param.data}")
         if True:
-            max_norm = 1  # maximum allowed norm of gradients
-            # debug
-            # torch.nn.utils.clip_grad_norm_(self.net.parameters(), max_norm)
-            # don't need optimizer step with the scaler
-            # self.optimizer.step()
-            
+            # Gradient clipping to prevent overshooting
+            grad_clip_norm = self.config.get('grad_clip_norm', None)
+            if grad_clip_norm is not None:
+                torch.nn.utils.clip_grad_norm_(self.net.parameters(), grad_clip_norm)
+
             # step with scaler
             if self.config.get('optimizer') == 'muon':
                 if isinstance(self.optimizer, list):
@@ -331,56 +758,102 @@ class Trainer:
             else:
                 self.optimizer.step()
             loss_copy = loss.cpu().item()
-            del x_batch, y_batch, mg_hat_batch, loss
+            del x_batch, y_batch, bw_hat_batch, loss
             torch.cuda.empty_cache()
         return loss_copy
     
-    def train_epoch(self, batches):
+    def train_epoch(self, batches, plot=False, epoch=None):
         losses = []
         for batch in batches:
-            x_batch, y_batch, mgh_batch = batch['x'], batch['y'], batch['mgh']
-            # print('first ten mg_hat values: ', mgh_batch[:10])f
-            losses.append(self.train_batch(x_batch, y_batch, mgh_batch))
+            x_batch, y_batch = batch['x'], batch['y']
+            # Support both old 'mgh' key and new 'bw' key for backward compatibility
+            bw_batch = batch.get('bw', batch.get('mgh'))
+            losses.append(self.train_batch(x_batch, y_batch, bw_batch, plot_message=plot, epoch=epoch))
             # Free references to batch tensors
-            del x_batch, y_batch, mgh_batch
+            del x_batch, y_batch, bw_batch
             torch.cuda.empty_cache()  # If running on GPU
-            
+
         if self.loss_fn == logspace_mse:
-                loss = sum(losses) / len(losses)
-                loss = torch.Tensor([loss]).to(self.config['device'])
+            loss = sum(losses) / len(losses)
+            loss = torch.Tensor([loss]).to(self.config['device'])
         else:
             if self.debug:
                 print('losses are ', losses)
-            # debug, uncomment below after debugging
-            loss = self._aggregate_batch_losses(losses)
+            # Determine if loss is in log-space or linear-space
+            # UKL and related losses are linear-space (should be summed)
+            loss_fn_name = self.config.get('loss_fn', '')
+            is_logspace = loss_fn_name not in ['unnormalized_kl', 'scaled_ukl', 'unnormalized_kl_old']
+            loss = self._aggregate_batch_losses(losses, is_logspace=is_logspace)
             if self.debug:
                 print('loss is ', loss)
         return loss
     
     def _make_dataloader(self):
+        """Create sample generator, data preprocessor, and data loader for training.
+
+        The normalizing constant is computed lazily on first load() call,
+        using the actual training samples rather than a separate initialization sample.
+        This ensures accurate normalization without redundant computation.
+
+        Returns:
+            Tuple of (SampleGenerator, DataPreprocessor, DataLoader)
+        """
+        sg = SampleGenerator(gm=self.bucket.gm, bucket=self.bucket, random_seed=self.config['seed'])
+
+        use_bw_approx = self.config.get('use_bw_approx', False)
+
+        # Create preprocessor with deferred normalization (y=None)
+        # The normalizing constant will be computed on first load() call
+        data_preprocessor = DataPreprocessor(
+            y=None,  # Deferred - will be set on first load()
+            bw=None,
+            lower_dim=self.lower_dim,
+            device=self.config['device'],
+            use_bw_approx=use_bw_approx
+        )
+
+        return sg, data_preprocessor, DataLoader(self.bucket, sample_generator=sg, data_preprocessor=data_preprocessor)
+
+    def _make_dataloader_old(self):
+        """OLD VERSION - kept for reference."""
         sg = SampleGenerator(gm=self.bucket.gm, bucket=self.bucket, random_seed=self.config['seed'])
         sample_assignments = sg.sample_assignments(1000)
         sample_values = sg.compute_message_values(sample_assignments)
-        sample_mg_values = sg.compute_gradient_values(sample_assignments) 
-        fdb_setting = self.config.get('fdb', False)
-        data_preprocessor = DataPreprocessor(
-            y=sample_values, 
-            mg=sample_mg_values, 
-            is_logspace=True, 
-            lower_dim=self.lower_dim, 
+
+        # Only compute gradient values if backward approximation is enabled
+        if self.config.get('use_bw_approx', False):
+            sample_mg_values = sg.compute_gradient_values_old(sample_assignments)
+        else:
+            sample_mg_values = None
+
+        # Automatically enable mean-based normalization for mini-batch mode
+        # If batch_size is specified, use mean-based normalization (works with sampled data)
+        # Otherwise, allow explicit fdb setting (for backward compatibility)
+        if 'batch_size' in self.config and self.config['batch_size'] is not None:
+            use_mean_normalization = True
+        else:
+            # Fallback to explicit fdb setting for backward compatibility
+            use_mean_normalization = self.config.get('fdb', False)
+
+        from .data_preprocessor import DataPreprocessor_old
+        data_preprocessor = DataPreprocessor_old(
+            y=sample_values,
+            mg=sample_mg_values,
+            is_logspace=True,
+            lower_dim=self.lower_dim,
             device=self.config['device'],
-            fdb=fdb_setting  # Pass the fdb setting to DataPreprocessor
+            fdb=use_mean_normalization  # True for mini-batch mode
         )
         return sg, data_preprocessor, DataLoader(self.bucket, sample_generator=sg, data_preprocessor=data_preprocessor)
     
-    # def _get_mgh_factors(self):
+    # def _get_bw_factors(self):
     #     return self.bucket.approximate_downstream_factors
     
     # def _get_mgh(self):
         from inference import FastGM
         fastgm_copy = FastGM(uai_file=self.bucket.gm.uai_file, device=self.config['device'], nn_config = self.config)
-        mg_hat = fastgm_copy.get_wmb_message_gradient(bucket_var=self.bucket.label, i_bound=self.config['iB_backwards'], weights='max')
-        return mg_hat
+        bw_hat = fastgm_copy.get_wmb_message_gradient(bucket_var=self.bucket.label, i_bound=self.config['iB_backwards'], weights='max')
+        return bw_hat
 
     def _get_val_set(self):
         if self.config['val_set'] is None:
@@ -399,9 +872,9 @@ class Trainer:
                 raise ValueError("Must specify number of backward samples")
             else:
                 seed = 0 if self.config.get('approximation_method', '') == 'dt' else None
-                return lambda out, targ, mgh=None: mg_sampled_loss_fdb(out, targ, mgh, sigma_f=sigma_f, sigma_g=sigma_g, rho=rho, num_bw_samples=num_bw_samples, seed=seed)
+                return lambda out, targ, mgh=None: elp(out, targ, mgh, sigma_f=sigma_f, sigma_g=sigma_g, rho=rho, num_bw_samples=num_bw_samples, seed=seed)
 
-        elif "mg_sampled_loss_fdb_recompute" in loss_fn_name or "mg_sampled_loss_loo_fdb" in loss_fn_name:
+        elif "elp_recompute" in loss_fn_name or "elp_loo" in loss_fn_name:
             try:
                 sigma_f, sigma_g, rho = self.bucket.get_fw_bw_stats()
             except Exception as e:
@@ -411,9 +884,9 @@ class Trainer:
             # begin debug
             # print("Using rho: ", rho, " sigma_f: ", sigma_f, " sigma_g: ", sigma_g, " num_bw_samples: ", num_bw_samples)
             # end debug
-            if "mg_sampled_loss_fdb_recompute" in loss_fn_name:
-                loss = mg_sampled_loss_fdb
-            elif "mg_sampled_loss_loo_fdb" in loss_fn_name:
+            if "elp_recompute" in loss_fn_name:
+                loss = elp
+            elif "elp_loo" in loss_fn_name:
                 print('depricated loss')
                 loss = mg_sampled_loss_loo_fdb
             else:
@@ -425,23 +898,46 @@ class Trainer:
                 return lambda out, targ, mgh=None: loss(out, targ, mgh, sigma_f=sigma_f, sigma_g=sigma_g, rho=rho, seed=seed)
             else:
                 return lambda out, targ, mgh=None: loss(out, targ, mgh, sigma_f=sigma_f, sigma_g=sigma_g, rho=rho, num_bw_samples=num_bw_samples, seed=seed)
-            # return mg_sampled_loss_fdb
-        elif loss_fn_name == "mg_sampled_loss_fdb":
-            print('depricated loss')
+        elif loss_fn_name == "elp":
+            print('depricated loss name format - please use elp_recompute,<num_samples>')
             sigma_f = self.stats[self.bucket.label]['output_message_std']
             sigma_g = self.stats[self.bucket.label]['mg_std']
             rho = self.stats[self.bucket.label]['correlation']
-            return lambda out, targ, mgh=None: mg_sampled_loss_fdb(out, targ, mgh, sigma_f=sigma_f, sigma_g=sigma_g, rho=rho)
-            # return mg_sampled_loss_fdb     
+            return lambda out, targ, mgh=None: elp(out, targ, mgh, sigma_f=sigma_f, sigma_g=sigma_g, rho=rho)     
         elif loss_fn_name == "logspace_mse_fdb":
             return logspace_mse_fdb
         elif loss_fn_name == "linspace_mse_fdb":
-            return linspace_mse_fdb
+            # Enable exponential preprocessing mode
+            self.data_preprocessor.exp_preprocessing = True
+            mse = nn.MSELoss()
+            # Wrap to ignore bw_hat_batch parameter
+            return lambda out, targ, mgh=None: mse(out, targ)
+        elif loss_fn_name == "scaled_mse":
+            # Enable exponential preprocessing mode with scaling
+            self.data_preprocessor.exp_preprocessing = True
+            mse = nn.MSELoss()
+            # Wrap to ignore bw_hat_batch parameter
+            return lambda out, targ, mgh=None: mse(out, targ)
         elif loss_fn_name == "unnormalized_kl":
-            return unnormalized_kl
+            # Return lambda that reads bw_normalizing_constant from data_preprocessor at call time
+            # This allows the constant to be computed after training data is loaded
+            return lambda out, targ, bw=None: unnormalized_kl(
+                out, targ, bw,
+                bw_normalizing_constant=self.data_preprocessor.bw_normalizing_constant
+            )
+        elif loss_fn_name == "scaled_ukl":
+            # Get forward/backward stats for scaling
+            try:
+                sigma_f, sigma_g, rho = self.bucket.get_fw_bw_stats()
+            except Exception as e:
+                print(f"Warning: Could not get fw/bw stats for scaled_ukl: {e}")
+                sigma_f, sigma_g = None, None
+
+            # Return lambda that calls unnormalized_kl with scaling parameters
+            return lambda out, targ, mgh=None: unnormalized_kl(out, targ, mgh, sigma_f=sigma_f, sigma_g=sigma_g)
         elif "power_exponential" in loss_fn_name:
             alpha = float(loss_fn_name.split(',')[-1])
-            return lambda outputs, targets, mg_hat=None: power_exponential(outputs, targets, mg_hat, alpha=alpha)
+            return lambda outputs, targets, bw_hat=None: power_exponential(outputs, targets, bw_hat, alpha=alpha)
         elif loss_fn_name == "mse" or loss_fn_name == "MSE":
             return nn.MSELoss()
         elif loss_fn_name == "gil1":
@@ -484,22 +980,163 @@ class Trainer:
             return weighted_logspace_mse
         elif loss_fn_name == "weighted_logspace_mse_pedigree":
             return weighted_logspace_mse_pedigree
-        
+        elif "elp_least_squares" in loss_fn_name:
+            # Expected log partition least squares loss
+            # Syntax: elp_least_squares,<num_bw_samples>
+            try:
+                sigma_f, sigma_g, rho = self.bucket.get_fw_bw_stats()
+            except Exception as e:
+                print(f"Error occurred while getting forward/backward stats for {self.bucket.label}: {e}")
+                sigma_f, sigma_g, rho = None, None, None
+            num_bw_samples = int(loss_fn_name.split(',')[-1]) if ',' in loss_fn_name else 100
+            seed = 0 if self.config.get('approximation_method', '') == 'dt' else None
+            return lambda out, targ, mgh=None: elp_least_squares(out, targ, mgh, sigma_f=sigma_f, sigma_g=sigma_g, rho=rho, num_bw_samples=num_bw_samples, seed=seed)
+
+        elif loss_fn_name == "ukf_sequential" or "ukf_seq" in loss_fn_name:
+            # UKF sequential loss - requires special training mode
+            # Syntax: ukf_sequential or ukf_sequential,<resample_period>,<m_per>
+            parts = loss_fn_name.split(',')
+            resample_period = int(parts[1]) if len(parts) > 1 else 10
+            m_per = int(parts[2]) if len(parts) > 2 else 500
+
+            # Get forward/backward stats
+            try:
+                sigma_f, sigma_g, rho = self.bucket.get_fw_bw_stats()
+            except Exception as e:
+                print(f"Error occurred while getting forward/backward stats for {self.bucket.label}: {e}")
+                sigma_f, sigma_g, rho = None, None, None
+
+            # Store parameters for training loop
+            self.ukf_resample_period = resample_period
+            self.ukf_m_per = m_per
+            self.ukf_Lmu = None  # Will be computed during training
+            self.ukf_Lsig = None
+            self.ukf_batch_count = 0
+            self.ukf_sigma_f = sigma_f
+            self.ukf_sigma_g = sigma_g
+            self.ukf_rho = rho
+
+            # Return lambda that will use these stored values
+            return lambda out, targ, mgh=None: ukf_sequential(
+                out, targ, mgh,
+                Lmu=self.ukf_Lmu,
+                Lsig=self.ukf_Lsig,
+                sigma_f=self.ukf_sigma_f,
+                sigma_g=self.ukf_sigma_g,
+                rho=self.ukf_rho
+            )
+
         else:
-            raise ValueError(f"Loss function {self.config['loss_fn']} not recognized")
-      
-    def _get_weights(self, mg_hat_batch):
+            raise ValueError(f"Loss function {loss_fn_name} not recognized")
+
+    def _generate_validation_set(self):
+        """Generate validation set for mini-batch early stopping.
+
+        Uses uniform sampling with size = min(100k, message_size).
+
+        Returns:
+            List with single batch dict containing validation data
+        """
+        # Determine validation set size: 100k or full message if smaller
+        val_size = min(100000, self.message_size)
+
+        # Check if full message is smaller than requested size
+        if self.message_size <= val_size:
+            # Use all assignments
+            return self.dataloader.load_all()
+        else:
+            # Sample uniformly
+            # Temporarily save original sampling scheme
+            original_scheme = self.dataloader.sample_generator.sampling_scheme
+            self.dataloader.sample_generator.sampling_scheme = 'uniform'
+
+            # Generate validation data
+            x, y, bw = self.dataloader.load(num_samples=val_size, all=False)
+
+            # Restore original sampling scheme
+            self.dataloader.sample_generator.sampling_scheme = original_scheme
+
+            # Return as list with single batch dict
+            return [{'x': x, 'y': y, 'bw': bw}]
+
+    def _generate_validation_set_nbe(self, val_size):
+        """Generate validation set for NBE early stopping.
+
+        Args:
+            val_size: Number of samples for validation set
+
+        Returns:
+            List with single batch dict containing validation data
+        """
+        # Cap at message size
+        val_size = min(val_size, self.message_size)
+
+        # Check if full message is smaller than requested size
+        if self.message_size <= val_size:
+            # Use all assignments
+            return self.dataloader.load_all()
+        else:
+            # Sample uniformly
+            # Temporarily save original sampling scheme
+            original_scheme = self.dataloader.sample_generator.sampling_scheme
+            self.dataloader.sample_generator.sampling_scheme = 'uniform'
+
+            # Generate validation data
+            x, y, bw = self.dataloader.load(num_samples=val_size, all=False)
+
+            # Restore original sampling scheme
+            self.dataloader.sample_generator.sampling_scheme = original_scheme
+
+            # Return as list with single batch dict
+            return [{'x': x, 'y': y, 'bw': bw}]
+
+    def compute_epoch_loss(self, batches, loss_fn):
+        """Compute total loss across all batches (for validation).
+
+        Args:
+            batches: List of batch dicts with 'x', 'y', 'bw' keys
+            loss_fn: Loss function to evaluate
+
+        Returns:
+            Total loss as torch.Tensor
+        """
+        total_loss = 0.0
+        total_samples = 0
+
+        for batch in batches:
+            x_batch = batch['x']
+            y_batch = batch['y']
+            # Support both old 'mgh' key and new 'bw' key
+            bw_batch = batch.get('bw', batch.get('mgh'))
+
+            # Forward pass
+            outputs = self.net(x_batch)
+
+            # Compute loss
+            if bw_batch is not None:
+                loss = loss_fn(outputs, y_batch, bw_batch)
+            else:
+                loss = loss_fn(outputs, y_batch)
+
+            # Accumulate
+            total_loss += loss.item() * len(x_batch)
+            total_samples += len(x_batch)
+
+        # Return average loss
+        return torch.tensor(total_loss / total_samples if total_samples > 0 else 0.0)
+
+    def _get_weights(self, bw_hat_batch):
         if self.dataloader.sample_generator.sampling_scheme == 'mg':
             message_size = self.dataloader.bucket.get_message_size()
             p_dist = 1 / message_size
-            q_dist = torch.exp(mg_hat_batch)
-            return torch.exp(mg_hat_batch)
+            q_dist = torch.exp(bw_hat_batch)
+            return torch.exp(bw_hat_batch)
         elif self.dataloader.sample_generator.sampling_scheme == 'path':
             p_dist = 1 / message_size
-            q_dist = torch.exp(mg_hat_batch)
-            return torch.exp(mg_hat_batch)
+            q_dist = torch.exp(bw_hat_batch)
+            return torch.exp(bw_hat_batch)
 
-    def _evaluate_batch(self, loss_fn_name, x_batch, y_batch, mg_hat_batch=None):
+    def _evaluate_batch(self, loss_fn_name, x_batch, y_batch, bw_hat_batch=None):
         with torch.no_grad():
             if self.debug:
                 for param_group in self.optimizer.param_groups:
@@ -514,9 +1151,9 @@ class Trainer:
             loss_fn = self._get_loss_fn(loss_fn_name)
             # if self.debug:
             #     print("Loss Function Type:", type(loss_fn))
-            #     print("Arguments Passed: outputs, y_batch, mg_hat_batch")
-            #     print(outputs.shape, y_batch.shape, mg_hat_batch.shape)
-            loss = loss_fn(outputs.squeeze(), y_batch, mg_hat_batch)
+            #     print("Arguments Passed: outputs, y_batch, bw_hat_batch")
+            #     print(outputs.shape, y_batch.shape, bw_hat_batch.shape)
+            loss = loss_fn(outputs.squeeze(), y_batch, bw_hat_batch)
             return loss
     
     def evaluate_epoch(self, loss_fns, batches):
@@ -525,17 +1162,18 @@ class Trainer:
             for loss_fn_name in loss_fns:
                 losses = []
                 for batch in batches:
-                    x_batch, y_batch, mgh_batch = batch['x'], batch['y'], batch['mgh']
+                    x_batch, y_batch = batch['x'], batch['y']
+                    # Support both old 'mgh' key and new 'bw' key
+                    bw_batch = batch.get('bw', batch.get('mgh'))
                     outputs = self.net(x_batch)
-                    
-                    losses.append(self._evaluate_batch(loss_fn_name, x_batch, y_batch, mgh_batch))
+
+                    losses.append(self._evaluate_batch(loss_fn_name, x_batch, y_batch, bw_batch))
                 if self._get_loss_fn(loss_fn_name) == logspace_mse:
-                    # print('loss_fn_name is ', loss_fn_name)
-                    # print('self._get_loss_fn(loss_fn_name)', ' returns ', self._get_loss_fn(loss_fn_name))
                     loss = sum(losses) / len(losses)
-                    # print('logspace_mse loss: ', loss.item())
                 else:
-                    loss = self._aggregate_batch_losses(losses)
+                    # Determine if loss is in log-space or linear-space
+                    is_logspace = loss_fn_name not in ['unnormalized_kl', 'scaled_ukl', 'unnormalized_kl_old']
+                    loss = self._aggregate_batch_losses(losses, is_logspace=is_logspace)
                 out.append(loss)
             return out
     
@@ -545,11 +1183,20 @@ class Trainer:
         for (loss_fn_name,loss) in zip(loss_fns, losses):
             print(f'{loss_fn_name} loss: {loss.item()}')
         
-    def _aggregate_batch_losses(self, losses, is_logspace = True):
-        # print('losses are ', losses)
+    def _aggregate_batch_losses(self, losses, is_logspace=True):
+        """Aggregate batch losses into epoch loss.
+
+        Args:
+            losses: List of per-batch loss values
+            is_logspace: If True, use logsumexp (for log-space losses like log-likelihood)
+                        If False, use simple sum (for linear-space losses like UKL)
+        """
         losses = torch.tensor(losses, dtype=torch.float32, device=self.config['device']).detach()
         if is_logspace:
             return torch.logsumexp(losses, dim=0) - torch.log(torch.tensor(len(losses)))
+        else:
+            # For linear-space losses (like unnormalized_kl), just sum them
+            return torch.sum(losses)
         
     def set_optimizer(self, name):
         if name == 'adam' or name == 'Adam':
@@ -584,8 +1231,8 @@ class Trainer:
         for batch_idx, batch in enumerate(self.dataloader):
             inputs = batch['input'].to(self.config['device'])
             targets = batch['target'].to(self.config['device'])
-            if 'mg_hat' in batch:
-                mg_hat = batch['mg_hat'].to(self.config['device'])
+            if 'bw_hat' in batch:
+                bw_hat = batch['bw_hat'].to(self.config['device'])
             # Zero the parameter gradients
             self.optimizer.zero_grad()
             
@@ -599,19 +1246,19 @@ class Trainer:
             #         print(outputs[i].item(), targets[i].item())
             
             # Compute loss
-            if 'mg_hat' in batch:
-                loss = self.loss_fn(outputs.squeeze(), targets, mg_hat)
+            if 'bw_hat' in batch:
+                loss = self.loss_fn(outputs.squeeze(), targets, bw_hat)
             else:
                 loss = self.loss_fn(outputs.squeeze(), targets)
                 
             # Backward pass and optimize
             loss.backward()
-            
-            # print('first 5 params', self.net.network[0].weight[0][:5])
-            # print('pred of x[713] , pred = ', outputs[713].item())
-            
-            # self.visualize_first_layer()
-            
+
+            # Gradient clipping to prevent overshooting
+            grad_clip_norm = self.config.get('grad_clip_norm', None)
+            if grad_clip_norm is not None:
+                torch.nn.utils.clip_grad_norm_(self.net.parameters(), grad_clip_norm)
+
             if isinstance(self.optimizer, list):
                 for opt in self.optimizer:
                     opt.step()

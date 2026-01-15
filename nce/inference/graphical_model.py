@@ -17,45 +17,82 @@ from tqdm.notebook import tqdm
 
 
 class FastGM:
-    def __init__(self, elim_order=None, buckets=None, factors=None, uai_file=None, device="cuda", reference_fastgm=None, nn_config=None, stats=None):
-        self.iB = nn_config['iB']
-        self.ecl = nn_config['ecl']
+    def __init__(self, model=None, elim_order=None, evid=None,buckets=None, factors=None, uai_file=None, device="cuda", reference_fastgm=None, nn_config=None, stats=None):
+        if model is not None:
+            uai_file = model.file
+            elim_order = model.order
+            evid = model.evidence
+            self.logSS = model.logSS
+        else:
+            self.logSS = None
+        # CRITICAL: Create a NEW copy of config dict to avoid sharing with other GMs
+        # Using dict() ensures each GM has its own independent config
+        self.config = dict(nn_config) if nn_config else {}
+
+        self.iB = self.config.get('iB', 0)
+        self.ecl = self.config.get('ecl', 0)
+        self.complexity_limit = self.config.get('complexity_limit', 0)
         self.num_trained = 0
         self.uai_file = uai_file
         self.device = device
         self.vars = []
         self.elim_order = None
-        self.config = nn_config
         self.traced_losses_data = []
         self.message_stats = []
         self.stats=stats # cheater stats with variances
         self.is_primary = True
-        if nn_config is not None:
-            self.sampling_scheme = nn_config['sampling_scheme']
-            self.traced_losses = nn_config['traced_losses']
-            self.lower_dim = nn_config['lower_dim']
-            self.hidden_sizes = nn_config['hidden_sizes']
-            self.loss_fn = nn_config['loss_fn']
-            self.optimizer = nn_config['optimizer']
-            self.lr = nn_config['lr']
-            self.lr_decay = nn_config['lr_decay']
-            self.patience = nn_config['patience']
-            self.min_lr = nn_config['min_lr']
-            self.num_samples = nn_config['num_samples']
-            self.num_epochs = nn_config['num_epochs']
-            self.batch_size = nn_config['batch_size']
-            self.set_size = nn_config['set_size']
-            self.seed = nn_config['seed']
-            self.gather_message_stats = nn_config['gather_message_stats']
+        self.is_populating_backward_factors = False  # Flag to indicate this GM is a copy used for backward factor population
+        self.bucket_complexities = []
+        self.track_errors = self.config.get('track_errors', False)
+        self.nn_errors = []
+        self.populate_bw_factors = self.config.get('populate_bw_factors', False)
+        if self.config:
+            self.sampling_scheme = self.config.get('sampling_scheme')
+            self.traced_losses = self.config.get('traced_losses', [])
+            self.lower_dim = self.config.get('lower_dim', False)
+            self.hidden_sizes = self.config.get('hidden_sizes', [])
+            self.loss_fn = self.config.get('loss_fn')
+            self.optimizer = self.config.get('optimizer')
+            self.lr = self.config.get('lr')
+            self.lr_decay = self.config.get('lr_decay', 1.0)
+            self.patience = self.config.get('patience', 10)
+            self.min_lr = self.config.get('min_lr', 1e-8)
+            self.num_samples = self.config.get('num_samples')
+            self.num_epochs = self.config.get('num_epochs')
+            self.batch_size = self.config.get('batch_size')
+            self.set_size = self.config.get('set_size')
+            self.seed = self.config.get('seed')
+            self.gather_message_stats = self.config.get('gather_message_stats', False)
             
 
         if uai_file is not None:
-            self._load_from_uai(uai_file)
+            self._load_from_uai(uai_file, elim_order=elim_order, evid=evid)
         elif buckets is not None:
             self.buckets = buckets
             self.elim_order = elim_order
         elif factors is not None:
-            self._load_vars_from_factors(factors)
+            # If reference_fastgm is provided, use its vars for correct domain sizes
+            # Otherwise, extract from factor tensor shapes
+            if reference_fastgm is not None:
+                # Get all variable labels from factors
+                var_labels = set()
+                for factor in factors:
+                    if factor.labels:
+                        var_labels.update(factor.labels)
+                # Use domain sizes from reference_fastgm
+                for label in var_labels:
+                    ref_var = reference_fastgm.matching_var(label)
+                    if ref_var is not None:
+                        self.vars.append(Var(label, ref_var.states))
+                    else:
+                        # Fallback: extract from factor if not in reference
+                        for factor in factors:
+                            if label in factor.labels:
+                                idx = factor.labels.index(label)
+                                self.vars.append(Var(label, factor.tensor.shape[idx]))
+                                break
+            else:
+                self._load_vars_from_factors(factors)
             if elim_order is not None:
                 self.load_elim_order(elim_order, reference_fastgm)
                 # print(self.elim_order)
@@ -68,9 +105,12 @@ class FastGM:
         
         self.message_scopes = {}
         self.calculate_message_scopes()
+        if self.populate_bw_factors:
+            print("Populating backward factors using WMB approximations...")
+            self.populate_backward_factors_wmb()
         if self.config.get('dope_factors'):
             self.dope_factors()
-        if self.config.get('sigma_g_global') is None and ('approx_smg' in self.loss_fn or 'approx_smg2' in self.config.get('loss_fn2', '')):
+        if self.config.get('sigma_g_global') is None and ('approx_smg' in self.loss_fn or 'approx_smg' in self.config.get('loss_fn2', '')):
             self.config['sigma_g_global'] = -1
             self.populate_global_stats()
 
@@ -87,17 +127,18 @@ class FastGM:
             output.append(f"Bucket {var}: {' '.join(factor_strs)}")
         return "\n".join(output)
     
-    def _load_from_uai(self, uai_file):
+    def _load_from_uai(self, uai_file, elim_order=None, evid=None):
         import os
         # Load the UAI file
         ord_file = uai_file + ".vo"
         evid_file = uai_file + ".evid"
         #check if evid file exists
-        gm_model = uai_to_GM(uai_file=uai_file,     order_file=ord_file)
+        gm_model = uai_to_GM(uai_file=uai_file,     order_file=ord_file, elim_order=elim_order)
         if os.path.exists(evid_file):
             evid = readEvidence14(evid_file)
             gm_model.condition(evid)
- 
+        elif evid is not None:
+            gm_model.condition(evid)
         
         self.vars = gm_model.vars
         
@@ -186,6 +227,7 @@ class FastGM:
         # print(self.elim_order)
             
     def eliminate_variables(self, elim_vars=None, up_to=None, through=None, all=False, all_but=None, exact=False):
+        from .factor_nn import FactorNN
         if sum(map(bool, [elim_vars, up_to is not None, through is not None, all, all_but])) != 1:
             raise ValueError("Exactly one of elim_vars, up_to, through, all_but, or all must be specified")
 
@@ -212,47 +254,79 @@ class FastGM:
         for key in self.message_scopes:
             mess_vars = self.message_scopes[key]
             mess_size = int(np.prod([self.matching_var(var).states for var in mess_vars]))
-            if key in vars_to_eliminate and (len(mess_vars) > self.iB or mess_size > self.ecl):
-                self.num_trained += 1
-        with tqdm(total=self.num_trained, desc="Num NNs to train") as pbar:
+            # if key in vars_to_eliminate and (len(mess_vars) > self.iB or mess_size > self.ecl):
+            #     self.num_trained += 1
+        large_buckets = self.get_large_message_buckets(iB=self.config['iB'], ecl=self.config['ecl'])
+        num_to_train = len(large_buckets)
+        with tqdm(total=num_to_train, desc="Num NNs to train") as pbar:
         # if True:
             for var in vars_to_eliminate:
-                # if type(var) != int:
-                #     var = var.label
-                current_bucket = self.buckets[var]
-                
-                # debug test
-                # print(var)
-                # fs = self.get_bucket(59).factors
-                # fails_test = False
-                # for f in fs:
-                #     if f.tensor is None:
-                #         fails_test = True
-                #         print("fails")
-                
-                # print(current_bucket.label)
-                message = self.process_bucket(current_bucket, exact=exact)
-                if not message.is_nn:
-                    assert message.tensor is not None
-                else:
-                    # pass
-                    pbar.update(1)
-                if message.labels:  # If the message is not a scalar
-                    # Find the next appropriate bucket
-                    if len(message.labels) > max_width:
-                        max_width = len(message.labels)
-                    next_bucket = self.find_next_bucket(message.labels, var)
-                    if next_bucket:
-                        next_bucket.receive_message(message)
+                try:
+                    current_bucket = self.buckets[var]
+                    result = self.process_bucket(current_bucket, exact=exact)
+                    if type(result) == FactorNN:
+                        pbar.update(1)
+                    # Handle both single messages and lists of messages (from WMB)
+                    messages = result if isinstance(result, list) else [result]
+
+                    for message in messages:
+                        if not message.is_nn:
+                            assert message.tensor is not None
+                        else:
+                            pbar.update(1)
+                        if message.labels:  # If the message is not a scalar
+                            # Find the next appropriate bucket
+                            if len(message.labels) > max_width:
+                                max_width = len(message.labels)
+                            next_bucket = self.find_next_bucket(message.labels, var)
+                            if next_bucket:
+                                next_bucket.receive_message(message)
+                            else:
+                                # If no appropriate bucket found, send to root
+                                root_bucket.receive_message(message)
+                        else:
+                            # If the message is a scalar, send to root
+                            root_bucket.receive_message(message)
+
+                    # Remove the eliminated variable's bucket
+                    del self.buckets[var]
+
+                except Exception as e:
+                    import traceback
+                    print("\n" + "="*60)
+                    print("ERROR during variable elimination")
+                    print("="*60)
+                    print(f"\nVariable being eliminated: {var}")
+                    print(f"Intended message scope: {self.message_scopes.get(var, 'N/A')}")
+
+                    # Get bucket info
+                    if var in self.buckets:
+                        bucket = self.buckets[var]
+                        print(f"\nBucket {var} info:")
+                        print(f"  get_width() = {bucket.get_width()}")
+                        print(f"  get_ec() = {bucket.get_ec():,}")
+                        print(f"  get_message_complexity() = {bucket.get_message_complexity():,}")
+                        print(f"  get_message_scope() = {bucket.get_message_scope()}")
+                        print(f"\nConfig thresholds:")
+                        print(f"  iB = {self.iB}")
+                        print(f"  ecl = {self.ecl:,}")
+                        print(f"  complexity_limit = {self.complexity_limit:,}")
+                        print(f"\nExact check: width<={self.iB}? {bucket.get_width() <= self.iB}, ec<={self.ecl:,}? {bucket.get_ec() <= self.ecl}")
+                        print(f"\nBucket {var} factors ({len(bucket.factors)} total):")
+                        for i, f in enumerate(bucket.factors):
+                            factor_type = "NN" if f.is_nn else "FastFactor"
+                            tensor_info = "tensor=None" if f.tensor is None else f"tensor shape={f.tensor.shape}"
+                            factor_complexity = f.get_factor_complexity()
+                            print(f"  [{i}] {factor_type}: scope={f.labels} (width={len(f.labels)}), complexity={factor_complexity:,}, {tensor_info}")
                     else:
-                        # If no appropriate bucket found, send to root
-                        root_bucket.receive_message(message)
-                else:
-                    # If the message is a scalar, send to root
-                    root_bucket.receive_message(message)
-                
-                # Remove the eliminated variable's bucket
-                del self.buckets[var]
+                        print(f"\nBucket {var} not found in self.buckets")
+
+                    print("\n" + "-"*60)
+                    print("Full traceback:")
+                    print("-"*60)
+                    traceback.print_exc()
+                    print("="*60 + "\n")
+                    raise
 
         # Process the root bucket
         if root_bucket.factors:
@@ -294,10 +368,12 @@ class FastGM:
         """
         Process bucket with support for linear solver options.
         """
-        print("Processing bucket: ", bucket.label)
-        
         # Check if we should use exact computation based on width
-        if exact or (bucket.get_width() <= self.iB and bucket.get_ec() <= self.ecl):
+        bucket_width = bucket.get_width()
+        bucket_ec = bucket.get_ec()
+        bucket_msg_complexity = bucket.get_message_complexity()
+
+        if (exact or (bucket_width <= self.iB and bucket_ec <= self.ecl)) or bucket_msg_complexity < self.complexity_limit:
             output_message = bucket.compute_message_exact()
             if self.gather_message_stats:
                 get_message_stats(self, bucket, output_message)
@@ -306,14 +382,64 @@ class FastGM:
                 raise ValueError(f"Output message for bucket {bucket.label} contains NaN values")
             return output_message
         else:
+            self.num_trained += 1
+            print(f"Bucket {bucket.label}: training ({self.num_trained})", flush=True)
             # Check if we should use linear solver
-            use_linear_solver = bucket.config.get('use_linear_solver', False)
-            if self.config.get('approximation_method') == 'nn':
-                print(f"Training NN for bucket: {bucket.label}")
+            # use_linear_solver = bucket.config.get('use_linear_solver', False)
+
+            # DEBUG: Track config state
+            # print(f"DEBUG process_bucket {bucket.label}: approx_method={self.config.get('approximation_method')}, is_populating={self.is_populating_backward_factors}, config_id={id(self.config)}")
+
+            # CRITICAL FIX: Check if we're in backward factor population mode first
+            # When populating backward factors, always use WMB regardless of config
+            if self.is_populating_backward_factors:
+                # print(f"Using WMB for backward factor population in bucket: {bucket.label}")
+                output_messages = bucket.compute_wmb_message(self.iB)
+                return output_messages
+            elif self.config.get('approximation_method') == 'nn':
+                # print(f"Training NN for bucket: {bucket.label}")
                 output_message = bucket.compute_message_nn()
             elif self.config.get('approximation_method') == 'dt':
-                print(f"Using decision tree for bucket: {bucket.label}")
+                # print(f"Using decision tree for bucket: {bucket.label}")
                 output_message = bucket.compute_message_dt()
+            elif self.config.get('approximation_method') == 'wmb':
+                # print(f"Using WMB for bucket: {bucket.label}")
+                # Use compute_wmb_message which returns a LIST of messages
+                # This keeps mini-bucket messages separate to respect ecl
+                output_messages = bucket.compute_wmb_message(self.iB)
+
+                # Return list of messages - caller will handle each separately
+                return output_messages
+            else:
+                raise ValueError(f"Unknown approximation_method: '{self.config.get('approximation_method')}'")
+
+            # Track NN error if enabled
+            if self.track_errors:
+                from nce.utils.backward_message import get_backward_message
+
+                # Compute exact message for comparison
+                exact_message = bucket.compute_message_exact()
+
+                # Get backward message (uses remaining factors, may include NN approximations)
+                exact_backward_mg, _ = get_backward_message(
+                    self, bucket.label,
+                    iB=100,
+                    backward_ecl=2**30,
+                    approximation_method='wmb'
+                )
+
+                # Compute NN error if backward message is not scalar
+                if exact_backward_mg.tensor.numel() > 1:
+                    # Convert NN factor to exact factor for multiplication
+                    nn_factor_exact = output_message.to_exact() if hasattr(output_message, 'to_exact') else output_message
+                    nn_contribution = (nn_factor_exact * exact_backward_mg).sum_all_entries()
+                    exact_contribution = (exact_message * exact_backward_mg).sum_all_entries()
+                    nn_error = float(nn_contribution - exact_contribution)
+                    partition_estimate = float(nn_contribution)
+                    self.nn_errors.append((bucket.label, nn_error, partition_estimate))
+                    print(f"  NN error for bucket {bucket.label}: {nn_error}")
+                    print(f"  Partition function estimate: {partition_estimate}")
+
             return output_message
     
     def calculate_message_scopes(self):
@@ -367,7 +493,9 @@ class FastGM:
     
     def show_elimination(self, elim_vars=None, up_to=None, through=None, all=False):
         if sum(map(bool, [elim_vars, up_to, through, all])) != 1:
-            raise ValueError("Exactly one of elim_vars, up_to, through, or all must be specified")
+            print("Showing all eliminations")
+            all = True
+            # raise ValueError("Exactly one of elim_vars, up_to, through, or all must be specified")
 
         if all:
             vars_to_eliminate = self.elim_order
@@ -476,26 +604,100 @@ class FastGM:
 
         return elimination_scheme
 
-    def get_large_message_buckets(self, iB, debug = False):
+    def get_adjusted_width(self, ecl=None):
+        """
+        Calculate the adjusted width of the graphical model.
+
+        The adjusted width is the complexity of the largest message that would be
+        sent with exact inference. It's defined as the log2 of the maximum product
+        of domain sizes across all message scopes.
+
+        Args:
+            ecl: Optional exact computation limit. If provided, counts how many
+                 messages have size strictly greater than this limit.
+
+        Returns:
+            tuple: (adjusted_width, num_exceeding_ecl) where:
+                - adjusted_width: log2 of the maximum product of domain sizes
+                - num_exceeding_ecl: count of messages exceeding ecl (or -1 if ecl not provided)
+
+        Examples:
+            >>> gm.get_adjusted_width()
+            (4.91, -1)  # Largest message has size 2*3*5=30, no ecl provided
+
+            >>> gm.get_adjusted_width(ecl=1000)
+            (10.1, 2)  # Largest message has size 1100, 2 messages exceed ecl=1000
+        """
+        max_complexity = 0
+        num_exceeding = 0 if ecl is not None else -1
+
         for key in self.message_scopes:
-            if len(self.message_scopes[key]) > iB:
+            # Compute product of domain sizes for this message scope
+            prod = 1
+            for idx in self.message_scopes[key]:
+                if idx != key:  # Exclude the variable being eliminated
+                    var = self.matching_var(idx)
+                    prod *= var.states
+
+            # Track the maximum
+            max_complexity = max(max_complexity, prod)
+
+            # Count messages exceeding ecl if provided
+            if ecl is not None and prod > ecl:
+                num_exceeding += 1
+
+        # Return log2 of the maximum complexity and count of exceeding messages
+        if max_complexity == 0:
+            return 0.0, num_exceeding
+        return math.log2(max_complexity), num_exceeding
+
+    def get_large_message_buckets(self, iB=None, ecl=None, debug=False):
+        """
+        Get buckets with large messages that will need NN approximation.
+
+        A bucket is considered "large" if EITHER:
+        - Number of variables in message scope > iB (if iB is provided)
+        - Number of elements in message (product of states) > ecl (if ecl is provided)
+
+        Args:
+            iB: Maximum number of variables allowed (optional)
+            ecl: Maximum number of elements allowed (optional)
+            debug: Print debug information
+
+        Returns:
+            List of bucket keys that have large messages
+        """
+        large_buckets = []
+
+        for key in self.message_scopes:
+            scope = self.message_scopes[key]
+            num_vars = len(scope)
+
+            # Compute message size (product of states for all vars in scope except the eliminated var)
+            message_size = 1
+            for idx in scope:
+                if idx != key:
+                    var = self.matching_var(idx)
+                    message_size *= var.states
+
+            # Check if bucket is large (either condition triggers)
+            is_large = False
+            if iB is not None and num_vars > iB:
+                is_large = True
+            if ecl is not None and message_size > ecl:
+                is_large = True
+
+            if is_large:
+                large_buckets.append(key)
                 if debug:
                     print('------------------------------------')
                     print('Key is ', key)
-                    print('Scope is ', self.message_scopes[key])
-                prod = 1
-                for idx in self.message_scopes[key]:
-                    if debug:
-                        print('(Var: ', idx, ', ', end= '')
-                    if idx != key:
-                        var = self.matching_var(idx)
-                        prod *= var.states
-                        if debug:
-                            print('states: ', var.states, end=') ')
-                if debug:
-                    print()
-                adj_num_vars = math.log2(prod)
-                print('bucket: ', key, ', num vars: ', len(self.message_scopes[key]), ', adj num vars: ', adj_num_vars)
+                    print('Scope is ', scope)
+                    print(f'num_vars: {num_vars}, message_size: {message_size}')
+                    adj_num_vars = math.log2(message_size) if message_size > 0 else 0
+                    print(f'bucket: {key}, num vars: {num_vars}, adj num vars: {adj_num_vars:.2f}')
+
+        return large_buckets
     
     def find_next_bucket(self, labels, current_var):
         """Find the next bucket that shares any variable with the given labels."""
@@ -515,6 +717,17 @@ class FastGM:
                 else:
                     joint *= factor
         return joint
+
+    def get_all_factors(self) -> List[FastFactor]:
+        """
+        Returns all factors from all buckets as a list WITHOUT multiplying them.
+        Used for batched learning where we don't want to materialize the full product.
+        """
+        all_factors = []
+        for bucket in self.buckets.values():
+            for factor in bucket.factors:
+                all_factors.append(factor)
+        return all_factors
 
     def get_log_partition_function(self):
         """
@@ -1118,7 +1331,7 @@ class FastGM:
 
         # if there are no gradient factors return a scalar factor
         if len(gradient_factors) == 0:
-            return FastFactor(tensor=torch.tensor([0.0], device=self.device, requires_grad=False), labels=[])
+            return FastFactor(tensor=torch.tensor(0.0, device=self.device, requires_grad=False), labels=[])
         
         # confirm no variables that should have been eliminated are in gradient factors
         should_have_been_eliminated = set([v.label for v in self.elim_order[0:self.elim_order.index(self.matching_var(bucket_var))]])
@@ -1151,19 +1364,25 @@ class FastGM:
 
         return self._wmb_eliminate(downstream_gm, bucket_scope, i_bound, weights)
 
-    def _wmb_eliminate(gm, target_scope, i_bound, weights, combine_factors=False):
+    def _wmb_eliminate(gm, target_scope, i_bound, weights, combine_factors=False, ecl=None):
         """
         Perform Weighted Mini-Bucket elimination.
 
         Args:
         gm (FastGM): The graphical model to eliminate.
         target_scope (list): The variables to keep (not eliminate).
-        i_bound (int): The maximum allowed scope size for mini-buckets.
+        i_bound (int): The maximum allowed scope size for mini-buckets. Only used if ecl is None.
         weights (str or list): Weights for WMB.
+        combine_factors (bool): Whether to combine remaining factors at the end.
+        ecl (int): Exact complexity limit (max tensor entries). If provided, completely overrides i_bound.
 
         Returns:
         FastFactor: The result of WMB elimination.
         """
+        # Use gm.ecl if ecl not explicitly provided
+        if ecl is None:
+            ecl = getattr(gm, 'ecl', None)
+
         # dprint('target scope is ', target_scope)
         if isinstance(weights, str):
             if weights == 'max':
@@ -1174,7 +1393,7 @@ class FastGM:
                 raise ValueError("Unknown weight type. Use 'max', 'sum', or provide a list of weights.")
         else:
             weight_map = {var.label: weight for var, weight in zip(gm.vars, weights)}
-        
+
         result = None
         # dprint('elim order is ', gm.elim_order)
         # dprint()
@@ -1186,27 +1405,33 @@ class FastGM:
         #     for factor in bucket.factors:
         #         dprint(factor.labels)
         #     dprint()
-                
+
         for var in gm.elim_order:
             # dprint('var ', var, ' considered')
             if var.label in target_scope:
                 continue
 
             bucket = gm.get_bucket(var)
-            
+
             if not bucket.factors:  # Skip empty buckets
                 continue
-            
-            # debug
-            # print('var: ', var.label, end='')
-            if bucket.get_width() <= i_bound:
+
+            # Determine if we need mini-buckets based on ecl (preferred) or i_bound (fallback)
+            needs_mini_buckets = False
+            if ecl is not None and ecl > 0:
+                # Use ecl: check if message complexity exceeds ecl
+                bucket_ec = bucket.get_ec()  # Product of domain sizes
+                needs_mini_buckets = bucket_ec > ecl
+            else:
+                # Fallback to i_bound: check variable count
+                needs_mini_buckets = bucket.get_width() > i_bound
+
+            if not needs_mini_buckets:
                 message = FastGM._compute_weighted_message(bucket.factors, var, weight_map[var.label])
                 gm.removeFactors(bucket.factors)
                 gm.addFactors([message])
-                # debug
-                # print('message labels: ', message.labels)
             else:
-                mini_buckets = FastGM._create_mini_buckets(bucket.factors, i_bound)
+                mini_buckets = FastGM._create_mini_buckets(bucket.factors, i_bound, gm, ecl)
                 for i, mini_bucket in enumerate(mini_buckets):
                     mini_weight = weight_map[var.label] / len(mini_buckets)
                     if i == len(mini_buckets) - 1:  # Adjust the last mini-bucket weight
@@ -1214,9 +1439,6 @@ class FastGM:
                     mini_message = FastGM._compute_weighted_message(mini_bucket, var, mini_weight)
                     gm.removeFactors(mini_bucket)
                     gm.addFactors([mini_message])
-                    # debug
-                    # print('mini_message labels: ', mini_message.labels)
-                    # dprint(mini_message.labels)
 
         # After elimination, combine all remaining factors
         remaining_factors = []
@@ -1251,25 +1473,50 @@ class FastGM:
                     raise ValueError("inf found")
         else:
             # If no factors remain, return a scalar factor with value 0 (in log space)
-            result = FastFactor(torch.tensor([0.0], device=gm.device, requires_grad=False), [])
+            result = FastFactor(torch.tensor(0.0, device=gm.device, requires_grad=False), [])
         if (result.tensor == float('inf')).any():
             print("inf found")
             raise ValueError("inf found")
         return result
 
-    def _create_mini_buckets(factors, i_bound):
+    def _create_mini_buckets(factors, i_bound, gm=None, ecl=None):
         """
-        Partition factors into mini-buckets respecting the i-bound.
+        Partition factors into mini-buckets respecting ecl (complexity limit).
+
+        When ecl is provided, it completely overrides i_bound - mini-buckets are created
+        based solely on the product of domain sizes (tensor entry count), not variable count.
+
+        Args:
+            factors: List of factors to partition
+            i_bound: Max variables per mini-bucket (only used if ecl is None)
+            gm: Graphical model (needed to look up variable states for ecl calculation)
+            ecl: Exact complexity limit (max tensor entries). If provided, overrides i_bound.
         """
         mini_buckets = []
-        sorted_factors = sorted(factors, key=lambda f: len(f.labels), reverse=True)
+        # Sort by tensor size (numel) instead of variable count
+        sorted_factors = sorted(factors, key=lambda f: f.tensor.numel(), reverse=True)
+
         for factor in sorted_factors:
             placed = False
             for bucket in mini_buckets:
-                if len(set.union(*[set(f.labels) for f in bucket], set(factor.labels))) <= i_bound:
-                    bucket.append(factor)
-                    placed = True
-                    break
+                combined_scope = set.union(*[set(f.labels) for f in bucket], set(factor.labels))
+
+                # If ecl is set and we have gm, use complexity (product of domain sizes)
+                if ecl is not None and ecl > 0 and gm is not None:
+                    combined_complexity = 1
+                    for var_label in combined_scope:
+                        var = gm.matching_var(var_label)
+                        combined_complexity *= var.states
+                    if combined_complexity <= ecl:
+                        bucket.append(factor)
+                        placed = True
+                        break
+                else:
+                    # Fallback to i_bound (variable count)
+                    if len(combined_scope) <= i_bound:
+                        bucket.append(factor)
+                        placed = True
+                        break
             if not placed:
                 mini_buckets.append([factor])
         return mini_buckets
@@ -1408,4 +1655,153 @@ class FastGM:
         var_g_avg, rho_avg, _ = get_gm_message_stats(self, self.config.get('ecl'))
         self.config['sigma_g_global'] = var_g_avg ** 0.5
         self.config['rho_global'] = rho_avg
+
+    def _create_population_copy(self):
+        """
+        Create a controlled copy of this GM for backward factor population.
+
+        Uses explicit construction instead of deepcopy to avoid config dict sharing issues.
+        The copy is configured to use WMB and not create its own copies.
+
+        Returns:
+            FastGM: A new GM instance configured for WMB-based backward factor computation
+        """
+        import copy
+
+        # CRITICAL: Create NEW config dict using dict() constructor, NOT deepcopy
+        # This ensures each GM has its own independent config dict
+        pop_config = dict(self.config)
+
+        # Configure for population: use WMB, don't populate recursively
+        pop_config['populate_bw_factors'] = False  # Prevent recursive population
+        pop_config['approximation_method'] = 'wmb'  # Use WMB for backward factors
+
+        # print(f"DEBUG: Creating population copy with factory method")
+        # print(f"  Original config id={id(self.config)}, approx_method={self.config.get('approximation_method')}")
+        # print(f"  New config id={id(pop_config)}, approx_method={pop_config.get('approximation_method')}")
+
+        # Get all factors from original GM's buckets
+        all_factors = []
+        for var in self.elim_order:
+            bucket = self.buckets[var]
+            for factor in bucket.factors:
+                # Deep copy each factor to avoid sharing
+                all_factors.append(copy.deepcopy(factor))
+
+        # Create new GM with explicit parameters (NOT deepcopy of entire GM)
+        copied_gm = FastGM(
+            factors=all_factors,
+            elim_order=list(self.elim_order),  # Copy the list
+            device=self.device,
+            reference_fastgm=self,
+            nn_config=pop_config,  # Use the NEW config dict
+            stats=self.stats
+        )
+
+        # Mark as copy to prevent further copying
+        copied_gm.is_primary = False
+        copied_gm.is_populating_backward_factors = True
+
+        # print(f"  Created GM config id={id(copied_gm.config)}, approx_method={copied_gm.config.get('approximation_method')}")
+        # print(f"  Original unchanged: config id={id(self.config)}, approx_method={self.config.get('approximation_method')}")
+
+        return copied_gm
+
+    def populate_backward_factors_wmb(self):
+        """
+        Pre-compute WMB backward factors for all buckets before main elimination.
+
+        This method creates a copy of the graphical model and performs elimination
+        using WMB approximations (instead of NNs) when buckets exceed ecl/iB thresholds.
+        The resulting factors are stored in each original bucket's approximate_downstream_factors
+        field for later use during NN training.
+
+        Key features:
+        - Uses WMB approximation when bucket width > iB OR complexity > ecl
+        - Keeps WMB factors together when placing in downstream buckets
+        - Factors are placed in the earliest bucket that contains any of their variables
+        """
+        # import traceback
+        # print(f"DEBUG: Entering populate_backward_factors_wmb() on GM with config id={id(self.config)}")
+        # print(f"DEBUG: populate_bw_factors flag = {self.populate_bw_factors}")
+        # print(f"DEBUG: is_primary = {self.is_primary}")
+        # # print("DEBUG: Call stack:")
+        # for line in traceback.format_stack()[:-1]:  # Exclude current frame
+        #     print(line.strip())
+        # print("Populating backward factors using WMB approximations...")
+
+        # Create a controlled copy using factory method (NOT deepcopy)
+        # This avoids config dict sharing issues
+        copied_gm = self._create_population_copy()
+
+        # Get sender-receiver scheme for proper message routing
+        scheme_info = copied_gm.get_senders_receivers()
+        scheme = {info['var']: info['sends_to'] for info in scheme_info}
+
+        # Process buckets in elimination order
+        for i, current_var in enumerate(self.elim_order):
+            # Get corresponding buckets from original and copied GMs
+            orig_bucket = self.get_bucket(current_var)
+            copy_bucket = copied_gm.get_bucket(current_var)
+
+            # print(f"  Processing bucket {current_var.label}...")
+
+            # Gather all downstream factors from copied GM and store in original GM
+            downstream_factors = []
+            for j in range(i+1, len(self.elim_order)):
+                downstream_bucket = copied_gm.get_bucket(self.elim_order[j])
+                for factor in downstream_bucket.factors:
+                    downstream_factors.append(factor.to_exact() if hasattr(factor, 'to_exact') else factor)
+
+            orig_bucket.approximate_downstream_factors = downstream_factors
+            # print(f"    Stored {len(downstream_factors)} downstream factors")
+
+            # Separate factors into those with and without the elimination variable
+            has_elim_var = [f for f in copy_bucket.factors if current_var in f.labels]
+            no_elim_var = [f for f in copy_bucket.factors if current_var not in f.labels]
+
+            # Temporarily set bucket factors to only those with elimination variable
+            copy_bucket.factors = has_elim_var
+
+            if not has_elim_var:
+                # No factors to eliminate, just move independent factors
+                messages = []
+            else:
+                # Check if we need approximation (width > iB OR complexity > ecl)
+                bucket_width = copy_bucket.get_width()
+                bucket_ec = copy_bucket.get_ec()
+
+                bw_ecl = self.config['bw_ecl']
+                needs_approx = bucket_ec > bw_ecl
+
+                if needs_approx:
+                    # print(f"    Using WMB (width={bucket_width} > iB={self.iB} OR ec={bucket_ec} > ecl={self.ecl})")
+                    # Use WMB approximation - returns list of factors
+                    messages = copy_bucket.compute_wmb_message(ecl=bw_ecl)
+                else:
+                    # print(f"    Using exact (width={bucket_width} <= iB={self.iB} AND ec={bucket_ec} <= ecl={self.ecl})")
+                    # Compute exact message - wrap in list for consistency
+                    try:
+                        exact_msg = copy_bucket.compute_message_exact()
+                        messages = [exact_msg]
+                    except Exception as e:
+                        print(f"    Warning: Exact computation failed: {e}, falling back to WMB")
+                        messages = copy_bucket.compute_wmb_message(ecl=bw_ecl)
+
+            # Combine WMB messages and independent factors
+            all_outgoing_factors = messages + no_elim_var
+            # print(f"    Outgoing: {len(messages)} message(s) + {len(no_elim_var)} independent factor(s)")
+
+            # Place all outgoing factors in the next bucket
+            # IMPORTANT: Keep WMB factors together by finding the earliest bucket
+            # that contains ANY variable from ANY of the outgoing factors
+            if all_outgoing_factors and scheme[current_var] is not None:
+                next_var_label = scheme[current_var]  # This is an int (label), not a Var
+                next_bucket = copied_gm.get_bucket(next_var_label)
+                next_bucket.factors.extend(all_outgoing_factors)
+                # print(f"    Sent to bucket {next_var_label}")
+
+        # print("Backward factor population complete!")
+        # print(f"DEBUG: Exiting populate - self.config id={id(self.config)}, approx_method={self.config.get('approximation_method')}")
+
 

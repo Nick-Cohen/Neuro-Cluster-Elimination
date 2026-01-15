@@ -187,7 +187,9 @@ class FastFactor:
         if not new_labels:
             result_tensor = result_tensor.view(1)
         
-        return FastFactor(result_tensor, new_labels)
+        out = FastFactor(result_tensor, new_labels)
+        out.order_indices()
+        return out
 
     def sum_all_entries(self):
         return self.eliminate('all').tensor.item()
@@ -300,7 +302,15 @@ class FastFactor:
     def _get_slices(self, assignments, elim_vars, elim_domain_sizes, message_scope):
         tensor = self.tensor
         tensor_labels = self.labels
-        
+
+        # Handle 0-dim tensors (scalar factors with empty labels)
+        # These represent constant factors that broadcast to all samples and all elimination states
+        if tensor.dim() == 0 or len(tensor_labels) == 0:
+            # Create output shape: (num_samples, elim_dim1, elim_dim2, ...)
+            expanded_shape = (len(assignments),) + tuple([v.states for v in elim_vars])
+            # Broadcast the scalar value to this shape
+            return tensor.expand(expanded_shape)
+
         # indices in assignments that correspond to dimensions in the tensor
         assignment_indices = [i for i, idx in enumerate(message_scope) if idx in tensor_labels]
         
@@ -335,7 +345,11 @@ class FastFactor:
             print(view)
             print(projected_assignments.shape)
             print(projected_assignments.t().shape)
-            exit(1)
+            # give the error
+            if not projected_assignments.numel() == 0:
+                slices = tensor.view(view)[tuple(projected_assignments.t())]
+            else:
+                slices = tensor.unsqueeze(0).expand(len(assignments), len(tensor))
         
         # reshape slices to match elimination variables in order, e.g. (1,2,2,1) if 2nd and 3rd variables are in tensor
         unexpanded_slice_shape = (len(assignments),) + tuple([v.states if v.label in tensor_labels else 1 for v in elim_vars])
@@ -346,25 +360,49 @@ class FastFactor:
     def _get_values(self, assignments, message_scope):
         tensor = self.tensor
         tensor_labels = self.labels
-        
+
+        # Ensure tensor_labels are ordered for correct indexing
+        if tensor_labels != sorted(tensor_labels):
+            # Need to reorder tensor to match sorted labels
+            sorted_indices = [tensor_labels.index(label) for label in sorted(tensor_labels)]
+            tensor = tensor.permute(sorted_indices)
+            tensor_labels = sorted(tensor_labels)
+
         # indices in assignments that correspond to dimensions in the tensor
         assignment_indices = [i for i, idx in enumerate(message_scope) if idx in tensor_labels]
-        
+
         # get assignments from tensor
         permuted_assignment_indices = [i for i, idx in enumerate(message_scope) if idx in tensor_labels]
         projected_assignments = assignments[:,permuted_assignment_indices]
 
         try:
             if not projected_assignments.numel() == 0:
+                # Validate indices are within bounds before indexing
+                for dim_idx, (label, tensor_dim) in enumerate(zip(tensor_labels, tensor.shape)):
+                    assignment_col = projected_assignments[:, dim_idx]
+                    max_val = assignment_col.max().item()
+                    if max_val >= tensor_dim:
+                        print(f"ERROR: Index out of bounds in _get_values")
+                        print(f"  Factor labels: {self.labels}")
+                        print(f"  Tensor shape: {tensor.shape}")
+                        print(f"  Message scope: {message_scope}")
+                        print(f"  Dimension {dim_idx} (label {label}): max assignment value {max_val} >= tensor dimension {tensor_dim}")
+                        print(f"  Assignment column stats: min={assignment_col.min()}, max={max_val}, unique={len(assignment_col.unique())}")
+                        raise IndexError(f"Assignment index {max_val} out of bounds for dimension {dim_idx} with size {tensor_dim}")
+
                 values = tensor[tuple(projected_assignments.t())].reshape(-1,1)
                 return values
             else:
                 slices = tensor.unsqueeze(0).expand(len(assignments), len(tensor))
-        except:
-            print(tensor.shape)
-            print(projected_assignments.shape)
-            print(projected_assignments.t().shape)
-            exit(1)
+        except Exception as e:
+            print(f"ERROR in _get_values:")
+            print(f"  Exception: {e}")
+            print(f"  Tensor shape: {tensor.shape}")
+            print(f"  Tensor labels: {tensor_labels}")
+            print(f"  Message scope: {message_scope}")
+            print(f"  Projected assignments shape: {projected_assignments.shape}")
+            print(f"  Projected assignments t() shape: {projected_assignments.t().shape}")
+            raise
         
         # reshape slices to match elimination variables in order, e.g. (1,2,2,1) if 2nd and 3rd variables are in tensor
         # unexpanded_slice_shape = (len(assignments),) + tuple([v.states if v.label in tensor_labels else 1 for v in elim_vars])
@@ -374,3 +412,33 @@ class FastFactor:
     
     def to_exact(self):
         return self
+
+    def get_factor_complexity(self):
+        """
+        Calculate the complexity of this factor.
+
+        For regular FastFactor, this is simply the number of elements in the tensor.
+        This method can be overridden in subclasses (e.g., FactorNN) to compute
+        complexity without materializing the full tensor.
+
+        Returns:
+            int: Number of elements in the factor's tensor representation
+        """
+        if self.tensor is None:
+            return 0
+        return self.tensor.numel()
+
+    def inverse(self):
+        """
+        Returns the inverse of this factor in log-space.
+        In linear space this would be 1/f, but in log-space it's -f.
+        Returns a deep copy with negated tensor values.
+        """
+        import copy
+        ff_copy = copy.deepcopy(self)
+        ff_copy.tensor = -ff_copy.tensor
+        return ff_copy
+
+    def shuffle(self):
+        perm = torch.randperm(self.tensor.numel())
+        self.tensor = self.tensor.reshape(-1)[perm].reshape(self.tensor.shape)

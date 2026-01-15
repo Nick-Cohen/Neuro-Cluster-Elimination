@@ -2,6 +2,7 @@ from .factor import FastFactor
 from .factor_nn import FactorNN
 from typing import List
 import numpy as np
+import torch
 
 class FastBucket:
     
@@ -18,6 +19,7 @@ class FastBucket:
         self.isRoot = isRoot
         self.approximate_downstream_factors: List[FastFactor] = None
         self.sigma_f, self.sigma_g, self.rho = None, None, None
+        self.numel = -1
 
         # Assert that all factors are on the specified device type
         for factor in self.factors:
@@ -25,82 +27,323 @@ class FastBucket:
         
     def compute_message_exact(self):
         # Multiply all factors
+        self.numel = 0
         if not self.factors:
-            raise ValueError("No factors in the bucket to send message from")
+            # Empty bucket: return scalar 0 (contributes nothing when multiplied)
+            return FastFactor(torch.tensor(0.0, device=self.device, requires_grad=False), [])
         
         if self.factors[0].is_nn:
             message = self.factors[0].to_exact()
             assert message.tensor is not None
         else:
             message = self.factors[0]
+            if self.config.get('exact', False):
+                self.numel += message.tensor.numel()
         for factor in self.factors[1:]:
+            if self.config.get('exact', False):
+                self.numel += factor.tensor.numel()
             if factor.is_nn:
                 factor = factor.to_exact()
             message = message * factor
-
         # Eliminate variables
-        message = message.eliminate(self.elim_vars)
+        try:
+            message = message.eliminate(self.elim_vars)
+        except Exception as e:
+            print(f"Warning: Elimination failed in bucket {self.label} with size {message.tensor.shape if message.tensor is not None else 'None'}: {e}")
+            raise e
+        width = len(message.labels)
         assert not (message.tensor is None and len(message.labels) > 0), f"{self.label}"
+        self.gm.bucket_complexities.append((self.label, width, self.numel, message.tensor.std().item()))
         return message
     
     def compute_message_nn(self, loss_fn='None', loss_fn2=None):
         """
-        Enhanced compute_message_nn with linear solver options and plotting preserved.
-        
+        Enhanced compute_message_nn with memorizer and linear solver options.
+
         Behavior depends on configuration:
+        - use_memorizer=True: Uses explicit Memorizer lookup table (no training)
         - use_linear_solver=True: Uses exact linear solver (no training)
         - init_with_linear_optimum=True: Initializes with linear optimum then trains
         - Otherwise: Standard neural network training with plotting support
         """
-        from nce.neural_networks.net import Net
+        from nce.neural_networks.net import Net, Memorizer
         from nce.neural_networks.train import Trainer
-        
-        # Check configuration flags for linear features
-        init_with_linear = self.config.get('init_with_linear_optimum', False)
-        
-        # Otherwise, proceed with neural network approach (with optional linear initialization)
-        
+
+        # Check configuration flags
+        use_memorizer = self.config.get('use_memorizer', False)
+
         # Check if plotting is enabled in config
         plot_messages = self.config.get('plot_messages', False)
-        
-        # Compute exact message if plotting is enabled
+
+        # Compute exact message if plotting is enabled AND logSS <= 6
         exact_message = None
         if plot_messages:
-            try:
-                print(f"Computing exact message for comparison (Bucket {self.label})...")
-                exact_message = self.compute_message_exact()
-            except Exception as e:
-                print(f"Warning: Could not compute exact message for plotting: {e}")
-                plot_messages = False
-        
-        # Create neural network
-        net = Net(self)
-        t = Trainer(net=net, bucket=self, stats=self.stats)
+            logSS = getattr(self.gm, 'logSS', 0)
+            if logSS <= 6:
+                try:
+                    print(f"Computing exact message for comparison (Bucket {self.label})...")
+                    exact_message = self.compute_message_exact()
+                except Exception as e:
+                    print(f"Warning: Could not compute exact message for plotting: {e}")
 
-        t.train()
-        if self.config.get('loss_fn2') is not None and self.config.get('num_epochs2') is not None:
-            t.train(new_loss_fn=self.config['loss_fn2'], override_epochs=self.config['num_epochs2'])
+        # Handle memorizer path
+        if use_memorizer:
+            print(f"Bucket {self.label}: Using Memorizer (lookup table)")
 
-        # Create FactorNN with trained network
-        nn_message_factor = FactorNN(net, t.data_preprocessor)
-        
-        # Plot comparison if enabled and exact message was computed
-        if plot_messages and exact_message is not None:
+            # Create a dummy net for initialization (needed for Trainer/dataloader)
+            net = Net(self, hidden_sizes=[])
+            t = Trainer(net=net, bucket=self, stats=self.stats)
+
+            # Generate validation set first (for normalization and plotting)
+            nbe_val_size = max(1, self.config['num_samples'] // 9)
+            t.nbe_val_set = t._generate_validation_set_nbe(nbe_val_size)
+            print(f"Validation set generated for normalization: {len(t.nbe_val_set[0]['x'])} samples")
+
+            # Handle use_bw_approx mode
+            bw_wmb = None
+            if self.config.get('use_bw_approx', False):
+                from nce.utils.backward_message import get_backward_message
+
+                # Get backward_iB and backward_ecl from config
+                backward_iB = self.config.get('backward_iB', self.config.get('iB', 100))
+                backward_ecl = self.config.get('backward_ecl', self.config.get('ecl', 2**20))
+
+                # Check if we should use pre-computed backward factors
+                use_precomputed = self.gm.populate_bw_factors and self.approximate_downstream_factors is not None
+                backward_factors_arg = self.approximate_downstream_factors if use_precomputed else None
+
+                # if use_precomputed:
+                    # print(f"Bucket {self.label}: Using pre-computed WMB backward factors ({len(self.approximate_downstream_factors)} factors)")
+
+                # Determine backward message complexity to decide on mode
+                # We need to check if the combined backward message would exceed backward_ecl
+                # If so, we must use factor list mode (sample_tensor_product) even with sampling_scheme='all'
+
+                # Get backward message scope
+                message_scope = t.dataloader.sample_generator.message_scope
+                bw_message_complexity = 1
+                for var_label in message_scope:
+                    var = self.gm.matching_var(var_label)
+                    bw_message_complexity *= var.states
+
+                # Only use full_data_batch mode if:
+                # 1. sampling_scheme is 'all' AND
+                # 2. backward message complexity doesn't exceed backward_ecl
+                can_use_full_data_batch = (
+                    t.dataloader.sample_generator.sampling_scheme == 'all' and
+                    bw_message_complexity <= backward_ecl
+                )
+
+                if can_use_full_data_batch:
+                    # Full data batch mode: materialize full backward message tensor (complexity allows it)
+                    mode_str = "(using pre-computed)" if use_precomputed else "(computing on-the-fly)"
+                    # print(f"Bucket {self.label}: Computing WMB backward message as single factor {mode_str} (complexity={bw_message_complexity} <= backward_ecl={backward_ecl}, backward_iB={backward_iB})")
+
+                    bw_wmb, _ = get_backward_message(
+                        self.gm,
+                        self.label,
+                        backward_factors=backward_factors_arg,  # Use pre-computed if available
+                        iB=backward_iB,
+                        backward_ecl=backward_ecl,
+                        approximation_method='wmb',
+                        return_factor_list=False  # Return single factor
+                    )
+
+                    # Set as single factor since complexity allows materialization
+                    t.dataloader.bw_modifier = bw_wmb
+                    # print(f"Bucket {self.label}: Set backward message as single factor (complexity={bw_message_complexity})")
+                else:
+                    # Batched mode: return factor list to avoid materializing full product (complexity exceeds limit)
+                    mode_str = "(using pre-computed)" if use_precomputed else "(computing on-the-fly)"
+                    # print(f"Bucket {self.label}: Computing WMB backward message as factor list {mode_str} (complexity={bw_message_complexity} > backward_ecl={backward_ecl}, backward_iB={backward_iB})")
+
+                    bw_factors, _ = get_backward_message(
+                        self.gm,
+                        self.label,
+                        backward_factors=backward_factors_arg,  # Use pre-computed if available
+                        iB=backward_iB,
+                        backward_ecl=backward_ecl,
+                        approximation_method='wmb',
+                        return_factor_list=True  # Return factor list
+                    )
+
+                    # Set as factor list to avoid materialization
+                    t.dataloader.bw_factors = bw_factors
+                    # print(f"Bucket {self.label}: Set backward message as factor list with {len(bw_factors)} factors (complexity={bw_message_complexity})")
+
+            # Calculate and print target_complexity
+            target_complexity = self.get_message_complexity()
+            if bw_wmb is not None:
+                target_complexity += bw_wmb.tensor.numel()
+            print(f"Bucket {self.label}: target_complexity = {target_complexity}")
+
+            # Load all data
+            x_all, y_all, _ = t.dataloader.load(all=True)
+
+            # Create memorizer
+            mem = Memorizer(self, x_all, y_all)
+
+            # Create FactorNN with memorizer (no bw_inv needed - loss handles backward message)
+            nn_message_factor = FactorNN(mem, t.data_preprocessor, losses=None)
+
+        else:
+            # Standard NN training path
+            # Create neural network
+            get_hidden_sizes = self.config.get('custom_hidden_sizes')
+            if get_hidden_sizes is not None:
+                hidden_sizes = get_hidden_sizes(self)
+                print(f"Bucket {self.label}: Using custom hidden sizes: {hidden_sizes}")
+                net = Net(self, hidden_sizes=hidden_sizes)
+            else:
+                hidden_sizes = self.config.get('hidden_sizes')
+
+                # Handle "nbe" or "nbe,{b}" string format for hidden sizes
+                if isinstance(hidden_sizes, str) and hidden_sizes.startswith('nbe'):
+                    import math
+                    # Parse the multiplier b (default 1)
+                    if ',' in hidden_sizes:
+                        b = int(hidden_sizes.split(',')[1])
+                    else:
+                        b = 1
+                    # Compute h = b * ceil(log2(message_size))
+                    message_size = self.get_message_size()
+                    h = b * math.ceil(math.log2(message_size)) if message_size > 1 else b
+                    hidden_sizes = [h, h]
+                    # print(f"Bucket {self.label}: NBE hidden sizes: {hidden_sizes} (message_size={message_size}, b={b})")
+
+            net = Net(self, hidden_sizes=hidden_sizes)
+            t = Trainer(net=net, bucket=self, stats=self.stats)
+
+            # Handle use_bw_approx mode
+            if self.config.get('use_bw_approx', False):
+                from nce.utils.backward_message import get_backward_message
+
+                # Get backward_iB and backward_ecl from config (fallback to regular iB/ecl if not specified)
+                backward_iB = self.config.get('backward_iB', self.config.get('iB', 100))
+                backward_ecl = self.config.get('backward_ecl', self.config.get('ecl', 2**20))
+
+                # Check if we should use pre-computed backward factors
+                use_precomputed = self.gm.populate_bw_factors and self.approximate_downstream_factors is not None
+                backward_factors_arg = self.approximate_downstream_factors if use_precomputed else None
+
+                if use_precomputed:
+                    print(f"Bucket {self.label}: Using pre-computed WMB backward factors ({len(self.approximate_downstream_factors)} factors)")
+
+                # Determine backward message complexity to decide on mode
+                # We need to check if the combined backward message would exceed backward_ecl
+                # If so, we must use factor list mode (sample_tensor_product) even with sampling_scheme='all'
+
+                # Get backward message scope
+                message_scope = t.dataloader.sample_generator.message_scope
+                bw_message_complexity = 1
+                for var_label in message_scope:
+                    var = self.gm.matching_var(var_label)
+                    bw_message_complexity *= var.states
+
+                # Only use full_data_batch mode if:
+                # 1. sampling_scheme is 'all' AND
+                # 2. backward message complexity doesn't exceed backward_ecl
+                can_use_full_data_batch = (
+                    t.dataloader.sample_generator.sampling_scheme == 'all' and
+                    bw_message_complexity <= backward_ecl
+                )
+
+                if can_use_full_data_batch:
+                    # Full data batch mode: materialize full backward message tensor (complexity allows it)
+                    mode_str = "(using pre-computed)" if use_precomputed else "(computing on-the-fly)"
+                    # print(f"Bucket {self.label}: Computing WMB backward message as single factor {mode_str} (complexity={bw_message_complexity} <= backward_ecl={backward_ecl}, backward_iB={backward_iB})")
+
+                    bw_wmb, _ = get_backward_message(
+                        self.gm,
+                        self.label,
+                        backward_factors=backward_factors_arg,  # Use pre-computed if available
+                        iB=backward_iB,
+                        backward_ecl=backward_ecl,
+                        approximation_method='wmb',
+                        return_factor_list=False  # Return single factor
+                    )
+
+                    # Set as single factor since complexity allows materialization
+                    t.dataloader.bw_modifier = bw_wmb
+                    # print(f"Bucket {self.label}: Set backward message as single factor (complexity={bw_message_complexity})")
+                else:
+                    # Batched mode: return factor list to avoid materializing full product (complexity exceeds limit)
+                    mode_str = "(using pre-computed)" if use_precomputed else "(computing on-the-fly)"
+                    # print(f"Bucket {self.label}: Computing WMB backward message as factor list {mode_str} (complexity={bw_message_complexity} > backward_ecl={backward_ecl}, backward_iB={backward_iB})")
+
+                    bw_factors, _ = get_backward_message(
+                        self.gm,
+                        self.label,
+                        backward_factors=backward_factors_arg,  # Use pre-computed if available
+                        iB=backward_iB,
+                        backward_ecl=backward_ecl,
+                        approximation_method='wmb',
+                        return_factor_list=True  # Return factor list
+                    )
+
+                    # Set as factor list to avoid materialization
+                    t.dataloader.bw_factors = bw_factors
+                    # print(f"Bucket {self.label}: Set backward message as factor list with {len(bw_factors)} factors (complexity={bw_message_complexity})")
+
+                # Enable backward-aware normalization - the actual normalizing constant
+                # will be computed lazily on first load() call using the training samples
+                t.data_preprocessor.use_bw_approx = True
+
+            t.train()
+            if self.config.get('loss_fn2') is not None and self.config.get('num_epochs2') is not None:
+                t.train(new_loss_fn=self.config['loss_fn2'], override_epochs=self.config['num_epochs2'])
+
+            # Synchronize CUDA operations to prevent race conditions
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
+
+            # Create FactorNN with trained network (no bw_inv needed - loss handles backward message)
+            nn_message_factor = FactorNN(net, t.data_preprocessor, losses=t.losses)
+
+        # Plot comparison if enabled
+        if plot_messages:
             try:
-                from nce.utils.plots import plot_fastfactor_comparison
-                print(f"Generating comparison plot for Bucket {self.label}...")
-                
-                # Convert NN message to exact FastFactor for comparison
-                nn_exact = nn_message_factor.to_exact()
-                if nn_exact.tensor.isnan().any():
-                    raise ValueError(f"NN exact message for bucket {self.label} contains NaN values")
-                # Plot comparison
-                plot_title = f"Bucket {self.label}: NN vs Exact Message"
-                plot_fastfactor_comparison(exact_message, nn_exact, title=plot_title, show=True)
-                
+                logSS = getattr(self.gm, 'logSS', 0)
+
+                if logSS <= 6 and exact_message is not None:
+                    # Full message comparison - logSS is small enough
+                    from nce.utils.plots import plot_fastfactor_comparison
+                    print(f"Generating full comparison plot for Bucket {self.label}...")
+
+                    # Convert NN message to exact FastFactor for comparison
+                    nn_exact = nn_message_factor.to_exact()
+                    if nn_exact.tensor.isnan().any():
+                        raise ValueError(f"NN exact message for bucket {self.label} contains NaN values")
+                    # Plot comparison
+                    plot_title = f"Bucket {self.label}: NN vs Exact Message"
+                    plot_fastfactor_comparison(exact_message, nn_exact, title=plot_title, show=True)
+                else:
+                    # Validation set comparison - logSS > 6
+                    from nce.utils.plots import plot_validation_comparison
+                    print(f"Generating validation set comparison plot for Bucket {self.label} (logSS={logSS} > 6)...")
+
+                    # Use the same validation set from training
+                    val_batch = t.nbe_val_set[0]
+                    x_val = val_batch['x']
+                    y_val = val_batch['y']
+                    bw_val = val_batch.get('bw', val_batch.get('mgh'))
+
+                    # Get predictions
+                    with torch.no_grad():
+                        y_pred = net(x_val).squeeze()
+
+                    # Plot validation set comparison
+                    val_size = len(x_val)
+                    plot_title = f"Bucket {self.label}: NN vs True (Validation Set, n={val_size:,})"
+                    plot_validation_comparison(
+                        y_val, y_pred, bw=bw_val,
+                        title=plot_title, show=True,
+                        losses=t.losses, val_losses=t.val_losses
+                    )
+
             except Exception as e:
                 print(f"Warning: Could not generate comparison plot: {e}")
-        
+
         return nn_message_factor
 
     def compute_message_dt(self, loss_fn='None'):
@@ -111,22 +354,20 @@ class FastBucket:
         f_hat = dt.fit_and_convert_to_FastFactor()
         plot_messages = self.config.get('plot_messages', False)
         if plot_messages:
-            try:
-                print(f"Computing exact message for comparison (Bucket {self.label})...")
-                exact_message = self.compute_message_exact()
-            except Exception as e:
-                print(f"Warning: Could not compute exact message for plotting: {e}")
-                plot_messages = False
-            try:
-                from nce.utils.plots import plot_fastfactor_comparison
-                print(f"Generating comparison plot for Bucket {self.label}...")
-                
-                # Plot comparison
-                plot_title = f"Bucket {self.label}: NN vs Exact Message"
-                plot_fastfactor_comparison(exact_message, f_hat, title=plot_title, show=True)
-                
-            except Exception as e:
-                print(f"Warning: Could not generate comparison plot: {e}")
+            logSS = getattr(self.gm, 'logSS', 0)
+
+            if logSS <= 6:
+                try:
+                    print(f"Computing exact message for comparison (Bucket {self.label})...")
+                    exact_message = self.compute_message_exact()
+                    from nce.utils.plots import plot_fastfactor_comparison
+                    print(f"Generating comparison plot for Bucket {self.label}...")
+                    plot_title = f"Bucket {self.label}: DT vs Exact Message"
+                    plot_fastfactor_comparison(exact_message, f_hat, title=plot_title, show=True)
+                except Exception as e:
+                    print(f"Warning: Could not generate comparison plot: {e}")
+            else:
+                print(f"Skipping full plot for Bucket {self.label}: logSS={logSS} > 6")
         return f_hat
 
     def compute_message_with_linear_solver(self):
@@ -156,17 +397,18 @@ class FastBucket:
         
         # Check if plotting is enabled in config
         plot_messages = self.config.get('plot_messages', False)
-        
-        # Compute exact message if plotting is enabled
+
+        # Compute exact message if plotting is enabled AND logSS <= 6
         exact_message = None
         if plot_messages:
-            try:
-                print(f"Computing exact message for comparison (Bucket {self.label})...")
-                exact_message = self.compute_message_exact()
-            except Exception as e:
-                print(f"Warning: Could not compute exact message for plotting: {e}")
-                plot_messages = False
-        
+            logSS = getattr(self.gm, 'logSS', 0)
+            if logSS <= 6:
+                try:
+                    print(f"Computing exact message for comparison (Bucket {self.label})...")
+                    exact_message = self.compute_message_exact()
+                except Exception as e:
+                    print(f"Warning: Could not compute exact message for plotting: {e}")
+
         # Step 1: Validate configuration creates a linear model
         try:
             validate_linear_config(self.config)
@@ -181,9 +423,14 @@ class FastBucket:
         
         # Step 3: Create trainer to get data loading infrastructure
         trainer = Trainer(net=net, bucket=self, stats=self.stats)
-        
+
+        # Generate validation set first (for normalization and plotting)
+        nbe_val_size = max(1, self.config['num_samples'] // 9)
+        trainer.nbe_val_set = trainer._generate_validation_set_nbe(nbe_val_size)
+        print(f"Validation set generated for normalization: {len(trainer.nbe_val_set[0]['x'])} samples")
+
         # Step 4: Load the full dataset to get ground truth
-        x_all, y_all, mg_hat_all = trainer.dataloader.load(all=True)
+        x_all, y_all, bw_hat_all = trainer.dataloader.load(all=True)
         # Apply the SAME preprocessing that neural networks use
         # _, y_normalized = trainer.data_preprocessor.convert_data()
         
@@ -269,25 +516,43 @@ class FastBucket:
         # Create FactorNN with optimally trained network
         linear_message_factor = FactorNN(net, trainer.data_preprocessor)
         
-        # Plot comparison if enabled and exact message was computed
-        if plot_messages and exact_message is not None:
+        # Plot comparison if enabled
+        if plot_messages:
             try:
-                from nce.utils.plots import plot_fastfactor_comparison
-                print(f"Generating comparison plot for Bucket {self.label}...")
-                
-                # Convert linear solver message to exact FastFactor for comparison
-                linear_exact = linear_message_factor.to_exact()
-                
-                if linear_exact.tensor.isnan().any():
-                    raise ValueError(f"Linear exact message for bucket {self.label} contains NaN values")
-                
-                # Plot comparison
-                plot_title = f"Bucket {self.label}: Linear Solver vs Exact Message"
-                plot_fastfactor_comparison(exact_message, linear_exact, title=plot_title, show=True)
-                
+                logSS = getattr(self.gm, 'logSS', 0)
+
+                if logSS <= 6 and exact_message is not None:
+                    # Full message comparison
+                    from nce.utils.plots import plot_fastfactor_comparison
+                    print(f"Generating full comparison plot for Bucket {self.label}...")
+
+                    linear_exact = linear_message_factor.to_exact()
+                    if linear_exact.tensor.isnan().any():
+                        raise ValueError(f"Linear exact message for bucket {self.label} contains NaN values")
+
+                    plot_title = f"Bucket {self.label}: Linear Solver vs Exact Message"
+                    plot_fastfactor_comparison(exact_message, linear_exact, title=plot_title, show=True)
+                else:
+                    # Validation set comparison - logSS > 6
+                    from nce.utils.plots import plot_validation_comparison
+                    print(f"Generating validation set comparison plot for Bucket {self.label} (logSS={logSS} > 6)...")
+
+                    # Use the same validation set from training
+                    val_batch = trainer.nbe_val_set[0]
+                    x_val = val_batch['x']
+                    y_val = val_batch['y']
+                    bw_val = val_batch.get('bw', val_batch.get('mgh'))
+
+                    with torch.no_grad():
+                        y_pred = net(x_val).squeeze()
+
+                    val_size = len(x_val)
+                    plot_title = f"Bucket {self.label}: Linear Solver vs True (Validation Set, n={val_size:,})"
+                    plot_validation_comparison(y_val, y_pred, bw=bw_val, title=plot_title, show=True)
+
             except Exception as e:
                 print(f"Warning: Could not generate comparison plot: {e}")
-        
+
         return linear_message_factor
 
     def compute_message_nn_with_linear_init(self, loss_fn='None'):
@@ -319,7 +584,7 @@ class FastBucket:
             print(f"Bucket {self.label}: Initializing with linear MSE optimum before training")
             
             # Load data for initialization
-            x_all, y_all, mg_hat_all = trainer.dataloader.load(all=True)
+            x_all, y_all, bw_hat_all = trainer.dataloader.load(all=True)
             
             # Initialize with linear optimum
             regularization = trainer.config.get('weight_decay', 0.0)
@@ -338,19 +603,9 @@ class FastBucket:
             trainer.train()
         else:
             trainer.train()
-        
+
         return FactorNN(net, trainer.data_preprocessor)
-        
-    def compute_dummy_nn(self):
-        from nce.neural_networks.net import Net, Memorizer
-        from nce.neural_networks.train import Trainer
-        net = Net(self)
-        t=Trainer(net=net, bucket=self)
-        # use trainer to make dataloader
-        x_all, y_all, _ = t.dataloader.load(all=True)
-        mem = Memorizer(self, x_all, y_all)
-        return FactorNN(mem, t.data_preprocessor)
-    
+
     def compute_one_to_one_nn(self):
         from nce.neural_networks.net import Net, BitVectorLookup
         from nce.neural_networks.train import Trainer
@@ -360,22 +615,24 @@ class FastBucket:
         t.train()
         return FactorNN(net, t.data_preprocessor)
 
-    def compute_wmb_message(self, iB: int, debug=False) -> List[FastFactor]:
+    def compute_wmb_message(self, iB: int = 100, debug=False, ecl: int = None) -> List[FastFactor]:
         # todo: add weights functionality. Currently just doing mb
         """
         Compute the Weighted Mini-Bucket (WMB) message for the bucket with given i-bound.
-        
+
         Args:
-        iB (int): The i-bound parameter for mini-bucket elimination.
-        
+        iB (int): The i-bound parameter for mini-bucket elimination. Only used if ecl is None.
+        debug (bool): Print debug information.
+        ecl (int): Exact complexity limit (max tensor entries). If provided, overrides iB.
+
         Returns:
         List[FastFactor]: The list of factors representing the WMB message.
         """
-        # Step 1: Split factors into mini-buckets
-        mini_buckets = self._create_mini_buckets(iB)
+        # Step 1: Split factors into mini-buckets (ecl will override iB if provided)
+        mini_buckets = self._create_mini_buckets(iB, ecl=ecl)
         if debug:
             print(f"Number of mini-buckets: {len(mini_buckets)}")
-        
+
         # Step 2: Compute weighted elimination for each mini-bucket
         wmb_factors = []
         first_bucket = True
@@ -389,8 +646,136 @@ class FastBucket:
                 eliminated_factor = combined_factor.eliminate(self.elim_vars) if first_bucket else combined_factor.eliminate(self.elim_vars, elimination_scheme='sum')
                 first_bucket = False
                 wmb_factors.append(eliminated_factor)
-        
+
         return wmb_factors
+
+    def compute_message_wmb_single(self, iB: int, debug=False, ecl: int = None) -> FastFactor:
+        """
+        Compute WMB message by splitting into mini-buckets and combining with weights.
+        This properly implements Weighted Mini-Bucket elimination.
+
+        Args:
+            iB (int): The i-bound parameter (max bucket width). Only used if ecl is None.
+            debug (bool): Print debug information
+            ecl (int): Exact complexity limit (max tensor entries). If provided, overrides iB.
+
+        Returns:
+            FastFactor: Single factor representing the WMB message
+        """
+        import math
+        import torch
+
+        if debug:
+            print(f"Computing WMB message for bucket {self.label} with iB={iB}, ecl={ecl}")
+
+        # Check if we even need mini-buckets - use ecl if provided, otherwise iB
+        if ecl is not None and ecl > 0:
+            bucket_ec = self.get_ec()
+            if bucket_ec <= ecl:
+                if debug:
+                    print(f"  Bucket ec {bucket_ec} <= ecl {ecl}, using exact elimination")
+                return self.compute_message_exact()
+        else:
+            bucket_width = self.get_width()
+            if bucket_width <= iB:
+                # Bucket is small enough, just do exact elimination
+                if debug:
+                    print(f"  Bucket width {bucket_width} <= iB {iB}, using exact elimination")
+                return self.compute_message_exact()
+
+        # Need to split into mini-buckets (ecl will override iB if provided)
+        mini_buckets = self._create_mini_buckets(iB, ecl=ecl)
+
+        if debug:
+            print(f"  Split into {len(mini_buckets)} mini-buckets")
+
+        # Compute weighted messages for each mini-bucket
+        # Using uniform weights: each mini-bucket gets weight 1/n
+        weight = 1.0 / len(mini_buckets)
+
+        if debug:
+            print(f"  Using weight {weight:.4f} per mini-bucket")
+
+        wmb_messages = []
+        for i, mb in enumerate(mini_buckets):
+            # Multiply factors in the mini-bucket
+            if len(mb) == 1:
+                combined = mb[0]
+            else:
+                combined = mb[0]
+                for factor in mb[1:]:
+                    combined = combined * factor
+
+            # Weighted elimination using lsePower formula from PyGMs:
+            # result = (1/weight) * log(sum(exp(values * weight)))
+            # In natural log space:
+            #   temp = logsumexp(values_ln * weight)
+            #   result_ln = temp / weight
+            # In log10 space (FastFactor):
+            #   values_ln = values_log10 * ln(10)
+            #   temp_ln = logsumexp(values_ln * weight)
+            #   result_ln = temp_ln / weight
+            #   result_log10 = result_ln / ln(10)
+
+            # Convert from log10 to natural log
+            ln_tensor = combined.tensor * math.log(10)
+
+            # Get dimensions to eliminate
+            elim_dims = [combined.labels.index(var.label) for var in self.elim_vars]
+
+            # Apply weight BEFORE logsumexp
+            weighted_tensor = ln_tensor * weight
+
+            # Perform logsumexp elimination
+            result_tensor = weighted_tensor
+            for dim_idx in sorted(elim_dims, reverse=True):  # Eliminate from right to left
+                result_tensor = torch.logsumexp(result_tensor, dim=dim_idx)
+
+            # Divide by weight (multiply by 1/weight)
+            result_tensor = result_tensor / weight
+
+            # Convert back to log10
+            result_tensor = result_tensor / math.log(10)
+
+            # Create result factor with remaining labels
+            remaining_labels = [label for label in combined.labels if label not in [v.label for v in self.elim_vars]]
+            wmb_message = FastFactor(result_tensor, remaining_labels)
+            wmb_messages.append(wmb_message)
+
+            if debug:
+                print(f"  Mini-bucket {i}: eliminated to scope {remaining_labels}")
+
+        # Combine all WMB messages by multiplication (addition in log space)
+        if len(wmb_messages) == 0:
+            return FastFactor(torch.tensor(0.0, device=self.device), [])
+        elif len(wmb_messages) == 1:
+            return wmb_messages[0]
+        else:
+            # Check if combining would exceed ecl BEFORE materializing
+            combined_scope = set()
+            for msg in wmb_messages:
+                combined_scope.update(msg.labels)
+
+            combined_complexity = 1
+            for var_label in combined_scope:
+                var = self.gm.matching_var(var_label)
+                combined_complexity *= var.states
+
+            if combined_complexity > self.gm.ecl:
+                raise RuntimeError(
+                    f"WMB combined message would exceed ecl: complexity={combined_complexity} > ecl={self.gm.ecl}. "
+                    f"This indicates mini-buckets are too large. Try lowering iB or increasing ecl. "
+                    f"Combined scope size: {len(combined_scope)} variables from {len(wmb_messages)} mini-buckets."
+                )
+
+            combined_message = wmb_messages[0]
+            for msg in wmb_messages[1:]:
+                combined_message = combined_message * msg
+
+            if debug:
+                print(f"  Combined message scope: {combined_message.labels}")
+
+            return combined_message
     
     def _get_nn_input_size(self):
         dimensions = self.get_message_dimension()
@@ -402,29 +787,56 @@ class FastBucket:
                 out += nstates
         return out
 
-    def _create_mini_buckets(self, iB: int) -> List[List[FastFactor]]:
+    def _create_mini_buckets(self, iB: int, ecl: int = None) -> List[List[FastFactor]]:
         """
-        Create mini-buckets from the factors in the bucket based on the i-bound.
-        
+        Create mini-buckets from the factors in the bucket based on ecl (complexity limit).
+
+        When ecl is provided, it completely overrides iB - mini-buckets are created
+        based solely on the product of domain sizes (tensor entry count), not variable count.
+
         Args:
-        iB (int): The i-bound parameter for mini-bucket creation.
-        
+        iB (int): The i-bound parameter (number of variables). Only used if ecl is None.
+        ecl (int): The exact complexity limit (max tensor entries). If provided, overrides iB.
+
         Returns:
         List[List[FastFactor]]: A list of mini-buckets, where each mini-bucket is a list of factors.
         """
+        # Use ecl from gm if not explicitly provided
+        if ecl is None:
+            ecl = getattr(self.gm, 'ecl', None)
+
         mini_buckets = []
-        sorted_factors = sorted(self.factors, key=lambda f: len(f.vars), reverse=True)
-        
+        # Sort by tensor size (numel) instead of variable count
+        sorted_factors = sorted(self.factors, key=lambda f: f.tensor.numel(), reverse=True)
+
         for factor in sorted_factors:
             placed = False
             for mb in mini_buckets:
-                if len(set.union(*[set(f.vars) for f in mb], set(factor.vars))) <= iB:
-                    mb.append(factor)
-                    placed = True
-                    break
+                # Get combined scope if we add this factor to this mini-bucket
+                combined_scope = set.union(*[set(f.vars) for f in mb], set(factor.vars))
+
+                # Calculate combined complexity (product of domain sizes)
+                combined_complexity = 1
+                for var_label in combined_scope:
+                    var = self.gm.matching_var(var_label)
+                    combined_complexity *= var.states
+
+                # If ecl is set, use it as the sole constraint (override iB)
+                if ecl is not None and ecl > 0:
+                    if combined_complexity <= ecl:
+                        mb.append(factor)
+                        placed = True
+                        break
+                else:
+                    # Fallback to iB (variable count) only if ecl not provided
+                    combined_width = len(combined_scope)
+                    if combined_width <= iB:
+                        mb.append(factor)
+                        placed = True
+                        break
             if not placed:
                 mini_buckets.append([factor])
-        
+
         return mini_buckets
 
     def send_message(self, bucket: 'FastBucket'):
@@ -470,21 +882,37 @@ class FastBucket:
     
     def get_message_size(self):
         scopes = self.get_message_dimension()
-        return np.prod(scopes)
+        return np.prod([float(d) for d in scopes])
+    
+    def get_message_complexity(self):
+        """
+        Calculate the total complexity of all factors in this bucket.
+
+        This sums up the complexity of each factor. For regular factors, this is
+        the number of elements in the tensor. For NN factors, this is computed
+        from the scope without materializing the tensor (avoiding OOM errors).
+
+        Returns:
+            int: Total complexity of all factors in the bucket
+        """
+        complexity = 0
+        for factor in self.factors:
+            complexity += factor.get_factor_complexity()
+        return complexity
     
     def get_ec(self):
         return self.get_message_size()
     
     def get_fw_bw_stats(self):
         from nce.utils.stats import get_fw_bw_correlation
-        from nce.utils.message_gradient import get_message_gradient
+        from nce.utils.backward_message import get_backward_message
         """
         returns sigma_f, sigma_g, rho
         """
         if self.sigma_f is not None:
             return self.sigma_f, self.sigma_g, self.rho
         else:
-            g, f = get_message_gradient(self.gm, self.label)
+            g, f = get_backward_message(self.gm, self.label)
             sigma_f = f.tensor.std(unbiased=False)
             sigma_g = g.tensor.std(unbiased=False)
             rho = get_fw_bw_correlation(f, g)

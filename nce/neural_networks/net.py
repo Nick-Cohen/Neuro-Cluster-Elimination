@@ -13,15 +13,16 @@ import matplotlib.pyplot as plt
 # from adabelief_pytorch import AdaBelief
 
 class Net(nn.Module):
-    def __init__(self, bucket):
+    def __init__(self, bucket, hidden_sizes=None):
         self.bucket = bucket
         self.gm = self.bucket.gm
         nn_config = bucket.config
         input_size = bucket._get_nn_input_size()
-        hidden_sizes = nn_config['hidden_sizes']
+        if hidden_sizes is None:
+            hidden_sizes = nn_config['hidden_sizes']
         device = nn_config['device']
-        seed = nn_config['seed']
-        self.use_linspace_bias = nn_config['use_linspace_bias']
+        seed = nn_config.get('seed', None)
+        self.use_linspace_bias = nn_config.get('use_linspace_bias', False)
         if 'memorizer' in nn_config:
             self.memorizer = nn_config['memorizer']
                  
@@ -37,10 +38,9 @@ class Net(nn.Module):
         
         layers = []
         prev_dim = input_size
-        # use no bias for any layers
         for hidden_dim in hidden_sizes:
             layers.append(nn.Linear(prev_dim, hidden_dim))
-            layers.append(nn.Softplus())
+            layers.append(nn.Tanh())
             prev_dim = hidden_dim
        
         layers.append(nn.Linear(prev_dim, 1))
@@ -52,13 +52,12 @@ class Net(nn.Module):
         self.network = nn.Sequential(*layers)
         self.to(device)
         
-        # He initialization
+        # Xavier/Glorot normal initialization for all layers
         for layer in self.network.modules():
             if isinstance(layer, nn.Linear):
-                torch.nn.init.kaiming_normal_(layer.weight, mode='fan_in', nonlinearity='relu')
+                torch.nn.init.xavier_normal_(layer.weight)
                 torch.nn.init.constant_(layer.bias, 0)
-        
-        
+              
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         network_output = self.network(x)
         

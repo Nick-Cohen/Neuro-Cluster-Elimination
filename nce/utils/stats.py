@@ -72,7 +72,7 @@ def get_fw_bw_correlation(output_message, mg):
 def get_message_stats(gm, bucket, output_message, get_Z_estimands=True):
     # adds (label, width, fw_var, bw_var, const_pred_linspace_mse_Z_err, ls_one)
     import os, contextlib
-    from .message_gradient import get_message_gradient
+    from .backward_message import get_backward_message
     stats = dict()
     stats['label'] = bucket.label
     stats['width'] = len(output_message.labels)
@@ -83,7 +83,7 @@ def get_message_stats(gm, bucket, output_message, get_Z_estimands=True):
         with open(os.devnull, "w") as devnull, \
             contextlib.redirect_stdout(devnull), \
             contextlib.redirect_stderr(devnull):
-            mg = get_message_gradient(bucket.gm, bucket.label, bucket.approximate_downstream_factors)[0]
+            mg = get_backward_message(bucket.gm, bucket.label, bucket.approximate_downstream_factors)[0]
     
     stats['mg_var'] = 0 if empty or mg is None else mg.get_variance()
     if not get_Z_estimands:
@@ -120,7 +120,7 @@ def get_message_stats(gm, bucket, output_message, get_Z_estimands=True):
 
 
 def get_gm_message_stats(gm, ecl):
-    from .message_gradient import get_message_gradient
+    from .backward_message import get_backward_message
     with mute_everything():
         gm_copy = copy.deepcopy(gm)
         gm_copy.loss_fn = 'none'
@@ -133,7 +133,7 @@ def get_gm_message_stats(gm, ecl):
             current_bucket = gm_copy.buckets[var]
             label = current_bucket.label
             if current_bucket.get_ec() > ecl:
-                g, f = get_message_gradient(gm_copy, label)
+                g, f = get_backward_message(gm_copy, label)
                 sigma_f = f.tensor.std(unbiased=False)
                 sigma_g = g.tensor.std(unbiased=False)
                 rho = get_fw_bw_correlation(f, g)
@@ -150,3 +150,16 @@ def get_gm_message_stats(gm, ecl):
         var_g_avg /= len(stats)
         rho_avg /= len(stats)
         return var_g_avg.item(), rho_avg, stats
+    
+def get_permuted_avg_err(f, f_hat, b, num_samples = 100):
+    b_copy = copy.deepcopy(b)
+    errs = []
+    abs_errs = []
+    for _ in range(num_samples):
+        b_copy.shuffle()
+        z = (f * b_copy).sum_all_entries()
+        z_hat = (f_hat * b_copy).sum_all_entries()
+        err = (z_hat - z)
+        errs.append(err)
+        abs_errs.append(abs(err))
+    return sum(errs) / len(errs), sum(abs_errs) / len(abs_errs)

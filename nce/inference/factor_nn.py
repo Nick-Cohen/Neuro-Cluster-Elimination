@@ -9,7 +9,7 @@ class FactorNN(FastFactor):
     """
     A subclass of FastFactor that integrates a neural network for more flexible message computation.
     """
-    def __init__(self, net, data_processor):
+    def __init__(self, net, data_processor, losses=None):
         labels = net.bucket.get_message_scope()
         super().__init__(None, labels)
         self.is_nn = True
@@ -18,6 +18,7 @@ class FactorNN(FastFactor):
         self.gm = self.net.gm
         self.device = self.gm.device
         self.domain_sizes = [self.gm.matching_var(label).states for label in self.labels]
+        self.losses = losses
         
     def eliminate(self, elim_labels, elimination_scheme='sum'):
         """
@@ -119,7 +120,7 @@ class FactorNN(FastFactor):
             elim_vars (list[int]): _description_
             message_scope (list[int]): _description_
             self.labels is a list of variable indices in the NN input
-            
+
         """
         all_elim_assignments = torch.cartesian_prod(*[torch.arange(size) for size in elim_domain_sizes])
         
@@ -205,8 +206,27 @@ class FactorNN(FastFactor):
         return output_tensor
     
     def to_exact(self):
-        return FactorNN.nn_to_FastFactor(fastGM=self.gm, jit_file = None, net = self.net, device=self.device, debug=False, data_processor=self.data_processor)
-      
+        """Convert FactorNN to FastFactor."""
+        result = FactorNN.nn_to_FastFactor(fastGM=self.gm, jit_file = None, net = self.net, device=self.device, debug=False, data_processor=self.data_processor)
+        return result
+
+    def get_factor_complexity(self):
+        """
+        Calculate the complexity of this NN factor without materializing the tensor.
+
+        For FactorNN, we compute complexity from the scope by taking the product
+        of domain sizes for each variable. This avoids calling to_exact() which
+        would materialize a potentially huge tensor and cause OOM errors.
+
+        Returns:
+            int: Product of domain sizes across all variables in the scope
+        """
+        complexity = 1
+        for label in self.labels:
+            var = self.gm.matching_var(label)
+            complexity *= var.states
+        return complexity
+
     def order_indices(self):
         assert self.labels == sorted(self.labels), "Labels must be sorted"
     

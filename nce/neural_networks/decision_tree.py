@@ -45,7 +45,7 @@ class DecisionTreeLossOptimizer:
         self.config = bucket.gm.config
         self.loss_fn = trainer._get_loss_fn(self.config.get('loss_fn'))
         self.sigma_f, self.sigma_g, self.rho = 0,0,0
-        if 'mg_sampled' in self.config.get('loss_fn') or 'approx_smg' in self.config.get('loss_fn'):
+        if 'elp' in self.config.get('loss_fn') or 'approx_smg' in self.config.get('loss_fn'):
             var_names = self.loss_fn.__code__.co_freevars
             var_values = [cell.cell_contents for cell in self.loss_fn.__closure__]
             closure_vars = dict(zip(var_names, var_values))
@@ -70,18 +70,30 @@ class DecisionTreeLossOptimizer:
             self._load_bucket_data()
             
     def fit(self, K=10, sf=1., sb=1., Sx=0., bias=0., plot_incremental=False):
-        if 'mg_sampled' in self.config.get('loss_fn') or 'approx_smg' in self.config.get('loss_fn'):
-            return self.fit_smg(K=K, sf=sf, sb=sb, Sx=Sx, bias=bias, plot_incremental=plot_incremental)
-        elif 'logspace' in self.config.get('loss_fn'):
-            return self.fit_log_mse()
-        elif 'linspace_mse' in self.config.get('loss_fn'):
-            return self.fit_lin_mse()
-        elif 'weighted_logspace_mse' in self.config.get('loss_fn'):
-            return self.fit_weighted_log_mse()
-        elif 'unnormalized_kl' in self.config.get('loss_fn'):
-            return self.fit_ukl()
+        K = self.num_leaves
+        msg = self.true_values.cpu().numpy()
+        if 'elp' in self.config.get('loss_fn') or 'approx_smg' in self.config.get('loss_fn'):
+            Sx = self.rho * self.sigma_f * self.sigma_g
+            dt = self.fit_smg(K=K, sf=self.sigma_f, sb=self.sigma_g, Sx=Sx, bias=bias, plot_incremental=plot_incremental)
         else:
-            raise NotImplementedError(f"Loss function {self.config.get('loss_fn')} not supported yet")
+            dt = DecisionTreeRegressor(max_leaf_nodes=K if K>1 else 2, min_samples_leaf=1 if K>1 else len(msg), random_state=0)
+            weights = self.get_weights()
+            dt.fit(self.dX, msg, sample_weight=weights)
+
+        mhat = dt.predict(self.dX)
+        mhat = torch.tensor(mhat, dtype=self.true_values.dtype, device=self.true_values.device)
+        mhat = self.convert_back_to_original(mhat)
+        return mhat
+        # elif 'logspace' in self.config.get('loss_fn'):
+        #     return self.fit_log_mse()
+        # elif 'linspace_mse' in self.config.get('loss_fn'):
+        #     return self.fit_lin_mse()
+        # elif 'weighted_logspace_mse' in self.config.get('loss_fn'):
+        #     return self.fit_weighted_log_mse()
+        # elif 'unnormalized_kl' in self.config.get('loss_fn'):
+        #     return self.fit_ukl()
+        # else:
+        #     raise NotImplementedError(f"Loss function {self.config.get('loss_fn')} not supported yet")
         
     def fit_smg(self, K=10, sf=1., sb=1., Sx=0., bias=0., plot_incremental=True, return_extras=True):
         K = self.num_leaves if K is None else K
@@ -91,53 +103,102 @@ class DecisionTreeLossOptimizer:
 
         f = 1.*self.dY; s=f+0.; c=s+0.;
         sf = sf+1e-12; sb = sb + 1e-12; rngf = np.std(f.flatten())+1e-12;
-        al_ = (1.+Sx/sb**2)
+        al_ = (1.+Sx/sf**2)
         sb_ = np.sqrt( (1. - Sx**2/sb**2/sf**2)*sb**2 )
         num_iter = self.num_iterations
-        num_samples, num_batch = 1000, 10 # number of smg samples, num per batch
+        num_samples, num_batch = 1000, 10
         print(f'     ... alpha: {np.round(al_,3)}, sb_: {np.round(sb_,3)}, bias: {np.round(bias,3)}, K: {K} (sf:{np.round(sf,2)},sb:{np.round(sb,2)},Sx:{np.round(Sx,2)})')
         #bs = sb_*np.random.randn(num_samples,len(f))
+        self.dt = None
         
+        dL,d2Ld = 0.,0.
         for it in range(num_iter):
-            dL,d2Ld = 0.,0.
-            np.random.seed(0*it)
+            dL_,d2Ld_ = 0.,0.
+            np.random.seed(it)
             for _ in range(num_samples//num_batch):
-                bs = sb_*np.random.randn(num_batch,f.size)
-                DP = (phi(al_*f.reshape(1,-1)+bs,axis=1)-phi(al_*s.reshape(1,-1)+bs,axis=1)+bias)
-                psb = np.exp(al_*s.reshape(1,-1)+bs - phi(al_*s.reshape(1,-1)+bs,axis=1))
-                dL += -2.*( DP * psb ).mean(0,keepdims=True)/(num_samples//num_batch)
-                d2Ld += 2.*(psb**2 - DP*(psb-psb**2)).mean(0,keepdims=True)/(num_samples//num_batch)
-            
-            d2Ld = np.maximum(d2Ld, 1e-20) #1./len(f)**2);  ### Force d2L to be positive definite
+                bs = sb_*np.random.randn(num_batch,f.size) + (al_-1.)*(f.reshape(1,-1)-f.mean())  # Fixed 9/19/25
+                DP = (phi(f.reshape(1,-1)+bs,axis=1)-phi(s.reshape(1,-1)+bs,axis=1)+bias)
+                psb = np.exp(s.reshape(1,-1)+bs - phi(s.reshape(1,-1)+bs,axis=1))
+                psb = np.maximum(psb, 1./len(f))
+                dL_ += -2.*( DP * psb ).mean(0,keepdims=True)/(num_samples//num_batch)
+                d2Ld_ += 2.*(psb**2 - DP*(psb-psb**2)).mean(0,keepdims=True)/(num_samples//num_batch)
+            #DP = (phi(al_*f.reshape(1,-1)+bs,axis=1)-phi(al_*s.reshape(1,-1)+bs,axis=1))
+            #psb = np.exp(al_*s.reshape(1,-1)+bs - phi(al_*s.reshape(1,-1)+bs,axis=1))
+            #dL = -2.*( DP * psb ).mean(0, keepdims=True)
+            #d2Ld = 2.*(psb**2 - DP*(psb-psb**2)).mean(0,keepdims=True) +1e-8
+            d2Ld_ = np.maximum(d2Ld_, 1./len(f)**2);  ### Force d2L to be positive definite
+            if it==0: dL,d2Ld = dL_,d2Ld_
+            else:     dL,d2Ld = (.9*dL+.1*dL_, .9*d2Ld+.1*d2Ld_)  # make stats evolve slowly
 
             #s_adj = (s.reshape(1,-1) - dL/d2Ld)    # regression target w/ weights
-            s_adj = (s.reshape(1,-1) - np.clip(dL/d2Ld, -rngf/(it+1),rngf/(it+1)) )    # I think this can't be larger than 0 or less than -1?
-            s_adj += 1e-6*np.random.randn(*s_adj.shape)
+            s_adj = (s.reshape(1,-1) - np.clip(dL/d2Ld, -rngf/(it+1),rngf/(it+1)) ) 
+            #s_adj += 1e-6*np.random.randn(*s_adj.shape)   # dodge numerical roundoff issues
 
-            dt = DecisionTreeRegressor(max_leaf_nodes=K if K>1 else 2, min_samples_leaf=1 if K>1 else len(self.dY), random_state=0)
-            dt.fit(self.dX,s_adj[0,:], sample_weight=d2Ld.squeeze()/d2Ld.sum())
-            c = dt.predict(self.dX)[np.newaxis,:];
-            # mhat = dt.predict(dX)
-            if plot_incremental:
-                from matplotlib import pyplot as plt
-                pltrng = np.argsort(f.flatten())[-10:]
-                plt.plot(f.flatten()[pltrng],'b-', label='f')
-                plt.plot(s.flatten()[pltrng],'r-', label='s')
-                plt.plot(s_adj.flatten()[pltrng],'m-',alpha=0.5, label='s_adj')
-                plt.plot(c.flatten()[pltrng],'c:',alpha=0.9,lw=2, label='f_hat')
-                plt.legend()
-                plt.show()
-                # plt.savefig('/home/cohenn1/NCE/notebooks/_September-2025/incremental_plots/it_'+str(it)+'.png')
+            self.dt = DecisionTreeRegressor(max_leaf_nodes=K if K>1 else 2, min_samples_leaf=1 if K>1 else len(self.dY),random_state=0)
+            self.dt.fit(self.dX,s_adj[0,:], sample_weight=d2Ld.squeeze()/d2Ld.sum())
+            c = self.dt.predict(self.dX)[None,:];
+            #plt.plot(f.flatten(),'b-'); plt.plot(s.flatten(),'r-'); plt.plot(s_adj.flatten(),'m-',alpha=0.5); plt.plot(c.flatten(),'c:',alpha=0.5); plt.show();
             sprev = s+0.
-            s = s + (c-s)*.25 + (f.reshape(1,-1)-s)/(4.) # +it?
+            #s = s + (c-s)*.25 + (f[None,:]-s)*.25
+            #s = s + (c-s)*.25 + 0*(f[None,:]-s)*.25 ## change 9/19/25-runB
+            s = s + (c-s)*.5 + 0*(f[None,:]-s)*.25 ## change 9/19/25-runC
             if np.abs(s-sprev).max()<.01: break
-            #print(f.round(2)); print(s.round(2));
-        if it>=num_iter-1: print(f'Convergence issue? {it+1} iterations'); #warning.warn('Con')
+        
+        # for it in range(num_iter):
+        #     mx = np.max(s)
+        #     dL = np.exp(s-mx)-np.exp(f-mx)
+        #     d2Ld = np.exp(s-mx) # diagonal of Hessian
+        #     d2Ld = np.minimum(d2Ld, 1./len(f))
+
+        #     s_adj = (s.reshape(1,-1) - np.clip(dL/d2Ld, -rngf/(it+1),rngf/(it+1)) )  
+        #     s_adj += 1e-6*np.random.randn(*s_adj.shape)   # dodge numerical roundoff issues
+
+        #     self.dt = DecisionTreeRegressor(max_leaf_nodes=K if K>1 else 2, min_samples_leaf=1 if K>1 else len(self.dY),random_state=0)
+        #     self.dt.fit(self.dX,s_adj[0,:], sample_weight=d2Ld.squeeze()/d2Ld.sum())
+        #     c = self.dt.predict(self.dX)[None,:];
+        #     sprev = s+0.
+        #     s = s + (c-s)*.25 + (f[None,:]-s)*.25
+        #     if np.abs(s-sprev).max()<.01: break
+        # for it in range(num_iter):
+        #     dL,d2Ld = 0.,0.
+        #     np.random.seed(it)
+        #     for _ in range(num_samples//num_batch):
+        #         bs = sb_*np.random.randn(num_batch,f.size) + (al_-1.)*(f.reshape(1,-1)-f.mean())
+        #         DP = (phi(al_*f.reshape(1,-1)+bs,axis=1)-phi(al_*s.reshape(1,-1)+bs,axis=1)+bias)
+        #         psb = np.exp(al_*s.reshape(1,-1)+bs - phi(al_*s.reshape(1,-1)+bs,axis=1))
+        #         dL += -2.*( DP * psb ).mean(0,keepdims=True)/(num_samples//num_batch)
+        #         d2Ld += 2.*(psb**2 - DP*(psb-psb**2)).mean(0,keepdims=True)/(num_samples//num_batch)
+            
+        #     d2Ld = np.maximum(d2Ld, 1e-20) #1./len(f)**2);  ### Force d2L to be positive definite
+
+        #     #s_adj = (s.reshape(1,-1) - dL/d2Ld)    # regression target w/ weights
+        #     s_adj = (s.reshape(1,-1) - np.clip(dL/d2Ld, -rngf/(it+1),rngf/(it+1)) )    # I think this can't be larger than 0 or less than -1?
+        #     s_adj += 1e-6*np.random.randn(*s_adj.shape)
+
+        #     dt = DecisionTreeRegressor(max_leaf_nodes=K if K>1 else 2, min_samples_leaf=1 if K>1 else len(self.dY), random_state=0)
+        #     dt.fit(self.dX,s_adj[0,:], sample_weight=d2Ld.squeeze()/d2Ld.sum())
+        #     c = dt.predict(self.dX)[np.newaxis,:];
+        #     # mhat = dt.predict(dX)
+        #     if plot_incremental:
+        #         from matplotlib import pyplot as plt
+        #         pltrng = np.argsort(f.flatten())[-10:]
+        #         plt.plot(f.flatten()[pltrng],'b-', label='f')
+        #         plt.plot(s.flatten()[pltrng],'r-', label='s')
+        #         plt.plot(s_adj.flatten()[pltrng],'m-',alpha=0.5, label='s_adj')
+        #         plt.plot(c.flatten()[pltrng],'c:',alpha=0.9,lw=2, label='f_hat')
+        #         plt.legend()
+        #         plt.show()
+        #         # plt.savefig('/home/cohenn1/NCE/notebooks/_September-2025/incremental_plots/it_'+str(it)+'.png')
+        #     sprev = s+0.
+        #     s = s + (c-s)*.25 + (f.reshape(1,-1)-s)/(4.) # +it?
+        #     if np.abs(s-sprev).max()<.01: break
+        #     #print(f.round(2)); print(s.round(2));
+        # if it>=num_iter-1: print(f'Convergence issue? {it+1} iterations'); #warning.warn('Con')
         
         loss_function = self.loss_fn
         
         optimized_dt, loss_history = self.optimize_leaf_values()
-        
+        return optimized_dt
         mhat = optimized_dt.predict(self.dX)
         mhat = torch.tensor(mhat, dtype=self.true_values.dtype, device=self.true_values.device)
         mhat = self.convert_back_to_original(mhat)
@@ -538,7 +599,7 @@ class DecisionTreeLossOptimizer:
         
         return fast_factor
 
-    def optimize_leaf_values(self, optimizer='adam', lr=0.01, max_iter=1000, tolerance=1e-6, device='cuda'):
+    def optimize_leaf_values(self, optimizer='adam', lr=0.01, max_iter=10000, tolerance=1e-6, device='cuda'):
         """
         Optimize leaf values of a fitted decision tree using PyTorch optimization.
         
@@ -608,7 +669,7 @@ class DecisionTreeLossOptimizer:
         loss_history = []
         best_loss = float('inf')
         best_params = leaf_params.clone()
-        patience_counter = 0
+        # patience_counter = 0
         
         def closure():
             opt.zero_grad()
@@ -630,6 +691,7 @@ class DecisionTreeLossOptimizer:
         
         print(f"Starting optimization with {K} leaves...")
         
+        last_loss = 10e6
         for iteration in range(max_iter):
             if optimizer.lower() == 'lbfgs':
                 loss = opt.step(closure)
@@ -641,20 +703,24 @@ class DecisionTreeLossOptimizer:
             loss_history.append(loss_val)
             
             # Early stopping
-            if loss_val < best_loss - tolerance:
-                best_loss = loss_val
-                best_params = leaf_params.clone()
-                patience_counter = 0
-            else:
-                patience_counter += 1
+            # if loss_val < best_loss - tolerance:
+            #     best_loss = loss_val
+            #     best_params = leaf_params.clone()
+            #     patience_counter = 0
+            # else:
+            #     patience_counter += 1
                 
-            if patience_counter > 200000 and optimizer.lower() == 'adam':  # Early stopping for Adam
-                print(f"Early stopping at iteration {iteration}")
-                break
+            # if patience_counter > 200000 and optimizer.lower() == 'adam':  # Early stopping for Adam
+            #     print(f"Early stopping at iteration {iteration}")
+            #     break
                 
             if iteration % 100 == 0:
                 print(f"Iteration {iteration}: Loss = {loss_val:.6f}")
-                
+                # early stopping
+                if not loss_val < last_loss * 0.9:
+                    print(f"Early stopping at iteration {iteration}")
+                    break
+                last_loss = loss_val
             # Convergence check
             if len(loss_history) > 1:
                 if abs(loss_history[-1] - loss_history[-2]) < tolerance:

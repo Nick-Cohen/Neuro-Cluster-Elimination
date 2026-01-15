@@ -9,36 +9,48 @@ from nce.inference.message_gradient_factors import get_wmb_message_gradient_fact
 import copy
 
 class SampleGenerator:
-    def __init__(self, gm: FastGM, bucket: FastBucket, mess = None, mg = None, random_seed =None):
+    def __init__(self, gm: FastGM, bucket: FastBucket, random_seed=None):
         self.config = gm.config
         self.gm = gm
         self.iB = gm.iB
         self.bucket = bucket
-        self.mess = mess
-        self.mg = mg
         self.random_seed = random_seed
         self.factors = bucket.factors
-        # for factor in self.factors:
-        #     assert factor.tensor is not None
-        self.num_samples = self.config['num_samples']
+        self.num_samples = self.config.get('num_samples')
         self.sampling_scheme = self.config['sampling_scheme']
         self.message_scope, self.domain_sizes = self.get_message_scope_and_dims()
-        self.message_size = np.prod([d.item() for d in self.domain_sizes])
-        if bucket.approximate_downstream_factors is not None:
-            # only consider factors that have a scope that intersects with the message scope
-            downstream_factors = [factor for factor in bucket.approximate_downstream_factors if bool(set(factor.labels) & set(self.message_scope))]
-            self.gradient_factors = get_wmb_message_gradient_factors(downstream_factors, self.message_scope, self.config)
-        else:
-            self.gradient_factors = None
+        self.message_size = np.prod([float(d.item()) for d in self.domain_sizes])
+
+        # Backward factors - set externally via dataloader.bw_factors after get_backward_message() is called
+        # Do NOT transform them here - they are used as-is
+        self.backward_factors = None
+
         for factor in self.factors:
             factor.order_indices()
-        if self.gradient_factors is not None:
-            for factor in self.gradient_factors:
-                factor.order_indices()
         self.elim_vars = sorted(self.bucket.elim_vars, key=lambda v: v.label)
         self.elim_domain_sizes = [v.states for v in self.elim_vars]
-        
-    def sample_assignments(self, num_samples: int = -1, sampling_scheme = None) -> torch.Tensor:
+
+    def sample_assignments(self, num_samples: int = -1, sampling_scheme=None) -> torch.Tensor:
+        """Sample assignments from the message scope.
+
+        Args:
+            num_samples: Number of samples to generate
+            sampling_scheme: 'uniform' or 'all'. Defaults to config setting.
+
+        Returns:
+            Tensor of shape (num_samples, num_vars) with sampled assignments
+        """
+        if sampling_scheme is None:
+            sampling_scheme = self.sampling_scheme
+        if sampling_scheme == 'uniform':
+            return self.sample_uniform(num_samples)
+        elif sampling_scheme == 'all':
+            return self.sample_all()
+        else:
+            raise ValueError(f"Unknown sampling scheme: {sampling_scheme}. Use 'uniform' or 'all'.")
+
+    def sample_assignments_old(self, num_samples: int = -1, sampling_scheme=None) -> torch.Tensor:
+        """OLD VERSION - kept for reference. Remove after confirming new version works."""
         if False: # turn off random seed
             self.random_seed += 1
             seed = self.random_seed
@@ -80,7 +92,8 @@ class SampleGenerator:
         coord = torch.stack(coord[::-1], dim=-1)
         return coord
     
-    def sample_from_mg_brute_force(self, mess: FastFactor, mg: FastFactor, num_samples: int, replacement = True) -> torch.Tensor:
+    def sample_from_mg_brute_force_old(self, mess: FastFactor, mg: FastFactor, num_samples: int, replacement = True) -> torch.Tensor:
+        """OLD VERSION - deprecated. Use uniform sampling instead."""
         # normalize the message gradient to be a probability distribution
         # first ensure mg has every variable in it
         mess_copy = copy.deepcopy(mess)
@@ -100,7 +113,8 @@ class SampleGenerator:
         samples = SampleGenerator._unravel_index(samples, dist.shape)
         return samples
 
-    def sample_from_mess_times_mg_brute_force(self, mess: FastFactor, mg: FastFactor, num_samples: int, replacement = True) -> torch.Tensor:
+    def sample_from_mess_times_mg_brute_force_old(self, mess: FastFactor, mg: FastFactor, num_samples: int, replacement = True) -> torch.Tensor:
+        """OLD VERSION - deprecated. Use uniform sampling instead."""
         # normalize the message gradient to be a probability distribution
         dist = mess * mg
         # convert tensor to base e
@@ -135,14 +149,42 @@ class SampleGenerator:
     
     def compute_message_values(self, assignments: torch.Tensor) -> torch.Tensor:
         factors = self.factors
+        if self.gm.config.get('fdb', False):
+            return self.bucket.compute_message_exact().tensor.flatten()
         return self.sample_tensor_product_elimination(self.factors, assignments)
     
-    def compute_gradient_values(self, assignments: torch.Tensor, gradient_factors=None) -> torch.Tensor:
+    def compute_backward_values(self, assignments: torch.Tensor, backward_factors=None) -> torch.Tensor:
+        """Compute backward message values at sampled assignments.
+
+        Evaluates the product of backward factors at each assignment point.
+        The backward factors should already be marginalized to only contain
+        variables in the message scope (done by get_backward_message).
+
+        Args:
+            assignments: Tensor of shape (num_samples, num_vars) with sampled assignments
+            backward_factors: List of FastFactors representing backward message.
+                             If None, uses self.backward_factors.
+
+        Returns:
+            Tensor of shape (num_samples,) with backward message values in log10 space
+        """
+        if backward_factors is None:
+            factors = self.backward_factors
+        else:
+            factors = backward_factors
+        if factors is None:
+            return None
+        # Use sample_tensor_product - no marginalization needed since bw_factors
+        # from get_backward_message already only contain message_scope variables
+        return self.sample_tensor_product(factors=factors, assignments=assignments)
+
+    def compute_gradient_values_old(self, assignments: torch.Tensor, gradient_factors=None) -> torch.Tensor:
+        """OLD VERSION - kept for reference. Use compute_backward_values instead."""
         if gradient_factors is None:
             factors = self.gradient_factors
         else:
             factors = gradient_factors
-        return self.sample_tensor_product(factors=factors,  assignments=assignments)
+        return self.sample_tensor_product_elimination(factors=factors, assignments=assignments)
     
     def sample_tensor_product_elimination(self, factors, assignments) -> torch.Tensor:
         for factor in factors:
@@ -150,6 +192,9 @@ class SampleGenerator:
         unsummed_shape = (*self.elim_domain_sizes,)
         unsummed_values = torch.zeros((len(assignments),) + unsummed_shape, device=self.gm.device, requires_grad=False)
         for fast_factor in factors:
+            # If this is a FactorNN with bw_inv, convert to exact first to apply inverse transformation
+            if hasattr(fast_factor, 'is_nn') and fast_factor.is_nn and hasattr(fast_factor, 'bw_inv') and fast_factor.bw_inv:
+                fast_factor = fast_factor.to_exact()
             if True:
                 # assert not fast_factor.tensor.requires_grad
                 unsummed_values += fast_factor._get_slices(assignments=assignments, elim_vars=self.elim_vars, elim_domain_sizes = self.elim_domain_sizes, message_scope=self.message_scope)
@@ -201,22 +246,20 @@ class SampleGenerator:
         return torch.logsumexp(unsummed_values * math.log(10), dim=tuple(range(1, unsummed_values.dim()))) / math.log(10)
 
     def sample_tensor_product(self, factors, assignments) -> torch.Tensor:
-        
-
-        if factors is None or len(factors) == 1 and factors[0].labels == [] or len(factors) == 0:
+        # Check for edge cases
+        if factors is None or len(factors) == 0:
             return torch.zeros(len(assignments), device=self.gm.device)
+        if len(factors) == 1 and factors[0].labels == []:
+            return torch.zeros(len(assignments), device=self.gm.device)
+
         for factor in factors:
             factor.order_indices()
-        scope = self.message_scope
-        elim_vars = self.elim_vars
         output = torch.zeros((len(assignments),1), device=self.gm.device, requires_grad=False)
         for fast_factor in factors:
-            try:
-                output += fast_factor._get_values(assignments=assignments, message_scope=self.message_scope)
-            except:
-                print(fast_factor._get_values(assignments=assignments, message_scope=self.message_scope).shape)
-                print(assignments.shape)
-                exit(1)
+            # If this is a FactorNN with bw_inv, convert to exact first to apply inverse transformation
+            if hasattr(fast_factor, 'is_nn') and fast_factor.is_nn and hasattr(fast_factor, 'bw_inv') and fast_factor.bw_inv:
+                fast_factor = fast_factor.to_exact()
+            output += fast_factor._get_values(assignments=assignments, message_scope=self.message_scope)
         assert not output.requires_grad
         return (output).squeeze(1)
         # return (output / math.log(10)).squeeze(1)
