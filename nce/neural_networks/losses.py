@@ -32,7 +32,7 @@ def expected_softmax_kl(outputs, targets, sigma_f=0, sigma_g=0, rho=0, num_bw_sa
     loss = kl_per_sample.mean()
     return loss
 
-def unnormalized_kl(outputs, targets, bw_hat=None, sigma_f=None, sigma_g=None, bw_normalizing_constant=None):
+def unnormalized_kl(outputs, targets, bw_hat=None, sigma_f=None, sigma_g=None, bw_normalizing_constant=None, max_val=None):
     """
     Unnormalized KL divergence loss.
 
@@ -54,6 +54,11 @@ def unnormalized_kl(outputs, targets, bw_hat=None, sigma_f=None, sigma_g=None, b
         The bw value at argmax(y + bw) from training data.
         When provided, this is subtracted from bw_hat before adding to outputs/targets.
         This ensures numerical stability by making the bw contribution at the max entry = 0.
+    max_val : float, optional
+        Global maximum value for numerical stability. When provided, this is used instead
+        of computing max from the current batch. IMPORTANT: For batched training, this
+        should be computed ONCE from the full dataset and passed to every batch. Using
+        per-batch max causes gradient inconsistency and training divergence.
 
     Returns:
     --------
@@ -78,8 +83,20 @@ def unnormalized_kl(outputs, targets, bw_hat=None, sigma_f=None, sigma_g=None, b
     # for non-log-valued, equation is
     # sum ~p(x) [ log [~p(x)/~q(x)] - ~p(x) + ~q(x) ]
 
-    log_p_tilde = targets
-    log_q_tilde = outputs
+    # Compute max_val for numerical stability (prevents exp overflow)
+    # CRITICAL: For batched training, max_val MUST be computed from full dataset
+    # and passed in. Per-batch max_val causes gradient inconsistency.
+    if max_val is None:
+        # Fallback: compute from current batch (works for full-batch training)
+        max_val = torch.max(torch.max(targets), torch.max(outputs.detach()))
+    else:
+        # Use provided global max_val, but also check if outputs exceed it
+        max_val = max(max_val, outputs.detach().max().item())
+        max_val = torch.tensor(max_val, device=outputs.device)
+    max_val = max_val.detach()
+
+    log_p_tilde = targets - max_val
+    log_q_tilde = outputs - max_val
     p_tilde = torch.exp(log_p_tilde)
     q_tilde = torch.exp(log_q_tilde)
     unsummed = p_tilde * (log_p_tilde - log_q_tilde) - p_tilde + q_tilde

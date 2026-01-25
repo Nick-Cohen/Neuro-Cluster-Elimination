@@ -35,9 +35,11 @@ def should_use_convex_early_stopping(config):
         'ukf_seq' in loss_fn
     )
 
+    hidden_sizes = config.get('hidden_sizes', [])
+    is_linear = (hidden_sizes == [] or hidden_sizes == 'bias_only')
     return (config.get('convex_early_stopping', False) and
             supported_losses and
-            config.get('hidden_sizes', []) == [])
+            is_linear)
 
 class Trainer:
     def __init__(self, net, bucket, loss_fn=None, stats=None):
@@ -158,17 +160,38 @@ class Trainer:
         # IMPORTANT: Initialize normalizing constant from TRAINING data, not validation data
         # This ensures that max(y + bw) from training is used to prevent overflow in UKL loss
         # We load a small training sample first just to trigger the normalization computation
-        batch_size = self.config['batch_size']
-        num_batches_per_set = self.config['set_size'] // batch_size
-        stratify = self.config.get('stratify_samples', False)
-        init_batches = self.dataloader.load_batches(batch_size, num_batches_per_set, stratify_samples=stratify)
+        if self.dataloader.sample_generator.sampling_scheme == 'all':
+            init_batches = self.dataloader.load_all()
+        else:
+            batch_size = self.config['batch_size']
+            num_batches_per_set = self.config['set_size'] // batch_size
+            stratify = self.config.get('stratify_samples', False)
+            init_batches = self.dataloader.load_batches(batch_size, num_batches_per_set, stratify_samples=stratify)
         print(f"Initialized normalizing constant from training data: {self.data_preprocessor.normalizing_constant:.4f}")
         if self.data_preprocessor.bw_normalizing_constant is not None:
             print(f"  bw_normalizing_constant (bw at argmax(y+bw)): {self.data_preprocessor.bw_normalizing_constant:.4f}")
 
+        # Compute global_max_targets for UKL numerical stability
+        # CRITICAL: This must be computed ONCE from all training data and used for ALL batches
+        # Using per-batch max causes gradient inconsistency and training divergence
+        if self.config.get('loss_fn', '') == 'unnormalized_kl':
+            with torch.no_grad():
+                all_y = torch.cat([b['y'] for b in init_batches], dim=0)
+                all_bw = torch.cat([b['bw'] for b in init_batches], dim=0) if init_batches[0].get('bw') is not None else None
+                if all_bw is not None and self.data_preprocessor.bw_normalizing_constant is not None:
+                    # targets = y + (bw - bw_normalizing_constant)
+                    targets_for_max = all_y + all_bw - self.data_preprocessor.bw_normalizing_constant
+                else:
+                    targets_for_max = all_y
+                self.data_preprocessor.global_max_targets = targets_for_max.max().item()
+                print(f"  global_max_targets (for UKL numerical stability): {self.data_preprocessor.global_max_targets:.4f}")
+
         # Now generate validation set (which will use the same normalizing constant)
-        nbe_val_size = max(1, self.config['num_samples'] // 9)
-        nbe_val_set = self._generate_validation_set_nbe(nbe_val_size)
+        if self.dataloader.sample_generator.sampling_scheme == 'all':
+            nbe_val_set = self.dataloader.load_all()
+        else:
+            nbe_val_size = max(1, self.config['num_samples'] // 9)
+            nbe_val_set = self._generate_validation_set_nbe(nbe_val_size)
         self.nbe_val_set = nbe_val_set  # Store for later use (plotting, etc.)
 
         if use_nbe_early_stopping:
@@ -196,12 +219,11 @@ class Trainer:
 
         # Check for full data batch mode BEFORE using set_size
         if self.dataloader.sample_generator.sampling_scheme == 'all':
-            print("Overwriting batch size and num sets for full data batches...")
-            set_size = self.message_size
-            num_samples = self.message_size
+            set_size = int(self.message_size)
+            num_samples = int(self.message_size)
             num_sets = 1
-            num_batches_per_set = self.config['num_batches_per_set']
-            batch_size = self.message_size // num_batches_per_set
+            batch_size = self.config['batch_size']
+            num_batches_per_set = (set_size + batch_size - 1) // batch_size
         else:
             num_sets = num_samples // set_size
             num_batches_per_set = set_size // batch_size
@@ -267,7 +289,19 @@ class Trainer:
         with tqdm(total=num_progress_steps, desc="Bucket "+str(self.bucket.label) + " training") as pbar:
             for s in range(num_sets):
                 stratify = self.config.get('stratify_samples', False)
-                set_batches = self.dataloader.load_batches(batch_size, num_batches_per_set, stratify_samples=stratify)
+                if self.dataloader.sample_generator.sampling_scheme == 'all':
+                    all_data = self.dataloader.load_all()[0]
+                    x_all, y_all, bw_all = all_data['x'], all_data['y'], all_data['bw']
+                    set_batches = []
+                    for i in range(0, len(x_all), batch_size):
+                        end_idx = min(i + batch_size, len(x_all))
+                        set_batches.append({
+                            'x': x_all[i:end_idx],
+                            'y': y_all[i:end_idx],
+                            'bw': bw_all[i:end_idx] if bw_all is not None else None
+                        })
+                else:
+                    set_batches = self.dataloader.load_batches(batch_size, num_batches_per_set, stratify_samples=stratify)
 
                 def debug_uniformity_histogram():
                     print('debugging uniformity')
@@ -488,12 +522,13 @@ class Trainer:
                             val_batch = nbe_val_set[0]
                             x_val = val_batch['x']
                             y_val = val_batch['y']
-                            mgh_val = val_batch.get('mgh', None)
+                            # Support both old 'mgh' key and new 'bw' key
+                            bw_val = val_batch.get('bw', val_batch.get('mgh'))
                             # print("x_val.shape, y_val.shape:", x_val.shape, y_val.shape)
                             outputs_val = self.net(x_val).squeeze()
                             # print("outputs_val.shape:", outputs_val.shape)
-                            if mgh_val is not None:
-                                nbe_val_loss = self.loss_fn(outputs_val, y_val, mgh_val)
+                            if bw_val is not None:
+                                nbe_val_loss = self.loss_fn(outputs_val, y_val, bw_val)
                             else:
                                 nbe_val_loss = self.loss_fn(outputs_val, y_val)
                             # Handle case where loss returns per-sample values
@@ -919,11 +954,13 @@ class Trainer:
             # Wrap to ignore bw_hat_batch parameter
             return lambda out, targ, mgh=None: mse(out, targ)
         elif loss_fn_name == "unnormalized_kl":
-            # Return lambda that reads bw_normalizing_constant from data_preprocessor at call time
-            # This allows the constant to be computed after training data is loaded
+            # Return lambda that reads bw_normalizing_constant and global_max_targets from
+            # data_preprocessor at call time. These are computed after training data is loaded.
+            # CRITICAL: global_max_targets must be used for ALL batches to prevent divergence
             return lambda out, targ, bw=None: unnormalized_kl(
                 out, targ, bw,
-                bw_normalizing_constant=self.data_preprocessor.bw_normalizing_constant
+                bw_normalizing_constant=self.data_preprocessor.bw_normalizing_constant,
+                max_val=self.data_preprocessor.global_max_targets
             )
         elif loss_fn_name == "scaled_ukl":
             # Get forward/backward stats for scaling

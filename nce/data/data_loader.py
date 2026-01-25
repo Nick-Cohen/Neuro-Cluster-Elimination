@@ -47,12 +47,13 @@ class DataLoader:
     def shuffle_data(self):
         indices = torch.randperm(len(self))
     
-    def load(self, num_samples: int = 0, all: bool = False) -> tuple:
+    def load(self, num_samples: int = 0, all: bool = False, is_validation: bool = False) -> tuple:
         """Load training data by sampling and computing message/backward values.
 
         Args:
             num_samples: Number of samples to generate (ignored if all=True)
             all: If True, enumerate all assignments instead of sampling
+            is_validation: If True, use validation seed (different from training samples)
 
         Returns:
             Tuple of (x, y, bw) where:
@@ -67,7 +68,7 @@ class DataLoader:
         if all:
             assignments = self.sample_generator.sample_assignments(sampling_scheme='all')
         else:
-            assignments = self.sample_generator.sample_assignments(num_samples)
+            assignments = self.sample_generator.sample_assignments(num_samples, is_validation=is_validation)
 
         # Compute message values
         mess_values = self.sample_generator.compute_message_values(assignments)

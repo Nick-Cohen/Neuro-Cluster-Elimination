@@ -33,6 +33,7 @@ class FastGM:
         self.ecl = self.config.get('ecl', 0)
         self.complexity_limit = self.config.get('complexity_limit', 0)
         self.num_trained = 0
+        self.wmb_fw_partitions = 0  # Total forward partitions during backward factor population
         self.uai_file = uai_file
         self.device = device
         self.vars = []
@@ -184,7 +185,7 @@ class FastGM:
                 buckets[var].factors.append(factor)
                 unplaced_factors.remove(factor)
 
-        if unplaced_factors:
+        if unplaced_factors and self.is_primary:
             raise ValueError(f"Some factors could not be placed in buckets: {unplaced_factors}")
 
         return buckets 
@@ -382,14 +383,6 @@ class FastGM:
                 raise ValueError(f"Output message for bucket {bucket.label} contains NaN values")
             return output_message
         else:
-            self.num_trained += 1
-            print(f"Bucket {bucket.label}: training ({self.num_trained})", flush=True)
-            # Check if we should use linear solver
-            # use_linear_solver = bucket.config.get('use_linear_solver', False)
-
-            # DEBUG: Track config state
-            # print(f"DEBUG process_bucket {bucket.label}: approx_method={self.config.get('approximation_method')}, is_populating={self.is_populating_backward_factors}, config_id={id(self.config)}")
-
             # CRITICAL FIX: Check if we're in backward factor population mode first
             # When populating backward factors, always use WMB regardless of config
             if self.is_populating_backward_factors:
@@ -397,16 +390,20 @@ class FastGM:
                 output_messages = bucket.compute_wmb_message(self.iB)
                 return output_messages
             elif self.config.get('approximation_method') == 'nn':
-                # print(f"Training NN for bucket: {bucket.label}")
+                self.num_trained += 1
+                print(f"Bucket {bucket.label}: training ({self.num_trained})", flush=True)
                 output_message = bucket.compute_message_nn()
             elif self.config.get('approximation_method') == 'dt':
-                # print(f"Using decision tree for bucket: {bucket.label}")
+                self.num_trained += 1
+                print(f"Bucket {bucket.label}: training DT ({self.num_trained})", flush=True)
                 output_message = bucket.compute_message_dt()
             elif self.config.get('approximation_method') == 'wmb':
                 # print(f"Using WMB for bucket: {bucket.label}")
                 # Use compute_wmb_message which returns a LIST of messages
                 # This keeps mini-bucket messages separate to respect ecl
                 output_messages = bucket.compute_wmb_message(self.iB)
+                # Track WMB partitions
+                self.wmb_fw_partitions += bucket.wmb_stats.get('fw_partitions', 0)
 
                 # Return list of messages - caller will handle each separately
                 return output_messages
@@ -1771,13 +1768,15 @@ class FastGM:
                 bucket_width = copy_bucket.get_width()
                 bucket_ec = copy_bucket.get_ec()
 
-                bw_ecl = self.config['bw_ecl']
+                bw_ecl = self.config.get('bw_ecl', self.config.get('ecl', 2**20))
                 needs_approx = bucket_ec > bw_ecl
 
                 if needs_approx:
                     # print(f"    Using WMB (width={bucket_width} > iB={self.iB} OR ec={bucket_ec} > ecl={self.ecl})")
                     # Use WMB approximation - returns list of factors
                     messages = copy_bucket.compute_wmb_message(ecl=bw_ecl)
+                    # Track forward partitions (upper bound for backward message impact)
+                    self.wmb_fw_partitions += copy_bucket.wmb_stats.get('fw_partitions', 0)
                 else:
                     # print(f"    Using exact (width={bucket_width} <= iB={self.iB} AND ec={bucket_ec} <= ecl={self.ecl})")
                     # Compute exact message - wrap in list for consistency
@@ -1801,6 +1800,9 @@ class FastGM:
                 next_bucket.factors.extend(all_outgoing_factors)
                 # print(f"    Sent to bucket {next_var_label}")
 
+        # Print summary of forward partitions during backward factor population
+        if self.wmb_fw_partitions > 0:
+            print(f"  WMB forward partitions during backward factor population: {self.wmb_fw_partitions} (upper bound)")
         # print("Backward factor population complete!")
         # print(f"DEBUG: Exiting populate - self.config id={id(self.config)}, approx_method={self.config.get('approximation_method')}")
 

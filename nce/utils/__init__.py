@@ -1,3 +1,3 @@
 from .stats import *
-from .message_gradient import get_message_gradient
+from .backward_message import get_backward_message, get_message_gradient
 from .plots import plot_fastfactor_comparison

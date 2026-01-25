@@ -250,7 +250,8 @@ class FactorNN(FastFactor):
 
         # Get the scope and domain sizes
         scope = net.bucket.get_message_scope()
-        domain_sizes = torch.tensor([fastGM.vars[fastGM.matching_var(v)].states for v in scope], device=device)
+        # matching_var returns a Var object (not an index), so use .states directly
+        domain_sizes = torch.tensor([fastGM.matching_var(v).states for v in scope], device=device)
         
         # Calculate the total number of inputs
         total_inputs = (domain_sizes - 1).sum().item()

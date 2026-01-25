@@ -42,6 +42,11 @@ class DataPreprocessor:
         # For use_bw_approx mode: bw value at argmax(y + bw), passed to loss function
         self.bw_normalizing_constant = None
 
+        # Global max of targets for UKL numerical stability (computed from full training data)
+        # CRITICAL: This must be computed ONCE from all training data and used for ALL batches
+        # Using per-batch max causes gradient inconsistency and training divergence
+        self.global_max_targets = None
+
         # Initialize normalizing constant from provided samples if available
         if y is not None:
             self._initialize_normalizing_constant(y, bw)

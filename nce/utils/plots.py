@@ -15,7 +15,7 @@ def plot_fastfactor_comparison(exact_factor, approx_factor, message_gradient=Non
         sort_indices: Whether to sort by exact values
         show_loss_curve: Whether to show the loss curve
         n_biggest: If specified, only plot the n largest values (by exact factor)
-        pred_alpha: Transparency for predicted values (0-1). If None, uses 1.0 for n_biggest mode, 0.01 for full data
+        pred_alpha: Transparency for predicted values (0-1). If None, uses 1.0 for n_biggest mode or <50k points, 0.01 for larger datasets
     """
     # Order indices for both factors
     # see if approx_factor has data field losses
@@ -66,7 +66,13 @@ def plot_fastfactor_comparison(exact_factor, approx_factor, message_gradient=Non
         plt.plot(X, Y2_sorted, label='m_hat (approx)', lw=0.5, color='orange', alpha=alpha)
     else:
         # Scatter plot for full data
-        alpha = pred_alpha if pred_alpha is not None else 0.01
+        # Use alpha=1 for small datasets (<50k points), otherwise 0.01 for visibility
+        if pred_alpha is not None:
+            alpha = pred_alpha
+        elif len(Y1_sorted) < 50000:
+            alpha = 1.0
+        else:
+            alpha = 0.01
         plt.scatter(X, Y2_sorted, label='m_hat (approx)', alpha=alpha, color='orange', s=.1)
     plt.plot(X, Y1_sorted, label='m (exact)', lw=0.5, color='blue')
     if Y3_sorted is not None:

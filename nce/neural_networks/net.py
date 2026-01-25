@@ -33,30 +33,42 @@ class Net(nn.Module):
                 torch.cuda.manual_seed(seed)
                 
         super().__init__()
-        
+
         self.device = device
-        
+
+        # Handle 'bias_only' mode: learn only a single constant (bias term)
+        self.bias_only = (hidden_sizes == 'bias_only')
+        if self.bias_only:
+            hidden_sizes = []  # Treat as linear model, then freeze weights
+
         layers = []
         prev_dim = input_size
         for hidden_dim in hidden_sizes:
             layers.append(nn.Linear(prev_dim, hidden_dim))
             layers.append(nn.Tanh())
             prev_dim = hidden_dim
-       
+
         layers.append(nn.Linear(prev_dim, 1))
-       
-        
+
+
         # Add a learnable bias parameter for linspace mode
         self.linspace_bias = nn.Parameter(torch.zeros(1, device=device))
-        
+
         self.network = nn.Sequential(*layers)
         self.to(device)
-        
+
         # Xavier/Glorot normal initialization for all layers
         for layer in self.network.modules():
             if isinstance(layer, nn.Linear):
                 torch.nn.init.xavier_normal_(layer.weight)
                 torch.nn.init.constant_(layer.bias, 0)
+
+        # For bias_only mode: freeze weights to zero, only bias is trainable
+        if self.bias_only:
+            for layer in self.network.modules():
+                if isinstance(layer, nn.Linear):
+                    layer.weight.data.fill_(0.0)
+                    layer.weight.requires_grad = False
               
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         network_output = self.network(x)

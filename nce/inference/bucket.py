@@ -21,6 +21,13 @@ class FastBucket:
         self.sigma_f, self.sigma_g, self.rho = None, None, None
         self.numel = -1
 
+        # WMB statistics tracking
+        self.wmb_stats = {
+            'fw_partitions': 0,      # Partitions in forward pass (upper bound for bw impact)
+            'bw_partitions': 0,      # Partitions when computing backward message
+            'num_mini_buckets': 1,   # Number of mini-buckets (1 = exact, >1 = WMB)
+        }
+
         # Assert that all factors are on the specified device type
         for factor in self.factors:
             assert self.device in str(factor.device), f"Factor device {factor.device} does not match bucket device type {self.device}"
@@ -104,9 +111,9 @@ class FastBucket:
             if self.config.get('use_bw_approx', False):
                 from nce.utils.backward_message import get_backward_message
 
-                # Get backward_iB and backward_ecl from config
+                # Get backward_iB and bw_ecl from config
                 backward_iB = self.config.get('backward_iB', self.config.get('iB', 100))
-                backward_ecl = self.config.get('backward_ecl', self.config.get('ecl', 2**20))
+                backward_ecl = self.config.get('bw_ecl', self.config.get('ecl', 2**20))
 
                 # Check if we should use pre-computed backward factors
                 use_precomputed = self.gm.populate_bw_factors and self.approximate_downstream_factors is not None
@@ -138,7 +145,7 @@ class FastBucket:
                     # Full data batch mode: materialize full backward message tensor (complexity allows it)
                     mode_str = "(using pre-computed)" if use_precomputed else "(computing on-the-fly)"
                     # print(f"Bucket {self.label}: Computing WMB backward message as single factor {mode_str} (complexity={bw_message_complexity} <= backward_ecl={backward_ecl}, backward_iB={backward_iB})")
-
+                    print("Computing backward message with bw ecl ", backward_ecl)
                     bw_wmb, _ = get_backward_message(
                         self.gm,
                         self.label,
@@ -218,9 +225,9 @@ class FastBucket:
             if self.config.get('use_bw_approx', False):
                 from nce.utils.backward_message import get_backward_message
 
-                # Get backward_iB and backward_ecl from config (fallback to regular iB/ecl if not specified)
+                # Get backward_iB and bw_ecl from config (fallback to regular iB/ecl if not specified)
                 backward_iB = self.config.get('backward_iB', self.config.get('iB', 100))
-                backward_ecl = self.config.get('backward_ecl', self.config.get('ecl', 2**20))
+                backward_ecl = self.config.get('bw_ecl', self.config.get('ecl', 2**20))
 
                 # Check if we should use pre-computed backward factors
                 use_precomputed = self.gm.populate_bw_factors and self.approximate_downstream_factors is not None
@@ -836,6 +843,12 @@ class FastBucket:
                         break
             if not placed:
                 mini_buckets.append([factor])
+
+        # Track partitioning statistics
+        # N mini-buckets means N-1 partitioning events
+        num_partitions = len(mini_buckets) - 1 if len(mini_buckets) > 1 else 0
+        self.wmb_stats['num_mini_buckets'] = len(mini_buckets)
+        self.wmb_stats['fw_partitions'] = num_partitions
 
         return mini_buckets
 

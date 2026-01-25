@@ -135,6 +135,11 @@ def get_backward_message(gm, bucket_var, backward_factors=None, iB = 100, backwa
 
     downstream_gm.eliminate_variables(all_but=bucket_scope)
 
+    # Track backward pass partitions
+    bw_partitions = downstream_gm.wmb_fw_partitions  # Partitions during backward message computation
+    if bw_partitions > 0:
+        print(f"  Backward message WMB partitions: {bw_partitions}")
+
     if return_factor_list:
         # Return list of factors for batched learning (avoids materializing full product)
         factor_list = downstream_gm.get_all_factors()

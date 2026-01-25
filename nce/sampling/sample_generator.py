@@ -14,7 +14,7 @@ class SampleGenerator:
         self.gm = gm
         self.iB = gm.iB
         self.bucket = bucket
-        self.random_seed = random_seed
+        self.random_seed = random_seed if random_seed is not None else 0
         self.factors = bucket.factors
         self.num_samples = self.config.get('num_samples')
         self.sampling_scheme = self.config['sampling_scheme']
@@ -30,12 +30,70 @@ class SampleGenerator:
         self.elim_vars = sorted(self.bucket.elim_vars, key=lambda v: v.label)
         self.elim_domain_sizes = [v.states for v in self.elim_vars]
 
-    def sample_assignments(self, num_samples: int = -1, sampling_scheme=None) -> torch.Tensor:
+        # Sampling counters for deterministic seed generation
+        # Each call to sample_assignments increments this to get unique but reproducible samples
+        self._training_sample_counter = 0
+        self._validation_sample_counter = 0
+
+    def reset_sample_counters(self):
+        """Reset sampling counters to reproduce the same samples.
+
+        Call this to reset the internal counters so that subsequent calls
+        to sample_assignments will produce the same samples as when the
+        SampleGenerator was first created (with the same random_seed).
+        """
+        self._training_sample_counter = 0
+        self._validation_sample_counter = 0
+
+    def _compute_seed(self, is_validation: bool = False) -> int:
+        """Compute deterministic seed based on bucket_id + global_seed + counter.
+
+        The seed formula is:
+            seed = bucket_label + global_seed * 10000 + counter * 100 + validation_offset
+
+        This ensures:
+        - Different buckets get different seeds
+        - Different global seeds give different results
+        - Multiple sampling calls get different but reproducible samples
+        - Training and validation samples are different
+
+        Args:
+            is_validation: If True, add offset to separate from training samples
+
+        Returns:
+            Integer seed value
+        """
+        bucket_id = self.bucket.label if isinstance(self.bucket.label, int) else hash(str(self.bucket.label)) % 10000
+        validation_offset = 50000000 if is_validation else 0
+
+        if is_validation:
+            counter = self._validation_sample_counter
+            self._validation_sample_counter += 1
+        else:
+            counter = self._training_sample_counter
+            self._training_sample_counter += 1
+
+        seed = bucket_id + self.random_seed * 10000 + counter * 100 + validation_offset
+        return seed
+
+    def _set_seed(self, seed: int):
+        """Set random seed for both CPU and GPU.
+
+        Args:
+            seed: Integer seed value
+        """
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed(seed)
+        np.random.seed(seed % (2**31))  # numpy requires seed < 2^31
+
+    def sample_assignments(self, num_samples: int = -1, sampling_scheme=None, is_validation: bool = False) -> torch.Tensor:
         """Sample assignments from the message scope.
 
         Args:
             num_samples: Number of samples to generate
             sampling_scheme: 'uniform' or 'all'. Defaults to config setting.
+            is_validation: If True, use validation seed (different from training)
 
         Returns:
             Tensor of shape (num_samples, num_vars) with sampled assignments
@@ -43,6 +101,9 @@ class SampleGenerator:
         if sampling_scheme is None:
             sampling_scheme = self.sampling_scheme
         if sampling_scheme == 'uniform':
+            # Set deterministic seed before sampling
+            seed = self._compute_seed(is_validation=is_validation)
+            self._set_seed(seed)
             return self.sample_uniform(num_samples)
         elif sampling_scheme == 'all':
             return self.sample_all()
@@ -145,7 +206,10 @@ class SampleGenerator:
             scope = scope.union(factor.labels)
         scope.discard(self.bucket.label)
         scope = sorted(list(scope))
-        return scope, torch.tensor([self.gm.vars[self.gm.matching_var(v)].states for v in scope])
+        if len(scope) == 0:
+            return scope, torch.tensor([], dtype=torch.long)
+        # matching_var returns a Var object (not an index), so use .states directly
+        return scope, torch.tensor([self.gm.matching_var(v).states for v in scope])
     
     def compute_message_values(self, assignments: torch.Tensor) -> torch.Tensor:
         factors = self.factors
