@@ -368,47 +368,77 @@ class FastFactor:
             tensor = tensor.permute(sorted_indices)
             tensor_labels = sorted(tensor_labels)
 
-        # indices in assignments that correspond to dimensions in the tensor
-        assignment_indices = [i for i, idx in enumerate(message_scope) if idx in tensor_labels]
+        # Find labels in tensor that ARE in message_scope (for indexing)
+        overlap_labels = [label for label in tensor_labels if label in message_scope]
+        # Find labels in tensor that are NOT in message_scope (for marginalizing)
+        marginalize_labels = [label for label in tensor_labels if label not in message_scope]
 
-        # get assignments from tensor
-        permuted_assignment_indices = [i for i, idx in enumerate(message_scope) if idx in tensor_labels]
-        projected_assignments = assignments[:,permuted_assignment_indices]
+        # Get indices in message_scope that correspond to overlap labels
+        assignment_indices = [i for i, idx in enumerate(message_scope) if idx in overlap_labels]
+        projected_assignments = assignments[:, assignment_indices]
 
         try:
-            if not projected_assignments.numel() == 0:
+            if len(overlap_labels) == 0:
+                # Factor has no variables in message_scope - marginalize over all dimensions
+                # and return the same constant for all assignments
+                marginal_value = torch.logsumexp(tensor.flatten(), dim=0)
+                return marginal_value.expand(len(assignments), 1).reshape(-1, 1)
+
+            if len(marginalize_labels) > 0:
+                # Partial overlap: need to marginalize over non-message-scope dimensions
+                # Permute tensor to put marginalize dimensions at the end
+                overlap_indices = [tensor_labels.index(label) for label in overlap_labels]
+                marginalize_indices = [tensor_labels.index(label) for label in marginalize_labels]
+                permutation = overlap_indices + marginalize_indices
+                tensor = tensor.permute(permutation)
+
+                # Index into the overlap dimensions, then logsumexp over marginalize dimensions
+                # tensor now has shape: [overlap_dim_1, ..., overlap_dim_k, marg_dim_1, ..., marg_dim_m]
+                n_overlap = len(overlap_labels)
+                n_marginalize = len(marginalize_labels)
+
+                # Validate indices are within bounds before indexing
+                overlap_shape = tensor.shape[:n_overlap]
+                for dim_idx, (label, tensor_dim) in enumerate(zip(overlap_labels, overlap_shape)):
+                    assignment_col = projected_assignments[:, dim_idx]
+                    max_val = assignment_col.max().item()
+                    if max_val >= tensor_dim:
+                        raise IndexError(f"Assignment index {max_val} out of bounds for dimension {dim_idx} (label {label}) with size {tensor_dim}")
+
+                # Index into overlap dimensions: result shape is [n_assignments, marg_dim_1, ..., marg_dim_m]
+                indexed = tensor[tuple(projected_assignments.t())]  # shape: [n_assignments, marg_dim_1, ..., marg_dim_m]
+
+                # Logsumexp over the marginalize dimensions (all dims except first)
+                if n_marginalize > 0:
+                    # Flatten marginalize dimensions and logsumexp
+                    flat_indexed = indexed.reshape(len(assignments), -1)  # shape: [n_assignments, prod(marg_dims)]
+                    values = torch.logsumexp(flat_indexed, dim=1, keepdim=True)  # shape: [n_assignments, 1]
+                else:
+                    values = indexed.reshape(-1, 1)
+                return values
+
+            else:
+                # Full overlap: all tensor labels are in message_scope
                 # Validate indices are within bounds before indexing
                 for dim_idx, (label, tensor_dim) in enumerate(zip(tensor_labels, tensor.shape)):
                     assignment_col = projected_assignments[:, dim_idx]
                     max_val = assignment_col.max().item()
                     if max_val >= tensor_dim:
-                        print(f"ERROR: Index out of bounds in _get_values")
-                        print(f"  Factor labels: {self.labels}")
-                        print(f"  Tensor shape: {tensor.shape}")
-                        print(f"  Message scope: {message_scope}")
-                        print(f"  Dimension {dim_idx} (label {label}): max assignment value {max_val} >= tensor dimension {tensor_dim}")
-                        print(f"  Assignment column stats: min={assignment_col.min()}, max={max_val}, unique={len(assignment_col.unique())}")
-                        raise IndexError(f"Assignment index {max_val} out of bounds for dimension {dim_idx} with size {tensor_dim}")
+                        raise IndexError(f"Assignment index {max_val} out of bounds for dimension {dim_idx} (label {label}) with size {tensor_dim}")
 
-                values = tensor[tuple(projected_assignments.t())].reshape(-1,1)
+                values = tensor[tuple(projected_assignments.t())].reshape(-1, 1)
                 return values
-            else:
-                slices = tensor.unsqueeze(0).expand(len(assignments), len(tensor))
+
         except Exception as e:
             print(f"ERROR in _get_values:")
             print(f"  Exception: {e}")
             print(f"  Tensor shape: {tensor.shape}")
             print(f"  Tensor labels: {tensor_labels}")
             print(f"  Message scope: {message_scope}")
+            print(f"  Overlap labels: {overlap_labels}")
+            print(f"  Marginalize labels: {marginalize_labels}")
             print(f"  Projected assignments shape: {projected_assignments.shape}")
-            print(f"  Projected assignments t() shape: {projected_assignments.t().shape}")
             raise
-        
-        # reshape slices to match elimination variables in order, e.g. (1,2,2,1) if 2nd and 3rd variables are in tensor
-        # unexpanded_slice_shape = (len(assignments),) + tuple([v.states if v.label in tensor_labels else 1 for v in elim_vars])
-        # reshaped_slices = slices.reshape(unexpanded_slice_shape)
-        # expanded_slice_shape = (len(assignments),) + tuple([v.states for v in elim_vars])
-        # return reshaped_slices.expand(expanded_slice_shape)
     
     def to_exact(self):
         return self
