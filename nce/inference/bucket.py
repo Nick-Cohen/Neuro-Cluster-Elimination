@@ -257,40 +257,51 @@ class FastBucket:
 
                 if can_use_full_data_batch:
                     # Full data batch mode: materialize full backward message tensor (complexity allows it)
-                    mode_str = "(using pre-computed)" if use_precomputed else "(computing on-the-fly)"
-                    # print(f"Bucket {self.label}: Computing WMB backward message as single factor {mode_str} (complexity={bw_message_complexity} <= backward_ecl={backward_ecl}, backward_iB={backward_iB})")
 
-                    bw_wmb, _ = get_backward_message(
-                        self.gm,
-                        self.label,
-                        backward_factors=backward_factors_arg,  # Use pre-computed if available
-                        iB=backward_iB,
-                        backward_ecl=backward_ecl,
-                        approximation_method='wmb',
-                        return_factor_list=False  # Return single factor
-                    )
+                    if use_precomputed:
+                        # pyGMs factors ARE the backward message - use directly without re-processing
+                        # Multiply factors together (sum in log space) to get single factor
+                        from nce.inference.factor import FastFactor
+                        print(f"Bucket {self.label}: Using pyGMs backward directly ({len(self.approximate_downstream_factors)} factors, materializing product)")
 
-                    # Set as single factor since complexity allows materialization
-                    t.dataloader.bw_modifier = bw_wmb
-                    # print(f"Bucket {self.label}: Set backward message as single factor (complexity={bw_message_complexity})")
+                        # Multiply all pyGMs factors together
+                        bw_wmb = self.approximate_downstream_factors[0]
+                        for f in self.approximate_downstream_factors[1:]:
+                            bw_wmb = bw_wmb * f
+
+                        t.dataloader.bw_modifier = bw_wmb
+                    else:
+                        # No pre-computed factors - compute backward message on-the-fly
+                        bw_wmb, _ = get_backward_message(
+                            self.gm,
+                            self.label,
+                            backward_factors=None,
+                            iB=backward_iB,
+                            backward_ecl=backward_ecl,
+                            approximation_method='wmb',
+                            return_factor_list=False
+                        )
+                        t.dataloader.bw_modifier = bw_wmb
                 else:
-                    # Batched mode: return factor list to avoid materializing full product (complexity exceeds limit)
-                    mode_str = "(using pre-computed)" if use_precomputed else "(computing on-the-fly)"
-                    # print(f"Bucket {self.label}: Computing WMB backward message as factor list {mode_str} (complexity={bw_message_complexity} > backward_ecl={backward_ecl}, backward_iB={backward_iB})")
+                    # Batched mode: use factor list to avoid materializing full product
 
-                    bw_factors, _ = get_backward_message(
-                        self.gm,
-                        self.label,
-                        backward_factors=backward_factors_arg,  # Use pre-computed if available
-                        iB=backward_iB,
-                        backward_ecl=backward_ecl,
-                        approximation_method='wmb',
-                        return_factor_list=True  # Return factor list
-                    )
-
-                    # Set as factor list to avoid materialization
-                    t.dataloader.bw_factors = bw_factors
-                    # print(f"Bucket {self.label}: Set backward message as factor list with {len(bw_factors)} factors (complexity={bw_message_complexity})")
+                    if use_precomputed:
+                        # pyGMs factors ARE the backward message - use directly as factor list
+                        # sample_tensor_product will evaluate at each sample point
+                        print(f"Bucket {self.label}: Using pyGMs backward directly as factor list ({len(self.approximate_downstream_factors)} factors)")
+                        t.dataloader.bw_factors = self.approximate_downstream_factors
+                    else:
+                        # No pre-computed factors - compute backward message on-the-fly
+                        bw_factors, _ = get_backward_message(
+                            self.gm,
+                            self.label,
+                            backward_factors=None,
+                            iB=backward_iB,
+                            backward_ecl=backward_ecl,
+                            approximation_method='wmb',
+                            return_factor_list=True
+                        )
+                        t.dataloader.bw_factors = bw_factors
 
                 # Enable backward-aware normalization - the actual normalizing constant
                 # will be computed lazily on first load() call using the training samples
@@ -306,6 +317,13 @@ class FastBucket:
 
             # Create FactorNN with trained network (no bw_inv needed - loss handles backward message)
             nn_message_factor = FactorNN(net, t.data_preprocessor, losses=t.losses)
+
+            # Save error tracking data to FastGM (bucket gets destroyed after elimination)
+            if hasattr(t, 'error_tracking_data') and t.error_tracking_data:
+                self.gm.error_tracking_data.append((self.label, t.error_tracking_data))
+
+            # Increment num_trained counter on FastGM
+            self.gm.num_trained += 1
 
         # Plot comparison if enabled
         if plot_messages:
@@ -376,6 +394,93 @@ class FastBucket:
             else:
                 print(f"Skipping full plot for Bucket {self.label}: logSS={logSS} > 6")
         return f_hat
+
+    def compute_message_quantization(self, num_states: int, loss_fn: str = 'unnormalized_kl'):
+        """
+        Compute message using optimal K-segment quantization.
+
+        This method computes the exact message, optionally gets a WMB backward
+        message approximation, then finds the optimal K-segment quantization
+        that minimizes the specified loss function.
+
+        Args:
+            num_states: Number of quantization levels (K)
+            loss_fn: Loss function - 'unnormalized_kl' or 'mse'/'logspace_mse'
+
+        Returns:
+            FastFactor: The quantized message
+        """
+        from nce.neural_networks.quantization import quantize_message
+        from nce.utils.backward_message import get_backward_message
+
+        # Map loss function names
+        if loss_fn in ['unnormalized_kl', 'ukl']:
+            loss_type = 'ukl'
+        else:
+            loss_type = 'mse'
+
+        # Compute exact message
+        exact_message = self.compute_message_exact()
+
+        # Get backward message if using UKL
+        backward_message = None
+        if loss_type == 'ukl' and self.config.get('use_bw_approx', False):
+            backward_iB = self.config.get('backward_iB', self.config.get('iB', 100))
+            backward_ecl = self.config.get('bw_ecl', self.config.get('ecl', 2**20))
+
+            # Check if we should use pre-computed backward factors
+            use_precomputed = (
+                self.gm.populate_bw_factors and
+                self.approximate_downstream_factors is not None
+            )
+            backward_factors_arg = self.approximate_downstream_factors if use_precomputed else None
+
+            print(f"Bucket {self.label}: Computing WMB backward message for quantization "
+                  f"(backward_ecl={backward_ecl}, backward_iB={backward_iB})")
+
+            backward_message, _ = get_backward_message(
+                self.gm,
+                self.label,
+                backward_factors=backward_factors_arg,
+                iB=backward_iB,
+                backward_ecl=backward_ecl,
+                approximation_method='wmb',
+                return_factor_list=False
+            )
+
+        # Perform quantization
+        print(f"Bucket {self.label}: Quantizing message into {num_states} states "
+              f"(loss_type={loss_type}, message_size={exact_message.tensor.numel()})")
+
+        quantized_message, info = quantize_message(
+            exact_message=exact_message,
+            backward_message=backward_message,
+            num_states=num_states,
+            loss_type=loss_type,
+            device=self.device
+        )
+
+        print(f"Bucket {self.label}: Quantization complete "
+              f"(total_cost={info['total_cost']:.4f})")
+
+        # Plot comparison if enabled
+        plot_messages = self.config.get('plot_messages', False)
+        if plot_messages:
+            logSS = getattr(self.gm, 'logSS', 0)
+            if logSS <= 6:
+                try:
+                    from nce.utils.plots import plot_fastfactor_comparison
+                    print(f"Generating comparison plot for Bucket {self.label}...")
+                    plot_title = f"Bucket {self.label}: Quantized (K={num_states}) vs Exact"
+                    plot_fastfactor_comparison(exact_message, quantized_message,
+                                               title=plot_title, show=True)
+                except Exception as e:
+                    print(f"Warning: Could not generate comparison plot: {e}")
+
+        # Increment num_trained counter on FastGM
+        self.gm.num_trained += 1
+
+        return quantized_message
 
     def compute_message_with_linear_solver(self):
         """
@@ -611,6 +716,9 @@ class FastBucket:
         else:
             trainer.train()
 
+        # Increment num_trained counter on FastGM
+        self.gm.num_trained += 1
+
         return FactorNN(net, trainer.data_preprocessor)
 
     def compute_one_to_one_nn(self):
@@ -620,6 +728,8 @@ class FastBucket:
         net = BitVectorLookup(self, w)
         t=Trainer(net=net, bucket=self)
         t.train()
+        # Increment num_trained counter on FastGM
+        self.gm.num_trained += 1
         return FactorNN(net, t.data_preprocessor)
 
     def compute_wmb_message(self, iB: int = 100, debug=False, ecl: int = None) -> List[FastFactor]:
@@ -635,24 +745,73 @@ class FastBucket:
         Returns:
         List[FastFactor]: The list of factors representing the WMB message.
         """
-        # Step 1: Split factors into mini-buckets (ecl will override iB if provided)
+        # Get elimination variable labels
+        elim_var_labels = set(v.label for v in self.elim_vars)
+
+        # Separate factors into those with and without the elimination variable
+        # Factors without the elim var are passed through unchanged
+        factors_with_elim_var = []
+        factors_without_elim_var = []
+        for factor in self.factors:
+            if elim_var_labels & set(factor.labels):
+                factors_with_elim_var.append(factor)
+            else:
+                factors_without_elim_var.append(factor)
+
+        if debug:
+            print(f"Factors with elim var: {len(factors_with_elim_var)}, without: {len(factors_without_elim_var)}")
+
+        # If no factors have the elimination variable, just return all factors unchanged
+        if not factors_with_elim_var:
+            return self.factors.copy()
+
+        # Step 1: Split factors (only those with elim var) into mini-buckets
+        # Temporarily replace self.factors for _create_mini_buckets
+        original_factors = self.factors
+        self.factors = factors_with_elim_var
         mini_buckets = self._create_mini_buckets(iB, ecl=ecl)
+        self.factors = original_factors
+
         if debug:
             print(f"Number of mini-buckets: {len(mini_buckets)}")
 
-        # Step 2: Compute weighted elimination for each mini-bucket
+        # Step 2: Compute elimination for each mini-bucket
         wmb_factors = []
-        first_bucket = True
-        for mb in mini_buckets:
-            if len(mb) == 1:
-                wmb_factors.append(mb[0])
-            else:
+        
+        EQUAL_WEIGHTS = True
+
+        if EQUAL_WEIGHTS:
+            for mb in mini_buckets:
+                n = len(mini_buckets)
+                if n == 0:
+                    # print('n is zero!')
+                    raise ValueError("n is zero!")
                 combined_factor = mb[0]
                 for factor in mb[1:]:
                     combined_factor *= factor
-                eliminated_factor = combined_factor.eliminate(self.elim_vars) if first_bucket else combined_factor.eliminate(self.elim_vars, elimination_scheme='sum')
-                first_bucket = False
+                # CRITICAL FIX: Clone tensor before in-place modification to avoid
+                # corrupting original factors when mini-bucket has only 1 element.
+                # When len(mb) == 1, combined_factor still references mb[0] (the original),
+                # and in-place *= would modify the original tensor, causing issues when
+                # factors are shared between graphical models (e.g., during backward message computation).
+                combined_factor = FastFactor(combined_factor.tensor.clone(), list(combined_factor.labels))
+                # apply weights inside
+                combined_factor.tensor *= n
+                # do the LSE
+                eliminated_factor = combined_factor.eliminate(self.elim_vars)
+                # apply weights outside
+                eliminated_factor.tensor *= (1/n)
                 wmb_factors.append(eliminated_factor)
+        else:
+            for mb in mini_buckets:
+                combined_factor = mb[0]
+                for factor in mb[1:]:
+                    combined_factor *= factor
+                eliminated_factor = combined_factor.eliminate(self.elim_vars)
+                wmb_factors.append(eliminated_factor)
+
+        # Add factors that didn't have the elimination variable (pass through unchanged)
+        wmb_factors.extend(factors_without_elim_var)
 
         return wmb_factors
 
@@ -931,5 +1090,86 @@ class FastBucket:
             rho = get_fw_bw_correlation(f, g)
             self.sigma_f, self.sigma_g, self.rho = sigma_f, sigma_g, rho
             return sigma_f, sigma_g, rho
-        
-     
+
+    def compute_bw_sensitivity(self, bw_wmb, exact_backward=None, exact_forward=None):
+        """
+        Compute backward message sensitivity metric.
+
+        Sensitivity = lse(f+b_wmb) - lse(b_wmb) - lse(f+b) + lse(b)
+
+        Where:
+        - f = exact forward message
+        - b = exact backward message
+        - b_wmb = WMB approximate backward message
+        - lse = log-sum-exp (sum_all_entries in log space)
+
+        This measures how much the WMB approximation affects the combined
+        forward-backward distribution compared to the exact backward.
+
+        Args:
+            bw_wmb: WMB approximate backward message (FastFactor)
+            exact_backward: Exact backward message (FastFactor). If None, computed with high ecl.
+            exact_forward: Exact forward message (FastFactor). If None, computed.
+
+        Returns:
+            float: Sensitivity value. 0 means WMB matches exact backward perfectly.
+        """
+        from nce.utils.backward_message import get_backward_message
+
+        # Get exact forward message if not provided
+        if exact_forward is None:
+            exact_forward = self.compute_message_exact()
+
+        # Get exact backward message if not provided (use very high ecl)
+        if exact_backward is None:
+            exact_backward, _ = get_backward_message(
+                self.gm,
+                self.label,
+                backward_factors=None,
+                iB=100,
+                backward_ecl=2**30,
+                approximation_method='wmb',
+                return_factor_list=False
+            )
+
+        # Compute sensitivity: lse(f+b_wmb) - lse(b_wmb) - lse(f+b) + lse(b)
+        f_bw_wmb = exact_forward * bw_wmb  # f + b_wmb in log space
+        f_bw_exact = exact_forward * exact_backward  # f + b in log space
+
+        term1 = f_bw_wmb.sum_all_entries()  # lse(f + b_wmb)
+        term2 = bw_wmb.sum_all_entries()     # lse(b_wmb)
+        term3 = f_bw_exact.sum_all_entries() # lse(f + b)
+        term4 = exact_backward.sum_all_entries()  # lse(b)
+
+        sensitivity = term1 - term2 - term3 + term4
+        return float(sensitivity)
+
+    def compute_bw_sensitivity_with_pygms(self, pygms_provider, exact_backward=None, exact_forward=None):
+        """
+        Compute backward message sensitivity using pyGMs weight-optimized backward.
+
+        This is a convenience method that uses a PyGMsBackwardProvider to get
+        the weight-optimized WMB backward message.
+
+        Args:
+            pygms_provider: PyGMsBackwardProvider instance with learned weights
+            exact_backward: Exact backward message (FastFactor). If None, computed.
+            exact_forward: Exact forward message (FastFactor). If None, computed.
+
+        Returns:
+            float: Sensitivity value
+        """
+        # Get pyGMs backward message (as single factor by multiplying the list)
+        factor_list = pygms_provider.get_backward_factor_list(self.label)
+
+        if not factor_list:
+            # No backward factors - return 0 sensitivity
+            return 0.0
+
+        # Multiply factors together to get single backward message
+        bw_wmb = factor_list[0]
+        for f in factor_list[1:]:
+            bw_wmb = bw_wmb * f
+
+        return self.compute_bw_sensitivity(bw_wmb, exact_backward, exact_forward)
+
