@@ -1,10 +1,7 @@
-_flag0 = False
-
 from .losses import *
 from collections import deque
 from nce.data import *
 from nce.sampling import *
-from nce.data.data_loader import shuffle_batches
 # from NCE.inference.graphical_model import *
 import torch
 import torch.nn.functional as F
@@ -14,6 +11,32 @@ import torch.optim as optim
 import matplotlib.pyplot as plt
 import sys
 from tqdm.notebook import tqdm
+
+def get_error_tracking_epochs(num_epochs):
+    """
+    Generate sorted, deduplicated list of checkpoint epochs for error tracking.
+
+    Fixed base list: [0, 1, 5, 10, 25, 50, 100, 200, 500, 1000, 2000, 5000, 10000],
+    then every 5000 up to num_epochs, plus the final epoch.
+
+    Args:
+        num_epochs: Total number of training epochs.
+
+    Returns:
+        Sorted list of unique checkpoint epoch numbers.
+    """
+    base = [0, 1, 5, 10, 25, 50, 100, 200, 500, 1000, 2000, 5000, 10000]
+    epochs = [e for e in base if e <= num_epochs]
+    # Add every 5000 after 10000
+    e = 15000
+    while e <= num_epochs:
+        epochs.append(e)
+        e += 5000
+    # Add final epoch if not already present
+    if num_epochs not in epochs:
+        epochs.append(num_epochs)
+    return sorted(set(epochs))
+
 
 def should_use_convex_early_stopping(config):
     """
@@ -84,28 +107,40 @@ class Trainer:
             return self.config['inverse_time_decay_constant'] / (self.config['inverse_time_decay_constant'] + set)
 
         # LR scheduler using LambdaLR
+        # NEW: Support config-based LR scheduling for any optimizer
+        lr_schedule_type = self.config.get('lr_schedule', 'none')
         if self.config.get('optimizer') == 'muon':
+            self.use_scheduler = True
+        elif lr_schedule_type != 'none':
             self.use_scheduler = True
         else:
             self.use_scheduler = False
+
         if net is not None and self.use_scheduler:
-            # self.scheduler = optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=inverse_time_decay)
-            if isinstance(self.optimizer, list):
+            num_epochs = self.config.get('num_epochs', 10000)
+
+            if lr_schedule_type == 'cosine':
+                # Cosine annealing - smooth decay to eta_min
+                eta_min = self.config.get('lr_schedule_eta_min', 1e-6)
+                self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+                    self.optimizer, T_max=num_epochs, eta_min=eta_min
+                )
+            elif lr_schedule_type == 'onecycle':
+                # OneCycle - warmup then decay, good for escaping local minima
+                max_lr = self.config.get('lr_schedule_max_lr', self.config['lr'] * 10)
+                pct_start = self.config.get('lr_schedule_pct_start', 0.1)
+                self.scheduler = torch.optim.lr_scheduler.OneCycleLR(
+                    self.optimizer, max_lr=max_lr, total_steps=num_epochs,
+                    pct_start=pct_start, anneal_strategy='cos'
+                )
+            elif isinstance(self.optimizer, list):
+                # Muon with multiple optimizers
                 self.muon_scheduler = torch.optim.lr_scheduler.StepLR(self.muon_optimizer, step_size=1000)
                 self.adamw_scheduler = torch.optim.lr_scheduler.StepLR(self.adamw_optimizer, step_size=1000)
                 self.scheduler = [self.muon_scheduler, self.adamw_scheduler]
             else:
+                # Default: StepLR
                 self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=1000)
-        if False:
-            self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-                self.optimizer, 
-                mode='min',           # Minimize loss
-                factor=self.config['lr_decay'],           # Reduce LR by this factor
-                patience=self.config['patience'],          # Number of epochs with no improvement before reducing LR
-                verbose=False,         # Print updates
-                min_lr=self.config['min_lr']          # Minimum learning rate
-            )
-        
         if loss_fn is None:
             self.loss_fn = self._get_loss_fn(self.config['loss_fn'])
         else:
@@ -126,11 +161,8 @@ class Trainer:
         #     }
             
         #     # Set new optimizer
-        #     print(f"Overriding optimizer to: {override_optimizer}")
         #     self.set_optimizer(override_optimizer)
-        # debug
-        # print("Using optimizer: ", self.optimizer)
-            
+
         if new_loss_fn is not None:
             self.loss_fn = self._get_loss_fn(new_loss_fn)
             old_loss_fn_name = self.config['loss_fn']
@@ -222,7 +254,11 @@ class Trainer:
             set_size = int(self.message_size)
             num_samples = int(self.message_size)
             num_sets = 1
-            batch_size = self.config['batch_size']
+            # Support batch_size='all' to use entire message as one batch
+            if self.config['batch_size'] == 'all':
+                batch_size = int(self.message_size)
+            else:
+                batch_size = self.config['batch_size']
             num_batches_per_set = (set_size + batch_size - 1) // batch_size
         else:
             num_sets = num_samples // set_size
@@ -286,6 +322,25 @@ class Trainer:
             except Exception as e:
                 print(f"WARNING: display_intermediate (initial) failed: {e}")
 
+        # --- Error tracking setup ---
+        error_tracking = self.config.get('error_tracking', False)
+        if error_tracking:
+            if self.dataloader.sample_generator.sampling_scheme != 'all':
+                raise ValueError("error_tracking requires sampling_scheme='all'")
+            from nce.utils.backward_message import get_backward_message
+            print(f"[Error Tracking] Computing exact forward and backward messages for bucket {self.bucket.label}...")
+            exact_fw = self.bucket.compute_message_exact()
+            exact_bw, _ = get_backward_message(
+                self.bucket.gm, self.bucket.label,
+                iB=100, backward_ecl=2**30,
+                approximation_method='wmb',
+                return_factor_list=False
+            )
+            exact_contribution = (exact_fw * exact_bw).sum_all_entries()
+            self.error_tracking_data = []
+            error_tracking_epochs = set(get_error_tracking_epochs(num_epochs))
+            print(f"[Error Tracking] Checkpoints: {sorted(error_tracking_epochs)}")
+
         with tqdm(total=num_progress_steps, desc="Bucket "+str(self.bucket.label) + " training") as pbar:
             for s in range(num_sets):
                 stratify = self.config.get('stratify_samples', False)
@@ -313,10 +368,19 @@ class Trainer:
                             else:
                                 data[batch['x'][i]] = 1
                             
-                # print first 3 inputs
-                # debug
-                # print(set_batches[0]['x'][:3])
                 loss1000 = 1000000
+
+                # --- Error tracking: epoch 0 (before any training) ---
+                if error_tracking and 0 in error_tracking_epochs:
+                    with torch.no_grad():
+                        initial_loss = self.compute_epoch_loss(set_batches, self.loss_fn).item()
+                        approx_factor_0 = FactorNN(self.net, self.data_preprocessor)
+                        approx_exact_0 = approx_factor_0.to_exact()
+                        approx_contribution_0 = (approx_exact_0 * exact_bw).sum_all_entries()
+                        log_z_err_0 = approx_contribution_0 - exact_contribution
+                        self.error_tracking_data.append((0, initial_loss, log_z_err_0, abs(log_z_err_0)))
+                        print(f"[Error Tracking] Epoch 0: loss={initial_loss:.6e}, log_Z_err={log_z_err_0:.6f}, |log_Z_err|={abs(log_z_err_0):.6f}")
+
                 for epoch in range(num_epochs):
                     if self.config.get('display_intermediate') and (epoch % self.config['display_intermediate'] == 0) and epoch > 0:
                         plot = False # debug
@@ -395,7 +459,6 @@ class Trainer:
                         # Z_hat = (intermediate_factor * self.bucket.mg).sum_all_entries()
                         # Z_here = (exact_message_here * self.bucket.mg).sum_all_entries()
                         # Z_original = (self.bucket.exact_message * self.bucket.mg).sum_all_entries()
-                        # print('Z_hat: ', Z_hat, ' Z_here: ', Z_here, ' Z original: ', Z_original)
                     else:
                         plot = False
                     #debug
@@ -418,6 +481,23 @@ class Trainer:
                     loss = self.train_epoch(set_batches, plot=plot, epoch=epoch)
                     global_epoch_num = s * num_epochs + epoch
                     self.losses.append((global_epoch_num, loss.item()))
+
+                    # Step scheduler once per epoch (not per batch)
+                    if self.use_scheduler and hasattr(self, 'scheduler') and self.scheduler is not None:
+                        self.scheduler.step()
+
+                    # --- Error tracking: check if this epoch is a checkpoint ---
+                    if error_tracking:
+                        epochs_completed = epoch + 1
+                        if epochs_completed in error_tracking_epochs:
+                            with torch.no_grad():
+                                approx_factor_et = FactorNN(self.net, self.data_preprocessor)
+                                approx_exact_et = approx_factor_et.to_exact()
+                                approx_contribution_et = (approx_exact_et * exact_bw).sum_all_entries()
+                                log_z_err_et = approx_contribution_et - exact_contribution
+                                current_loss_et = self.losses[-1][1]
+                                self.error_tracking_data.append((epochs_completed, current_loss_et, log_z_err_et, abs(log_z_err_et)))
+                                print(f"[Error Tracking] Epoch {epochs_completed}: loss={current_loss_et:.6e}, log_Z_err={log_z_err_et:.6f}, |log_Z_err|={abs(log_z_err_et):.6f}")
 
                     # Validation-based early stopping for mini-batch learning
                     if use_validation_early_stopping and not self.config['skip_early_stopping'] and epoch > 0 and epoch % 10 == 0:
@@ -524,9 +604,7 @@ class Trainer:
                             y_val = val_batch['y']
                             # Support both old 'mgh' key and new 'bw' key
                             bw_val = val_batch.get('bw', val_batch.get('mgh'))
-                            # print("x_val.shape, y_val.shape:", x_val.shape, y_val.shape)
                             outputs_val = self.net(x_val).squeeze()
-                            # print("outputs_val.shape:", outputs_val.shape)
                             if bw_val is not None:
                                 nbe_val_loss = self.loss_fn(outputs_val, y_val, bw_val)
                             else:
@@ -569,7 +647,6 @@ class Trainer:
                         #             previous_avg = sum(nbe_val_losses[-2*nbe_plateau_window:-nbe_plateau_window]) / nbe_plateau_window
                         #             improvement = (previous_avg - recent_avg) / (abs(previous_avg) + 1e-10)
                         #             if improvement < nbe_plateau_min_improvement:
-                        #                 print(f'NBE early stopping (plateau) at epoch {global_epoch}')
                         #                 return traced_losses_data
                         #     else:
                         #         # Phase 2: Low loss - use lenient 3-consecutive-epochs criteria
@@ -578,7 +655,6 @@ class Trainer:
                         #             v_prev2 = nbe_val_losses[-3]
                         #             v_base = nbe_val_losses[-4]
                         #             if v_curr > v_base and v_prev1 > v_base and v_prev2 > v_base:
-                        #                 print(f'NBE early stopping (converged) at epoch {global_epoch}')
                         #                 return traced_losses_data
 
                     # track different losses-------------------
@@ -606,7 +682,6 @@ class Trainer:
                     pbar.set_postfix(postfix)
                     pbar.update(1)
                     # if current_lr <= self.config['min_lr'] * 10:
-                    #     print('Learning rate is at minimum. Stopping training.')
                     #     self.bucket.gm.traced_losses_data.append((self.bucket.label, traced_losses_data))
                     #     return traced_losses_data
         self.bucket.gm.traced_losses_data.append((self.bucket.label, traced_losses_data))
@@ -619,6 +694,13 @@ class Trainer:
               
     def train_batch(self, x_batch, y_batch, bw_hat_batch=None, plot_message=False, epoch=None):
         self.net.train()
+
+        # Move data to device
+        device = self.config['device']
+        x_batch = x_batch.to(device)
+        y_batch = y_batch.to(device)
+        if bw_hat_batch is not None:
+            bw_hat_batch = bw_hat_batch.to(device)
 
         # Zero the parameter gradients
         if isinstance(self.optimizer, list):
@@ -699,21 +781,12 @@ class Trainer:
         #     bw_hat_batch.detach()
         #     loss = self.loss_fn(outputs.squeeze(), y_batch, bw_hat_batch)
         # else:
-        #     # print(outputs.shape,y_batch.shape)
         #     loss = self.loss_fn(outputs.squeeze(), y_batch)
             
         # Backward pass and optimize
         
         # if self.debug:
         #     self.tracked['parameters'].append([p.data.clone() for p in self.net.parameters()])
-        # debug-------------------------
-        # print(f"Loss grad_fn before backward: {loss.grad_fn}")
-        # for name, param in self.net.named_parameters():
-        #     print(f"Param {name} requires_grad: {param.requires_grad}, grad_fn: {param.grad_fn}")
-        #     print(f"Loss memory address: {id(loss)}")
-        # print(f"Loss requires_grad: {loss.requires_grad}")
-        # print(f"Loss grad_fn: {loss.grad_fn}")
-
         # debug-------------------------
         # with torch.autograd.detect_anomaly():
         # loss.backward(retain_graph=True)
@@ -761,40 +834,32 @@ class Trainer:
         if self.debug:
             self.tracked['gradients'].append([p.grad.clone() if p.grad is not None else None for p in self.net.parameters()])
         
-        # print("Batch loss: ", loss.item(), " grad sum: ", self.net.get_sum_grad().item())
-        
-        # if self.debug:
-        #     for name, param in self.net.named_parameters():
-        #         if param.grad is not None:
-        #             print(f"Before Step - {name}: Grad: {param.grad}, Param: {param.data}")
-        #     self.optimizer.step()
-        #     for name, param in self.net.named_parameters():
-        #         print(f"After Step - {name}: Param: {param.data}")
-        if True:
-            # Gradient clipping to prevent overshooting
-            grad_clip_norm = self.config.get('grad_clip_norm', None)
-            if grad_clip_norm is not None:
-                torch.nn.utils.clip_grad_norm_(self.net.parameters(), grad_clip_norm)
+        # Gradient clipping to prevent overshooting
+        grad_clip_norm = self.config.get('grad_clip_norm', None)
+        if grad_clip_norm is not None:
+            torch.nn.utils.clip_grad_norm_(self.net.parameters(), grad_clip_norm)
 
-            # step with scaler
-            if self.config.get('optimizer') == 'muon':
-                if isinstance(self.optimizer, list):
-                    for opt in self.optimizer:
-                        self.scaler.step(opt)
-                    self.scaler.update()
-                else:
-                    self.scaler.step(self.optimizer)
-                    self.scaler.update()
-                if isinstance(self.scheduler, list):
-                    for sched in self.scheduler:
-                        sched.step()  # or create separate schedulers
-                else:
-                    self.scheduler.step()
+        # step with scaler
+        if self.config.get('optimizer') == 'muon':
+            if isinstance(self.optimizer, list):
+                for opt in self.optimizer:
+                    self.scaler.step(opt)
+                self.scaler.update()
             else:
-                self.optimizer.step()
-            loss_copy = loss.cpu().item()
-            del x_batch, y_batch, bw_hat_batch, loss
-            torch.cuda.empty_cache()
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+            if isinstance(self.scheduler, list):
+                for sched in self.scheduler:
+                    sched.step()
+            else:
+                self.scheduler.step()
+        else:
+            self.optimizer.step()
+            # NOTE: Scheduler stepping moved to epoch level (after train_epoch)
+            # to fix OneCycleLR step count issue when using multiple batches per epoch
+        loss_copy = loss.cpu().item()
+        del x_batch, y_batch, bw_hat_batch, loss
+        torch.cuda.empty_cache()
         return loss_copy
     
     def train_epoch(self, batches, plot=False, epoch=None):
@@ -849,47 +914,6 @@ class Trainer:
 
         return sg, data_preprocessor, DataLoader(self.bucket, sample_generator=sg, data_preprocessor=data_preprocessor)
 
-    def _make_dataloader_old(self):
-        """OLD VERSION - kept for reference."""
-        sg = SampleGenerator(gm=self.bucket.gm, bucket=self.bucket, random_seed=self.config['seed'])
-        sample_assignments = sg.sample_assignments(1000)
-        sample_values = sg.compute_message_values(sample_assignments)
-
-        # Only compute gradient values if backward approximation is enabled
-        if self.config.get('use_bw_approx', False):
-            sample_mg_values = sg.compute_gradient_values_old(sample_assignments)
-        else:
-            sample_mg_values = None
-
-        # Automatically enable mean-based normalization for mini-batch mode
-        # If batch_size is specified, use mean-based normalization (works with sampled data)
-        # Otherwise, allow explicit fdb setting (for backward compatibility)
-        if 'batch_size' in self.config and self.config['batch_size'] is not None:
-            use_mean_normalization = True
-        else:
-            # Fallback to explicit fdb setting for backward compatibility
-            use_mean_normalization = self.config.get('fdb', False)
-
-        from .data_preprocessor import DataPreprocessor_old
-        data_preprocessor = DataPreprocessor_old(
-            y=sample_values,
-            mg=sample_mg_values,
-            is_logspace=True,
-            lower_dim=self.lower_dim,
-            device=self.config['device'],
-            fdb=use_mean_normalization  # True for mini-batch mode
-        )
-        return sg, data_preprocessor, DataLoader(self.bucket, sample_generator=sg, data_preprocessor=data_preprocessor)
-    
-    # def _get_bw_factors(self):
-    #     return self.bucket.approximate_downstream_factors
-    
-    # def _get_mgh(self):
-        from inference import FastGM
-        fastgm_copy = FastGM(uai_file=self.bucket.gm.uai_file, device=self.config['device'], nn_config = self.config)
-        bw_hat = fastgm_copy.get_wmb_message_gradient(bucket_var=self.bucket.label, i_bound=self.config['iB_backwards'], weights='max')
-        return bw_hat
-
     def _get_val_set(self):
         if self.config['val_set'] is None:
             return None
@@ -916,9 +940,6 @@ class Trainer:
                 print(f"Error occurred while getting forward/backward stats for {self.bucket.label}: {e}")
                 sigma_f, sigma_g, rho = None, None, None
             num_bw_samples = int(loss_fn_name.split(',')[-1]) if ',' in loss_fn_name else -1
-            # begin debug
-            # print("Using rho: ", rho, " sigma_f: ", sigma_f, " sigma_g: ", sigma_g, " num_bw_samples: ", num_bw_samples)
-            # end debug
             if "elp_recompute" in loss_fn_name:
                 loss = elp
             elif "elp_loo" in loss_fn_name:
@@ -1147,7 +1168,7 @@ class Trainer:
             bw_batch = batch.get('bw', batch.get('mgh'))
 
             # Forward pass
-            outputs = self.net(x_batch)
+            outputs = self.net(x_batch).reshape(-1)  # Flatten to [batch_size] to match y_batch and bw_batch shapes
 
             # Compute loss
             if bw_batch is not None:
@@ -1180,16 +1201,9 @@ class Trainer:
                     print(f"Learning rate: {param_group['lr']}")
             self.net.eval()
             # Forward pass
-            # if self.debug:
-            #     print('debug')
-            #     print('x_batch is ', x_batch)
             outputs = self.net(x_batch)
             # Compute loss
             loss_fn = self._get_loss_fn(loss_fn_name)
-            # if self.debug:
-            #     print("Loss Function Type:", type(loss_fn))
-            #     print("Arguments Passed: outputs, y_batch, bw_hat_batch")
-            #     print(outputs.shape, y_batch.shape, bw_hat_batch.shape)
             loss = loss_fn(outputs.squeeze(), y_batch, bw_hat_batch)
             return loss
     
@@ -1276,12 +1290,6 @@ class Trainer:
             # Forward pass
             outputs = self.net(inputs)
             
-            # print first ten predictions and targets
-            # if batch_idx == 0:
-            #     print("predictions, targets")
-            #     for i in range(10):
-            #         print(outputs[i].item(), targets[i].item())
-            
             # Compute loss
             if 'bw_hat' in batch:
                 loss = self.loss_fn(outputs.squeeze(), targets, bw_hat)
@@ -1323,8 +1331,7 @@ class Trainer:
             
             # Print epoch results
             print(f'Train Loss: {train_loss:.6f}')
-            # print(f'Val Loss: {val_loss:.6f}')
-            
+
             # # Save checkpoint if best model
             # if val_loss < best_val_loss:
             #     best_val_loss = val_loss
@@ -1336,13 +1343,11 @@ class Trainer:
             #         'train_loss': train_loss,
             #         'val_loss': val_loss,
             #     }, self.config['training']['checkpoint_path'])
-            #     print('Saved new best model checkpoint')
             # else:
             #     early_stopping_counter += 1
             
             # # Early stopping
             # if early_stopping_counter >= self.config['training']['patience']:
-            #     print(f'Early stopping triggered after {epoch+1} epochs')
             #     break
             
     def validate(self):
@@ -1364,8 +1369,8 @@ class Trainer:
         #     gradients = first_layer.weight.grad
         #     plot_gradients_as_grid(gradients, title="First Layer Gradients")
         # else:
-        #     print("No gradients available yet. Perform a backward pass first.")
-        
+        #     pass
+
     def _initialize_linspace_model_fdb(self):
         """
         Initialize the model by adjusting the final network bias term to match partition functions.

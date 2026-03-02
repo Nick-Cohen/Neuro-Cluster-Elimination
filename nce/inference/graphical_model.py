@@ -46,6 +46,7 @@ class FastGM:
         self.bucket_complexities = []
         self.track_errors = self.config.get('track_errors', False)
         self.nn_errors = []
+        self.error_tracking_data = []  # List of (bucket_label, [(epoch, loss, log_Z_err, abs_log_Z_err), ...])
         self.populate_bw_factors = self.config.get('populate_bw_factors', False)
         if self.config:
             self.sampling_scheme = self.config.get('sampling_scheme')
@@ -96,7 +97,6 @@ class FastGM:
                 self._load_vars_from_factors(factors)
             if elim_order is not None:
                 self.load_elim_order(elim_order, reference_fastgm)
-                # print(self.elim_order)
             else:
                 print("Computing elim order")
                 self.load_elim_order(wtminfill_order(factors), reference_fastgm)
@@ -159,7 +159,6 @@ class FastGM:
     def _load_vars_from_factors(self, factors):
         var_domains = {}
         for factor in factors:
-            # print(factor.labels)
             if factor.labels:
                 for i, label in enumerate(factor.labels):
                     if label not in var_domains:
@@ -171,7 +170,6 @@ class FastGM:
         if self.elim_order is None:
             raise ValueError("Elimination order must be set before creating buckets")
         
-        # print(self.elim_order)
         buckets = {var: FastBucket(self, var.label, [], self.device, [var]) for var in self.elim_order}
         unplaced_factors = set(factors)
 
@@ -225,8 +223,6 @@ class FastGM:
             # self.elim_order = [self.matching_var(var_index) for var_index in elim_order]
         else:
             raise ValueError("Elimination order must be a list of Var objects or integers")
-        # print(self.elim_order)
-            
     def eliminate_variables(self, elim_vars=None, up_to=None, through=None, all=False, all_but=None, exact=False):
         from .factor_nn import FactorNN
         if sum(map(bool, [elim_vars, up_to is not None, through is not None, all, all_but])) != 1:
@@ -243,15 +239,18 @@ class FastGM:
         elif all_but:
             vars_to_keep = set(all_but)
             vars_to_eliminate = [var for var in self.elim_order if var not in vars_to_keep]
-            
+
         # remove variables already eliminated from vars_to_eliminate
         vars_to_eliminate = [var for var in vars_to_eliminate if var in self.buckets]
-        
+
+        # Determine if this is partial elimination (where we need to preserve scalars in buckets)
+        is_partial_elimination = not all
+
         # Create a dummy root bucket to collect the final result
         root_bucket = FastBucket(self, 'root', [], self.device, [], isRoot=True)
-        
+
         max_width = 0
-        
+
         for key in self.message_scopes:
             mess_vars = self.message_scopes[key]
             mess_size = int(np.prod([self.matching_var(var).states for var in mess_vars]))
@@ -259,75 +258,84 @@ class FastGM:
             #     self.num_trained += 1
         large_buckets = self.get_large_message_buckets(iB=self.config['iB'], ecl=self.config['ecl'])
         num_to_train = len(large_buckets)
-        with tqdm(total=num_to_train, desc="Num NNs to train") as pbar:
-        # if True:
-            for var in vars_to_eliminate:
-                try:
-                    current_bucket = self.buckets[var]
-                    result = self.process_bucket(current_bucket, exact=exact)
-                    if type(result) == FactorNN:
-                        pbar.update(1)
-                    # Handle both single messages and lists of messages (from WMB)
-                    messages = result if isinstance(result, list) else [result]
+        for var in vars_to_eliminate:
+            try:
+                current_bucket = self.buckets[var]
+                result = self.process_bucket(current_bucket, exact=exact)
+                # Handle both single messages and lists of messages (from WMB)
+                messages = result if isinstance(result, list) else [result]
 
-                    for message in messages:
-                        if not message.is_nn:
-                            assert message.tensor is not None
+                for message in messages:
+                    if not message.is_nn:
+                        assert message.tensor is not None
+                    if message.labels:  # If the message is not a scalar
+                        # Find the next appropriate bucket
+                        if len(message.labels) > max_width:
+                            max_width = len(message.labels)
+                        next_bucket = self.find_next_bucket(message.labels, var)
+                        if next_bucket:
+                            next_bucket.receive_message(message)
                         else:
-                            pbar.update(1)
-                        if message.labels:  # If the message is not a scalar
-                            # Find the next appropriate bucket
-                            if len(message.labels) > max_width:
-                                max_width = len(message.labels)
-                            next_bucket = self.find_next_bucket(message.labels, var)
-                            if next_bucket:
-                                next_bucket.receive_message(message)
+                            # If no appropriate bucket found, send to root
+                            root_bucket.receive_message(message)
+                    else:
+                        # Scalar message handling:
+                        # - For partial elimination: send to next bucket to preserve for backward factors
+                        # - For full elimination: send to root as before
+                        if is_partial_elimination:
+                            # Find the next bucket in elimination order that still exists
+                            var_idx = self.elim_order.index(var)
+                            next_bucket_found = None
+                            for next_var in self.elim_order[var_idx + 1:]:
+                                if next_var in self.buckets:
+                                    next_bucket_found = self.buckets[next_var]
+                                    break
+                            if next_bucket_found:
+                                next_bucket_found.receive_message(message)
                             else:
-                                # If no appropriate bucket found, send to root
                                 root_bucket.receive_message(message)
                         else:
-                            # If the message is a scalar, send to root
                             root_bucket.receive_message(message)
 
-                    # Remove the eliminated variable's bucket
-                    del self.buckets[var]
+                # Remove the eliminated variable's bucket
+                del self.buckets[var]
 
-                except Exception as e:
-                    import traceback
-                    print("\n" + "="*60)
-                    print("ERROR during variable elimination")
-                    print("="*60)
-                    print(f"\nVariable being eliminated: {var}")
-                    print(f"Intended message scope: {self.message_scopes.get(var, 'N/A')}")
+            except Exception as e:
+                import traceback
+                print("\n" + "="*60)
+                print("ERROR during variable elimination")
+                print("="*60)
+                print(f"\nVariable being eliminated: {var}")
+                print(f"Intended message scope: {self.message_scopes.get(var, 'N/A')}")
 
-                    # Get bucket info
-                    if var in self.buckets:
-                        bucket = self.buckets[var]
-                        print(f"\nBucket {var} info:")
-                        print(f"  get_width() = {bucket.get_width()}")
-                        print(f"  get_ec() = {bucket.get_ec():,}")
-                        print(f"  get_message_complexity() = {bucket.get_message_complexity():,}")
-                        print(f"  get_message_scope() = {bucket.get_message_scope()}")
-                        print(f"\nConfig thresholds:")
-                        print(f"  iB = {self.iB}")
-                        print(f"  ecl = {self.ecl:,}")
-                        print(f"  complexity_limit = {self.complexity_limit:,}")
-                        print(f"\nExact check: width<={self.iB}? {bucket.get_width() <= self.iB}, ec<={self.ecl:,}? {bucket.get_ec() <= self.ecl}")
-                        print(f"\nBucket {var} factors ({len(bucket.factors)} total):")
-                        for i, f in enumerate(bucket.factors):
-                            factor_type = "NN" if f.is_nn else "FastFactor"
-                            tensor_info = "tensor=None" if f.tensor is None else f"tensor shape={f.tensor.shape}"
-                            factor_complexity = f.get_factor_complexity()
-                            print(f"  [{i}] {factor_type}: scope={f.labels} (width={len(f.labels)}), complexity={factor_complexity:,}, {tensor_info}")
-                    else:
-                        print(f"\nBucket {var} not found in self.buckets")
+                # Get bucket info
+                if var in self.buckets:
+                    bucket = self.buckets[var]
+                    print(f"\nBucket {var} info:")
+                    print(f"  get_width() = {bucket.get_width()}")
+                    print(f"  get_ec() = {bucket.get_ec():,}")
+                    print(f"  get_message_complexity() = {bucket.get_message_complexity():,}")
+                    print(f"  get_message_scope() = {bucket.get_message_scope()}")
+                    print(f"\nConfig thresholds:")
+                    print(f"  iB = {self.iB}")
+                    print(f"  ecl = {self.ecl:,}")
+                    print(f"  complexity_limit = {self.complexity_limit:,}")
+                    print(f"\nExact check: width<={self.iB}? {bucket.get_width() <= self.iB}, ec<={self.ecl:,}? {bucket.get_ec() <= self.ecl}")
+                    print(f"\nBucket {var} factors ({len(bucket.factors)} total):")
+                    for i, f in enumerate(bucket.factors):
+                        factor_type = "NN" if f.is_nn else "FastFactor"
+                        tensor_info = "tensor=None" if f.tensor is None else f"tensor shape={f.tensor.shape}"
+                        factor_complexity = f.get_factor_complexity()
+                        print(f"  [{i}] {factor_type}: scope={f.labels} (width={len(f.labels)}), complexity={factor_complexity:,}, {tensor_info}")
+                else:
+                    print(f"\nBucket {var} not found in self.buckets")
 
-                    print("\n" + "-"*60)
-                    print("Full traceback:")
-                    print("-"*60)
-                    traceback.print_exc()
-                    print("="*60 + "\n")
-                    raise
+                print("\n" + "-"*60)
+                print("Full traceback:")
+                print("-"*60)
+                traceback.print_exc()
+                print("="*60 + "\n")
+                raise
 
         # Process the root bucket
         if root_bucket.factors:
@@ -386,7 +394,6 @@ class FastGM:
             # CRITICAL FIX: Check if we're in backward factor population mode first
             # When populating backward factors, always use WMB regardless of config
             if self.is_populating_backward_factors:
-                # print(f"Using WMB for backward factor population in bucket: {bucket.label}")
                 output_messages = bucket.compute_wmb_message(self.iB)
                 return output_messages
             elif self.config.get('approximation_method') == 'nn':
@@ -398,7 +405,6 @@ class FastGM:
                 print(f"Bucket {bucket.label}: training DT ({self.num_trained})", flush=True)
                 output_message = bucket.compute_message_dt()
             elif self.config.get('approximation_method') == 'wmb':
-                # print(f"Using WMB for bucket: {bucket.label}")
                 # Use compute_wmb_message which returns a LIST of messages
                 # This keeps mini-bucket messages separate to respect ecl
                 output_messages = bucket.compute_wmb_message(self.iB)
@@ -749,33 +755,6 @@ class FastGM:
                     gradient_factors.append(factor)
         return gradient_factors
     
-    # def get_message_gradient(self, bucket_var, gradient_factors=None, iB = 100):
-    #     # function should do elimination up to, but not including bucket_var.
-    #     # function should gather all factors from all buckets that come after bucket_var and create a new fastGM from them.
-    #     # function should eliminate all bucket the variables in the scope of bucket_var's bucket's scope
-    #     if gradient_factors is None:
-    #         self.eliminate_variables(up_to=bucket_var, exact=True)
-    #         gradient_factors = []
-    #         for var in self.elim_order[self.elim_order.index(self.matching_var(bucket_var))+1:]:
-    #             bucket = self.buckets[var]
-    #             bucket_factors = bucket.factors
-    #             for factor in bucket_factors:
-    #                 gradient_factors.append(factor)
-    #     bucket = self.get_bucket(bucket_var)
-    #     message = bucket.compute_message_exact()
-    #     bucket_scope = bucket.get_message_scope()
-    #     # if no downstream function
-    #     if gradient_factors == []:
-    #         return FastFactor(torch.tensor([0.0], device=self.device), [], requires_grad=False), message
-    #     downstream_elim_order = wtminfill_order(gradient_factors, variables_not_eliminated=bucket_scope)
-    #     # print("deo is ", downstream_elim_order)
-    #     # device_copy=str(self.device)
-    #     downstream_gm = FastGM(factors=gradient_factors, elim_order=downstream_elim_order, reference_fastgm=self, device=self.device, nn_config=self.config)
-    #     print("Upstream width is ", downstream_gm.get_max_width())
-    #     downstream_gm.iB = iB
-    #     downstream_gm.eliminate_variables(all_but=bucket_scope)
-    #     return downstream_gm.get_joint_distribution(), message
-
     def removeFactors(self, factors_to_remove):
         for var in self.buckets:
             self.buckets[var].factors = [f for f in self.buckets[var].factors if f not in factors_to_remove]
@@ -793,336 +772,10 @@ class FastGM:
                 # find index of earliest bucket
                 earliest_var = factor.labels[indices.index(min(indices))]
                 # move to that bucket
-                try:
-                    self.buckets[self.matching_var(earliest_var)].factors.append(factor)
-                except:
-                    print('got here')
-                    raise(ValueError("No matching var found for idx ", earliest_var))
+                self.buckets[self.matching_var(earliest_var)].factors.append(factor)
                 
                 # self.buckets[var].factors.append(factor)
 
-    # def get_message_stats(self, bucket, output_message, get_Z_estimands=True):
-    #     # adds (label, width, fw_var, bw_var, const_pred_linspace_mse_Z_err, ls_one)
-    #     from nce.utils.stats import get_fw_bw_correlation
-    #     import os, contextlib
-    #     stats = dict()
-    #     stats['label'] = bucket.label
-    #     stats['width'] = len(output_message.labels)
-    #     if not bucket.approximate_downstream_factors or len(output_message.labels) == 0:
-    #         empty = True
-    #     else:
-    #         empty = False
-    #         with open(os.devnull, "w") as devnull, \
-    #             contextlib.redirect_stdout(devnull), \
-    #             contextlib.redirect_stderr(devnull):
-    #             mg = self.get_message_gradient(bucket.label, bucket.approximate_downstream_factors)[0]
-        
-    #     stats['mg_var'] = 0 if empty or mg is None else mg.get_variance()
-    #     if not get_Z_estimands:
-    #         Z_errs = () # linspace_err,logspace_err
-    #     else:
-    #         Z_linspace_mse_fw_component = torch.logsumexp(output_message.tensor.reshape(-1), dim=0) - math.log(output_message.tensor.numel())
-    #         Z_logspace_mse_bw_component = torch.mean(output_message.tensor.reshape(-1))
-    #         if len(output_message.labels) == 0:
-    #             stats['linspace_err'], stats['logspace_err'] = 0, 0
-    #         elif not bucket.approximate_downstream_factors:
-    #             stats['linspace_err'], stats['logspace_err'] = 0, Z_linspace_mse_fw_component.item() - Z_logspace_mse_bw_component.item()
-    #         else:
-    #             if mg is not None:
-    #                 Z = (output_message * mg).sum_all_entries()
-    #                 Z_component_from_bw_message = torch.logsumexp(mg.tensor.reshape(-1), dim=0)
-    #             else:
-    #                 Z = output_message.sum_all_entries()
-                    
-    #             fw_star = Z - Z_component_from_bw_message
-    #             stats['linspace_err'], stats['logspace_err'] = \
-    #                 Z_linspace_mse_fw_component.item() - fw_star.item(), \
-    #                 Z_logspace_mse_bw_component.item() - fw_star.item()
-                
-    #     stats['output_message_var'] = output_message.get_variance()
-    #     stats['correlation'] = get_fw_bw_correlation(output_message, mg) if not empty else 0
-    #     stats['output_message_std'] = stats['output_message_var']** 0.5 if stats['output_message_var'] > 0 else 0
-    #     stats['mg_std'] = stats['mg_var'] ** 0.5 if stats['mg_var'] > 0 else 0
-    #     stats['correlation_correction_factor'] = 2 * stats['correlation'] * stats['output_message_std'] * stats['mg_std']
-    #     stats['corrected_err'] = stats['linspace_err'] + stats['correlation_correction_factor']
-
-
-    #     self.message_stats.append(stats)
-    
- 
-    # def graph_message_stats(
-    #     self,
-    #     min_width: int = 0,
-    #     prob_name: str | None = None,
-    #     save_path: str | None = None,
-    #     show: bool = True,
-    # ) -> None:
-    #     """
-    #     Figures produced
-    #     ----------------
-    #     1. Scatter: forward/backward variance vs. # vars eliminated first.
-    #     2. Scatter: (variance_f − variance_b) vs. lin/log-space MSE + best-fit lines.
-    #     3. Scatter: bucket width vs. forward/backward variance (small dots).
-
-    #     All figures are saved to *save_path* (directory) if provided.
-    #     """
-    #     import os
-    #     import numpy as np
-    #     import matplotlib.pyplot as plt
-
-    #     # -------- collect data -------------------------------------------------
-    #     idx, widths = [], []
-    #     vf, vb = [], []
-    #     mse_lin, mse_log = [], []
-    #     corrs = []  # log correlation between forward and backward messages
-
-    #     for (_, width, var_f, var_b, ml, mg, corr) in self.message_stats:
-    #         if width < min_width:
-    #             continue
-    #         idx.append(len(idx))
-    #         widths.append(width)
-    #         vf.append(var_f)
-    #         vb.append(var_b)
-    #         mse_lin.append(ml)
-    #         mse_log.append(mg)
-    #         corrs.append(corr)
-
-    #     if not idx:
-    #         raise ValueError("No message_stats entries satisfy min_width.")
-
-    #     def _fname(stem: str) -> str:
-    #         return f"{stem}{'_'+prob_name if prob_name else ''}.png"
-
-    #     # -------- Figure 1 -----------------------------------------------------
-    #     plt.figure()
-    #     plt.scatter(idx, vf, marker="o", label="Forward Variance")
-    #     plt.scatter(idx, vb, marker="x", label="Backward Variance")
-    #     plt.xlabel("# vars eliminated first")
-    #     plt.ylabel("Variance of log‐message")
-    #     t = "Variance vs. Elimination Order"
-    #     if prob_name:
-    #         t += f" for {prob_name}"
-    #     plt.title(t)
-    #     plt.legend()
-    #     if save_path:
-    #         os.makedirs(save_path, exist_ok=True)
-    #         plt.savefig(os.path.join(save_path, _fname("variance_vs_elim")),
-    #                     dpi=300, bbox_inches="tight")
-    #     if show: plt.show()
-    #     else:    plt.close()
-
-    #     # -------- Figure 2 -----------------------------------------------------
-    #     ratio = np.array(vf) - np.array(vb)           # *** keep your subtraction ***
-    #     abs_lin = np.abs(mse_lin)
-    #     abs_log = np.abs(mse_log)
-
-    #     # best-fit line in log-space (fit log10(y) on x, then exponentiate for plotting)
-    #     def best_fit(x, y):
-    #         mask = np.isfinite(x) & (y > 0)
-    #         if mask.sum() < 2:      # degenerate case
-    #             return None, None
-    #         coeff = np.polyfit(x[mask], np.log10(y[mask]), 1)   # slope, intercept
-    #         x_fit = np.linspace(x[mask].min(), x[mask].max(), 200)
-    #         y_fit = 10 ** (coeff[1] + coeff[0] * x_fit)
-    #         return x_fit, y_fit
-
-    #     x_fit_lin, y_fit_lin = best_fit(ratio, abs_lin)
-    #     x_fit_log, y_fit_log = best_fit(ratio, abs_log)
-
-    #     plt.figure()
-    #     plt.scatter(ratio, abs_lin, marker="o", label="Lin-space MSE (Z_err)")
-    #     plt.scatter(ratio, abs_log, marker="x", label="Log-space MSE (Z_err)")
-
-    #     if x_fit_lin is not None:
-    #         plt.plot(x_fit_lin, y_fit_lin, linestyle="--", linewidth=1,
-    #                 label="Best fit (lin-space)")
-    #     if x_fit_log is not None:
-    #         plt.plot(x_fit_log, y_fit_log, linestyle="--", linewidth=1,
-    #                 label="Best fit (log-space)")
-
-    #     plt.xlabel("Log-variance ratio  (forward – backward)")
-    #     plt.ylabel("Z_err for constant-message prediction")
-    #     t = "Variance-Ratio vs. Z_err (lin/log)"
-    #     if prob_name:
-    #         t += f" for {prob_name}"
-    #     plt.title(t)
-    #     # plt.yscale("log")
-    #     plt.legend()
-
-    #     if save_path:
-    #         plt.savefig(os.path.join(save_path, _fname("var_ratio_vs_mse")),
-    #                     dpi=300, bbox_inches="tight")
-    #     if show: plt.show()
-    #     else:    plt.close()
-
-    #     # -------- Figure 3 -----------------------------------------------------
-    #     plt.figure()
-    #     plt.scatter(widths, vf, s=15, marker="o", label="Forward Variance")  # tiny dots
-    #     plt.scatter(widths, vb, s=15, marker="x", label="Backward Variance")
-    #     plt.xlabel("Bucket width")
-    #     plt.ylabel("Variance of log‐message")
-    #     t = "Variance vs. Bucket Width"
-    #     if prob_name:
-    #         t += f" for {prob_name}"
-    #     plt.title(t)
-    #     plt.legend()
-
-    #     if save_path:
-    #         plt.savefig(os.path.join(save_path, _fname("variance_vs_width")),
-    #                     dpi=300, bbox_inches="tight")
-    #     if show: plt.show()
-    #     else:    plt.close()
-  
-    # def graph_message_stats_old(
-    #     self,
-    #     min_width: int = 0,
-    #     prob_name: str | None = None,
-    #     save_path: str | None = None,
-    #     show: bool = True,
-    # ) -> None:
-    #     """
-    #     Figures produced
-    #     ----------------
-    #     1. Scatter: forward/backward variance vs. # vars eliminated first.
-    #     2. Scatter: (variance_f − variance_b) vs. lin/log-space MSE + best-fit lines.
-    #     3. Scatter: bucket width vs. forward/backward variance (small dots).
-    #     4. Scatter: log forward-backward correlation vs. lin/log-space MSE Z_err.
-
-    #     All figures are saved to *save_path* (directory) if provided.
-    #     """
-    #     import os
-    #     import numpy as np
-    #     import matplotlib.pyplot as plt
-
-    #     # -------- collect data -------------------------------------------------
-    #     idx, widths = [], []
-    #     vf, vb = [], []
-    #     mse_lin, mse_log = [], []
-    #     corrs = []  # log correlation between forward and backward messages
-
-    #     for stat_dict in self.message_stats:
-    #         width = stat_dict['width']
-    #         idx = stat_dict['label']
-    #         var_f = stat_dict['output_message_var']
-    #         var_b = stat_dict['mg_var']
-    #         ml = stat_dict['linspace_err']
-    #         mg = stat_dict['logspace_err']
-    #         corr = stat_dict['correlation']
-            
-    #         if width < min_width:
-    #             continue
-    #         idx.append(len(idx))
-    #         widths.append(width)
-    #         vf.append(var_f)
-    #         vb.append(var_b)
-    #         mse_lin.append(ml)
-    #         mse_log.append(mg)
-    #         corrs.append(corr)
-
-    #     if not idx:
-    #         raise ValueError("No message_stats entries satisfy min_width.")
-
-    #     def _fname(stem: str) -> str:
-    #         return f"{stem}{'_'+prob_name if prob_name else ''}.png"
-
-    #     # -------- Figure 1 -----------------------------------------------------
-    #     plt.figure()
-    #     plt.scatter(idx, vf, marker="o", label="Forward Variance")
-    #     plt.scatter(idx, vb, marker="x", label="Backward Variance")
-    #     plt.xlabel("# vars eliminated first")
-    #     plt.ylabel("Variance of log‐message")
-    #     t = "Variance vs. Elimination Order"
-    #     if prob_name:
-    #         t += f" for {prob_name}"
-    #     plt.title(t)
-    #     plt.legend()
-    #     if save_path:
-    #         os.makedirs(save_path, exist_ok=True)
-    #         plt.savefig(os.path.join(save_path, _fname("variance_vs_elim")),
-    #                     dpi=300, bbox_inches="tight")
-    #     if show: plt.show()
-    #     else:    plt.close()
-
-    #     # -------- Figure 2 -----------------------------------------------------
-    #     ratio = np.array(vf) - np.array(vb)           # *** keep your subtraction ***
-    #     abs_lin = np.abs(mse_lin)
-    #     abs_log = np.abs(mse_log)
-
-    #     # best-fit line in log-space (fit log10(y) on x, then exponentiate for plotting)
-    #     def best_fit(x, y):
-    #         mask = np.isfinite(x) & (y > 0)
-    #         if mask.sum() < 2:      # degenerate case
-    #             return None, None
-    #         coeff = np.polyfit(x[mask], np.log10(y[mask]), 1)   # slope, intercept
-    #         x_fit = np.linspace(x[mask].min(), x[mask].max(), 200)
-    #         y_fit = 10 ** (coeff[1] + coeff[0] * x_fit)
-    #         return x_fit, y_fit
-
-    #     x_fit_lin, y_fit_lin = best_fit(ratio, abs_lin)
-    #     x_fit_log, y_fit_log = best_fit(ratio, abs_log)
-
-    #     plt.figure()
-    #     plt.scatter(ratio, abs_lin, marker="o", label="Lin-space MSE (Z_err)")
-    #     plt.scatter(ratio, abs_log, marker="x", label="Log-space MSE (Z_err)")
-
-    #     if x_fit_lin is not None:
-    #         plt.plot(x_fit_lin, y_fit_lin, linestyle="--", linewidth=1,
-    #                 label="Best fit (lin-space)")
-    #     if x_fit_log is not None:
-    #         plt.plot(x_fit_log, y_fit_log, linestyle="--", linewidth=1,
-    #                 label="Best fit (log-space)")
-
-    #     plt.xlabel("Log-variance ratio  (forward – backward)")
-    #     plt.ylabel("Z_err for constant-message prediction")
-    #     t = "Variance-Ratio vs. Z_err (lin/log)"
-    #     if prob_name:
-    #         t += f" for {prob_name}"
-    #     plt.title(t)
-    #     # plt.yscale("log")
-    #     plt.legend()
-
-    #     if save_path:
-    #         plt.savefig(os.path.join(save_path, _fname("var_ratio_vs_mse")),
-    #                     dpi=300, bbox_inches="tight")
-    #     if show: plt.show()
-    #     else:    plt.close()
-
-    #     # -------- Figure 3 -----------------------------------------------------
-    #     plt.figure()
-    #     plt.scatter(widths, vf, s=15, marker="o", label="Forward Variance")  # tiny dots
-    #     plt.scatter(widths, vb, s=15, marker="x", label="Backward Variance")
-    #     plt.xlabel("Bucket width")
-    #     plt.ylabel("Variance of log‐message")
-    #     t = "Variance vs. Bucket Width"
-    #     if prob_name:
-    #         t += f" for {prob_name}"
-    #     plt.title(t)
-    #     plt.legend()
-
-    #     if save_path:
-    #         plt.savefig(os.path.join(save_path, _fname("variance_vs_width")),
-    #                     dpi=300, bbox_inches="tight")
-    #     if show: plt.show()
-    #     else:    plt.close()
-
-    #     # -------- Figure 4 -----------------------------------------------------
-    #     plt.figure()
-    #     plt.scatter(corrs, abs_lin, marker="o", label="Lin-space MSE (Z_err)")
-    #     plt.scatter(corrs, abs_log, marker="x", label="Log-space MSE (Z_err)")
-    #     plt.xlabel("Log forward-backward correlation")
-    #     plt.ylabel("Z_err for constant-message prediction")
-    #     t = "Log FW-BW Correlation vs. Z_err (lin/log)"
-    #     if prob_name:
-    #         t += f" for {prob_name}"
-    #     plt.title(t)
-    #     plt.legend()
-
-    #     if save_path:
-    #         plt.savefig(os.path.join(save_path, _fname("correlation_vs_mse")),
-    #                     dpi=300, bbox_inches="tight")
-    #     if show: plt.show()
-    #     else:    plt.close()
-  
     def graph_message_stats(
             self,
             min_width: int = 0,
@@ -1343,7 +996,6 @@ class FastGM:
         
         bucket = self.get_bucket(bucket_var)
         bucket_scope = bucket.get_message_scope()
-        # dprint('bucket scope here reads', bucket_scope)
 
         # Get all variables involved in the gradient factors
         all_vars = set()
@@ -1380,7 +1032,6 @@ class FastGM:
         if ecl is None:
             ecl = getattr(gm, 'ecl', None)
 
-        # dprint('target scope is ', target_scope)
         if isinstance(weights, str):
             if weights == 'max':
                 weight_map = {var.label: 0.0 for var in gm.vars}
@@ -1392,19 +1043,8 @@ class FastGM:
             weight_map = {var.label: weight for var, weight in zip(gm.vars, weights)}
 
         result = None
-        # dprint('elim order is ', gm.elim_order)
-        # dprint()
-        # dprint('All bucket factors scopes are:')
-        # for key in self.buckets.keys():
-        #     dprint("Bucket = ", key)
-        #     bucket = self.buckets[key]
-        #     dprint('Factors scopes are:')
-        #     for factor in bucket.factors:
-        #         dprint(factor.labels)
-        #     dprint()
 
         for var in gm.elim_order:
-            # dprint('var ', var, ' considered')
             if var.label in target_scope:
                 continue
 
@@ -1441,10 +1081,6 @@ class FastGM:
         remaining_factors = []
         for bucket in gm.buckets.values():
             remaining_factors.extend(bucket.factors)
-            # debug
-            for factor in bucket.factors:
-                if 54 in factor.labels:
-                    print('got here')
             
         if not combine_factors:
             return remaining_factors
@@ -1458,11 +1094,7 @@ class FastGM:
             for factor in remaining_factors[1:]:
                 try:
                     result = result * factor
-                    # if sum([0 if v in target_scope else 1 for v in factor.labels]) != 0:
-                        # dprint('factor scope is ', factor.labels)
-                    # dprint('result scope is ', result.labels)
-                except:
-                    print('err')
+                except Exception:
                     raise ValueError("scope incorrect")
                 if (result.tensor == float('inf')).any():
                     print("inf found")
@@ -1673,10 +1305,6 @@ class FastGM:
         pop_config['populate_bw_factors'] = False  # Prevent recursive population
         pop_config['approximation_method'] = 'wmb'  # Use WMB for backward factors
 
-        # print(f"DEBUG: Creating population copy with factory method")
-        # print(f"  Original config id={id(self.config)}, approx_method={self.config.get('approximation_method')}")
-        # print(f"  New config id={id(pop_config)}, approx_method={pop_config.get('approximation_method')}")
-
         # Get all factors from original GM's buckets
         all_factors = []
         for var in self.elim_order:
@@ -1699,9 +1327,6 @@ class FastGM:
         copied_gm.is_primary = False
         copied_gm.is_populating_backward_factors = True
 
-        # print(f"  Created GM config id={id(copied_gm.config)}, approx_method={copied_gm.config.get('approximation_method')}")
-        # print(f"  Original unchanged: config id={id(self.config)}, approx_method={self.config.get('approximation_method')}")
-
         return copied_gm
 
     def populate_backward_factors_wmb(self):
@@ -1718,15 +1343,6 @@ class FastGM:
         - Keeps WMB factors together when placing in downstream buckets
         - Factors are placed in the earliest bucket that contains any of their variables
         """
-        # import traceback
-        # print(f"DEBUG: Entering populate_backward_factors_wmb() on GM with config id={id(self.config)}")
-        # print(f"DEBUG: populate_bw_factors flag = {self.populate_bw_factors}")
-        # print(f"DEBUG: is_primary = {self.is_primary}")
-        # # print("DEBUG: Call stack:")
-        # for line in traceback.format_stack()[:-1]:  # Exclude current frame
-        #     print(line.strip())
-        # print("Populating backward factors using WMB approximations...")
-
         # Create a controlled copy using factory method (NOT deepcopy)
         # This avoids config dict sharing issues
         copied_gm = self._create_population_copy()
@@ -1741,8 +1357,6 @@ class FastGM:
             orig_bucket = self.get_bucket(current_var)
             copy_bucket = copied_gm.get_bucket(current_var)
 
-            # print(f"  Processing bucket {current_var.label}...")
-
             # Gather all downstream factors from copied GM and store in original GM
             downstream_factors = []
             for j in range(i+1, len(self.elim_order)):
@@ -1751,7 +1365,6 @@ class FastGM:
                     downstream_factors.append(factor.to_exact() if hasattr(factor, 'to_exact') else factor)
 
             orig_bucket.approximate_downstream_factors = downstream_factors
-            # print(f"    Stored {len(downstream_factors)} downstream factors")
 
             # Separate factors into those with and without the elimination variable
             has_elim_var = [f for f in copy_bucket.factors if current_var in f.labels]
@@ -1768,17 +1381,15 @@ class FastGM:
                 bucket_width = copy_bucket.get_width()
                 bucket_ec = copy_bucket.get_ec()
 
-                bw_ecl = self.config.get('bw_ecl', self.config.get('ecl', 2**20))
+                bw_ecl = self.config.get('bw_ecl')
                 needs_approx = bucket_ec > bw_ecl
 
                 if needs_approx:
-                    # print(f"    Using WMB (width={bucket_width} > iB={self.iB} OR ec={bucket_ec} > ecl={self.ecl})")
                     # Use WMB approximation - returns list of factors
                     messages = copy_bucket.compute_wmb_message(ecl=bw_ecl)
                     # Track forward partitions (upper bound for backward message impact)
                     self.wmb_fw_partitions += copy_bucket.wmb_stats.get('fw_partitions', 0)
                 else:
-                    # print(f"    Using exact (width={bucket_width} <= iB={self.iB} AND ec={bucket_ec} <= ecl={self.ecl})")
                     # Compute exact message - wrap in list for consistency
                     try:
                         exact_msg = copy_bucket.compute_message_exact()
@@ -1789,7 +1400,6 @@ class FastGM:
 
             # Combine WMB messages and independent factors
             all_outgoing_factors = messages + no_elim_var
-            # print(f"    Outgoing: {len(messages)} message(s) + {len(no_elim_var)} independent factor(s)")
 
             # Place all outgoing factors in the next bucket
             # IMPORTANT: Keep WMB factors together by finding the earliest bucket
@@ -1798,12 +1408,8 @@ class FastGM:
                 next_var_label = scheme[current_var]  # This is an int (label), not a Var
                 next_bucket = copied_gm.get_bucket(next_var_label)
                 next_bucket.factors.extend(all_outgoing_factors)
-                # print(f"    Sent to bucket {next_var_label}")
 
         # Print summary of forward partitions during backward factor population
         if self.wmb_fw_partitions > 0:
             print(f"  WMB forward partitions during backward factor population: {self.wmb_fw_partitions} (upper bound)")
-        # print("Backward factor population complete!")
-        # print(f"DEBUG: Exiting populate - self.config id={id(self.config)}, approx_method={self.config.get('approximation_method')}")
-
 

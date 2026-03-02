@@ -1,7 +1,7 @@
 import torch
 import math
 import numpy as np
-from typing import *
+from typing import List, Tuple
 from nce.inference.graphical_model import FastGM
 from nce.inference.bucket import FastBucket
 from nce.inference.factor import FastFactor
@@ -110,33 +110,6 @@ class SampleGenerator:
         else:
             raise ValueError(f"Unknown sampling scheme: {sampling_scheme}. Use 'uniform' or 'all'.")
 
-    def sample_assignments_old(self, num_samples: int = -1, sampling_scheme=None) -> torch.Tensor:
-        """OLD VERSION - kept for reference. Remove after confirming new version works."""
-        if False: # turn off random seed
-            self.random_seed += 1
-            seed = self.random_seed
-            if seed is not None:
-                torch.manual_seed(seed)
-                if self.gm.device == 'cuda':
-                    torch.cuda.manual_seed(seed)
-            if self.random_seed is not None:
-                torch.manual_seed(self.random_seed)
-        if sampling_scheme is None:
-            sampling_scheme = self.sampling_scheme
-        if sampling_scheme == 'uniform':
-            return self.sample_uniform(num_samples)
-        elif sampling_scheme == 'mg':
-            return self.sample_from_mg_brute_force(self.mess, self.mg, num_samples)
-        elif sampling_scheme == 'mess_times_mg':
-            return self.sample_from_mess_times_mg_brute_force(self.mess, self.mg, num_samples)
-        elif sampling_scheme == 'all':
-            return self.sample_all()
-        elif type(sampling_scheme) == tuple:
-            samples = []
-            for (scheme, ratio) in sampling_scheme:
-                samples.append(self.sample_assignments(int(num_samples * ratio), self.random_seed, scheme))
-            return torch.cat(samples, dim=0)
-    
     def sample_all(self) -> torch.Tensor:
         # Generate all possible assignments
         assignments = torch.cartesian_prod(*[torch.arange(size) for size in self.domain_sizes])
@@ -153,40 +126,6 @@ class SampleGenerator:
         coord = torch.stack(coord[::-1], dim=-1)
         return coord
     
-    def sample_from_mg_brute_force_old(self, mess: FastFactor, mg: FastFactor, num_samples: int, replacement = True) -> torch.Tensor:
-        """OLD VERSION - deprecated. Use uniform sampling instead."""
-        # normalize the message gradient to be a probability distribution
-        # first ensure mg has every variable in it
-        mess_copy = copy.deepcopy(mess)
-        mess_copy.tensor = torch.zeros_like(mess_copy.tensor)
-        mg_expanded = mess_copy * mg
-        mg_expanded.order_indices()
-        # convert tensor to base e
-        ln10 = torch.tensor(math.log(10), device=self.gm.device)
-        mg_expanded.tensor *= ln10
-        logsumexp = torch.logsumexp(mg_expanded.tensor.reshape(-1), dim=0)
-        dist = torch.exp(mg_expanded.tensor - logsumexp)
-        # ensure the distribution is normalized
-        s = dist.sum()
-        st = f"Sum of distribution is {s}"
-        assert torch.allclose(s, torch.tensor(1.0, device=self.gm.device)), st
-        samples = torch.multinomial(dist.flatten(), num_samples, replacement=replacement)
-        samples = SampleGenerator._unravel_index(samples, dist.shape)
-        return samples
-
-    def sample_from_mess_times_mg_brute_force_old(self, mess: FastFactor, mg: FastFactor, num_samples: int, replacement = True) -> torch.Tensor:
-        """OLD VERSION - deprecated. Use uniform sampling instead."""
-        # normalize the message gradient to be a probability distribution
-        dist = mess * mg
-        # convert tensor to base e
-        ln10 = torch.tensor(math.log(10), device=self.gm.device)
-        dist.tensor *= ln10
-        logsumexp = torch.logsumexp(dist.tensor.reshape(-1), dim=0)
-        dist = torch.exp(dist.tensor - logsumexp)
-        samples = torch.multinomial(dist.flatten(), num_samples, replacement=replacement)
-        samples = SampleGenerator._unravel_index(samples, dist.shape)
-        return samples
-        
     def sample_uniform(self, num_samples) -> torch.Tensor:
         # dtype long used for compatibility with indexing
         samples = []
@@ -242,14 +181,6 @@ class SampleGenerator:
         # from get_backward_message already only contain message_scope variables
         return self.sample_tensor_product(factors=factors, assignments=assignments)
 
-    def compute_gradient_values_old(self, assignments: torch.Tensor, gradient_factors=None) -> torch.Tensor:
-        """OLD VERSION - kept for reference. Use compute_backward_values instead."""
-        if gradient_factors is None:
-            factors = self.gradient_factors
-        else:
-            factors = gradient_factors
-        return self.sample_tensor_product_elimination(factors=factors, assignments=assignments)
-    
     def sample_tensor_product_elimination(self, factors, assignments) -> torch.Tensor:
         for factor in factors:
             factor.order_indices()
@@ -259,54 +190,7 @@ class SampleGenerator:
             # If this is a FactorNN with bw_inv, convert to exact first to apply inverse transformation
             if hasattr(fast_factor, 'is_nn') and fast_factor.is_nn and hasattr(fast_factor, 'bw_inv') and fast_factor.bw_inv:
                 fast_factor = fast_factor.to_exact()
-            if True:
-                # assert not fast_factor.tensor.requires_grad
-                unsummed_values += fast_factor._get_slices(assignments=assignments, elim_vars=self.elim_vars, elim_domain_sizes = self.elim_domain_sizes, message_scope=self.message_scope)
-            if False:
-                tensor = fast_factor.tensor
-                tensor_labels = fast_factor.labels
-                
-                # indices in assignments that correspond to dimensions in the tensor
-                assignment_indices = [i for i, idx in enumerate(scope) if idx in tensor_labels]
-                
-                # indices of the assignment in the tensor
-                tensor_assignment_indices = [i for i, idx in enumerate(tensor_labels) if idx not in elim_vars]
-                # indices of eliminated variables in the tensor
-                tensor_elim_indices = [i for i, idx in enumerate(tensor_labels) if idx in elim_vars]
-                
-                # put elimination indices at end of tensor
-                permutation = (*tensor_assignment_indices, *tensor_elim_indices)
-                # permute tensor
-                tensor = tensor.permute(permutation)
-                # reordered labels
-                tensor_labels = [tensor_labels[i] for i in permutation]
-                
-                # get assignments from permuted tensor
-                # assertation necessary for indexing
-                assert(all(tensor_labels[i] < tensor_labels[i+1] for i in range(len(tensor_labels)-len(elim_vars)-1)))
-                permuted_assignment_indices = [i for i, idx in enumerate(scope) if idx in tensor_labels]
-                projected_assignments = assignments[:,permuted_assignment_indices]
-
-                # stretch out elimination indices to 1d
-                # grab slices corresponding to assignments
-                view = tuple(int(dim) for dim in tensor.shape[:len(tensor.shape) - len(elim_vars)]) + (int(torch.prod(torch.tensor(tensor.shape[len(tensor.shape) - len(elim_vars):]))),)
-                try:
-                    if not projected_assignments.numel() == 0:
-                        slices = tensor.view(view)[tuple(projected_assignments.t())]
-                    else:
-                        slices = tensor.unsqueeze(0).expand(len(assignments), len(tensor))
-                except:
-                    print(tensor.shape)
-                    print(view)
-                    print(projected_assignments.shape)
-                    print(projected_assignments.t().shape)
-                    exit(1)
-                
-                # reshape slices to match elimination variables in order, e.g. (1,2,2,1) if 2nd and 3rd variables are in tensor
-                unexpanded_slice_shape = (len(assignments),) + tuple([v.states if v.label in tensor_labels else 1 for v in elim_vars])
-                reshaped_slices = slices.reshape(unexpanded_slice_shape)
-                expanded_slice_shape = (len(assignments),) + tuple([v.states for v in elim_vars])
-                unsummed_values += reshaped_slices.expand(expanded_slice_shape) # it will broadcast over dimensions not in the factor
+            unsummed_values += fast_factor._get_slices(assignments=assignments, elim_vars=self.elim_vars, elim_domain_sizes = self.elim_domain_sizes, message_scope=self.message_scope)
         return torch.logsumexp(unsummed_values * math.log(10), dim=tuple(range(1, unsummed_values.dim()))) / math.log(10)
 
     def sample_tensor_product(self, factors, assignments) -> torch.Tensor:
@@ -326,14 +210,3 @@ class SampleGenerator:
             output += fast_factor._get_values(assignments=assignments, message_scope=self.message_scope)
         assert not output.requires_grad
         return (output).squeeze(1)
-        # return (output / math.log(10)).squeeze(1)
-        # return torch.logsumexp(unsummed_values * math.log(10), dim=tuple(range(1, unsummed_values.dim()))) / math.log(10)
-        
-            
-        
-            
-            
-            
-            
-            
-            

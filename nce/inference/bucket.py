@@ -119,9 +119,6 @@ class FastBucket:
                 use_precomputed = self.gm.populate_bw_factors and self.approximate_downstream_factors is not None
                 backward_factors_arg = self.approximate_downstream_factors if use_precomputed else None
 
-                # if use_precomputed:
-                    # print(f"Bucket {self.label}: Using pre-computed WMB backward factors ({len(self.approximate_downstream_factors)} factors)")
-
                 # Determine backward message complexity to decide on mode
                 # We need to check if the combined backward message would exceed backward_ecl
                 # If so, we must use factor list mode (sample_tensor_product) even with sampling_scheme='all'
@@ -143,8 +140,6 @@ class FastBucket:
 
                 if can_use_full_data_batch:
                     # Full data batch mode: materialize full backward message tensor (complexity allows it)
-                    mode_str = "(using pre-computed)" if use_precomputed else "(computing on-the-fly)"
-                    # print(f"Bucket {self.label}: Computing WMB backward message as single factor {mode_str} (complexity={bw_message_complexity} <= backward_ecl={backward_ecl}, backward_iB={backward_iB})")
                     print("Computing backward message with bw ecl ", backward_ecl)
                     bw_wmb, _ = get_backward_message(
                         self.gm,
@@ -158,12 +153,8 @@ class FastBucket:
 
                     # Set as single factor since complexity allows materialization
                     t.dataloader.bw_modifier = bw_wmb
-                    # print(f"Bucket {self.label}: Set backward message as single factor (complexity={bw_message_complexity})")
                 else:
                     # Batched mode: return factor list to avoid materializing full product (complexity exceeds limit)
-                    mode_str = "(using pre-computed)" if use_precomputed else "(computing on-the-fly)"
-                    # print(f"Bucket {self.label}: Computing WMB backward message as factor list {mode_str} (complexity={bw_message_complexity} > backward_ecl={backward_ecl}, backward_iB={backward_iB})")
-
                     bw_factors, _ = get_backward_message(
                         self.gm,
                         self.label,
@@ -176,7 +167,6 @@ class FastBucket:
 
                     # Set as factor list to avoid materialization
                     t.dataloader.bw_factors = bw_factors
-                    # print(f"Bucket {self.label}: Set backward message as factor list with {len(bw_factors)} factors (complexity={bw_message_complexity})")
 
             # Calculate and print target_complexity
             target_complexity = self.get_message_complexity()
@@ -216,7 +206,6 @@ class FastBucket:
                     message_size = self.get_message_size()
                     h = b * math.ceil(math.log2(message_size)) if message_size > 1 else b
                     hidden_sizes = [h, h]
-                    # print(f"Bucket {self.label}: NBE hidden sizes: {hidden_sizes} (message_size={message_size}, b={b})")
 
             net = Net(self, hidden_sizes=hidden_sizes)
             t = Trainer(net=net, bucket=self, stats=self.stats)
@@ -545,15 +534,7 @@ class FastBucket:
         x_all, y_all, bw_hat_all = trainer.dataloader.load(all=True)
         # Apply the SAME preprocessing that neural networks use
         # _, y_normalized = trainer.data_preprocessor.convert_data()
-        
-        # print(f"y_normalized stats:")
-        # print(f"  Shape: {y_normalized.shape}")
-        # print(f"  Min: {y_normalized.min().item():.6f}")
-        # print(f"  Max: {y_normalized.max().item():.6f}")
-        # print(f"  Mean: {y_normalized.mean().item():.6f}")
-        # print(f"  Std: {y_normalized.std().item():.6f}")
-        # print(f"  Unique values: {len(torch.unique(y_normalized))}")
-        
+
         # Step 5: Solve for optimal parameters using logspace MSE
         from nce.neural_networks.linear_mse_solver import solve_optimal_logspace_mse
         # from nce.neural_networks.linear_mse_solver import enhanced_solve_optimal_logspace_mse
@@ -784,7 +765,6 @@ class FastBucket:
             for mb in mini_buckets:
                 n = len(mini_buckets)
                 if n == 0:
-                    # print('n is zero!')
                     raise ValueError("n is zero!")
                 combined_factor = mb[0]
                 for factor in mb[1:]:
@@ -979,7 +959,7 @@ class FastBucket:
             placed = False
             for mb in mini_buckets:
                 # Get combined scope if we add this factor to this mini-bucket
-                combined_scope = set.union(*[set(f.vars) for f in mb], set(factor.vars))
+                combined_scope = set.union(*[set(f.labels) for f in mb], set(factor.labels))
 
                 # Calculate combined complexity (product of domain sizes)
                 combined_complexity = 1

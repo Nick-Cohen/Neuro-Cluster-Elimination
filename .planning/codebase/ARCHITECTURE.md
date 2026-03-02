@@ -1,207 +1,209 @@
 # Architecture
 
-**Analysis Date:** 2026-01-25
+**Analysis Date:** 2026-02-21
 
 ## Pattern Overview
 
-**Overall:** Hybrid Inference with Neural Network Approximation
-
-NCE (Neural Computational Elimination) implements a hybrid approach to probabilistic inference on graphical models. The core pattern combines exact elimination (bucket elimination / junction tree) with learned neural network approximations for high-complexity factors. The architecture uses a bucket-based elimination scheme where buckets that exceed complexity thresholds are approximated using neural networks trained to learn message-passing functions.
+**Overall:** Multi-layered inference framework for neural approximation of probabilistic graphical models using message-passing elimination and neural network learning.
 
 **Key Characteristics:**
-- Bucket elimination framework with pluggable approximation methods
-- Neural networks learn to approximate complex message computations
-- Hybrid exact/approximate inference with configurable complexity thresholds
-- Factor-based representation with automatic variable elimination
-- Support for multiple approximation strategies: exact, neural network, weighted mini-bucket
-- PyTorch integration for gradient-based learning and automatic differentiation
+- Graph-based elimination order computation with mini-bucket approximation (WMB)
+- Bucket elimination algorithm with message-passing semantics
+- Neural network approximation of intractable messages via supervised learning
+- Data-driven training with sampling, preprocessing, and loss function composition
+- Backward message computation for gradient-informed approximation
+- Support for decision tree and linear solver alternatives to neural networks
 
 ## Layers
 
-**Inference Layer:**
-- Purpose: Core probabilistic inference engine implementing bucket elimination
+**Inference Core:**
+- Purpose: Represents graphical models and orchestrates probabilistic inference via bucket elimination
 - Location: `nce/inference/`
-- Contains: GraphicalModel, Buckets, Factors, Elimination schemes
-- Depends on: PyTorch tensors, PyGMs library for model loading
-- Used by: Neural network training, message passing, gradient computation
+- Contains: `FastGM` (graphical model orchestrator), `FastBucket` (bucket abstraction), `FastFactor` (factor/tensor wrapper)
+- Depends on: pyGMs library (external), torch for tensor operations
+- Used by: All training and inference workflows
 
-**Neural Network Layer:**
-- Purpose: Learned approximations for complex message computations
+**Neural Network Approximation:**
+- Purpose: Learns message approximations through supervised training with configurable architectures
 - Location: `nce/neural_networks/`
-- Contains: Network architectures, training routines, loss functions
-- Depends on: Inference layer (queries buckets for training data), PyTorch
-- Used by: Inference layer for approximation when buckets exceed thresholds
+- Contains: `Net` (PyTorch module), `Trainer` (training loop manager), loss functions
+- Depends on: Inference core (buckets), data loaders, sampling generators
+- Used by: Bucket elimination when `compute_message_nn()` is called
 
-**Data/Sampling Layer:**
-- Purpose: Training data generation and preprocessing for neural networks
+**Data & Sampling Pipeline:**
+- Purpose: Generates training samples, computes message values, normalizes data
 - Location: `nce/data/` and `nce/sampling/`
-- Contains: Sample generation, data preprocessing, one-hot encoding
-- Depends on: Inference layer (gets factor values, message scope)
-- Used by: Neural network training pipeline
+- Contains: `SampleGenerator` (deterministic sampling with seed control), `DataLoader` (message value computation), `DataPreprocessor` (normalization)
+- Depends on: Inference core for message computation
+- Used by: Neural network training, validation data generation
 
-**Utilities Layer:**
-- Purpose: Cross-cutting concerns and helper functions
+**Utility & Support:**
+- Purpose: Message gradient computation, backward message approximation, visualization
 - Location: `nce/utils/`
-- Contains: Message gradient computation, statistics, plotting, backward message functions
-- Depends on: All layers
-- Used by: Loss functions, training, analysis
+- Contains: `get_message_gradient()`, `get_backward_message()`, stats collection
+- Depends on: Inference core, data layer
+- Used by: Advanced training scenarios with backward approximation
+
+**Test Problems & Benchmarks:**
+- Purpose: Predefined UAI format graphical models for evaluation
+- Location: `nce/problems/`
+- Contains: TestProblem class, UAI files grouped by tree width, benchmark metadata
+- Depends on: Inference core (FastGM)
+- Used by: Notebooks and experiments
 
 ## Data Flow
 
-**Forward Elimination (Message Passing):**
+**Inference & Elimination:**
 
-1. User creates FastGM with factors and elimination order
-2. eliminate_variables() iterates through elimination order
-3. For each bucket:
-   - Check if bucket complexity exceeds iB (width) or ecl (element count) thresholds
-   - If below threshold: compute_message_exact() multiplies factors and eliminates variable
-   - If above threshold (based on approximation_method config):
-     - compute_message_nn(): Creates/trains neural network to approximate message
-     - compute_message_wmb(): Uses weighted mini-bucket approximation
-     - compute_message_dt(): Uses decision tree approximation
-4. Output message passed to next bucket in elimination order
-5. Final result: Partition function or marginal probability
+1. User creates `FastGM` from UAI file or raw factors with elimination order
+2. `FastGM` builds `FastBucket` instances, one per elimination variable
+3. User calls `eliminate_variables()` to process buckets in order
+4. Each bucket multiplies factors (including NN approximations if available) and marginalizes scope
 
-**Neural Network Training (for high-complexity buckets):**
+**Neural Network Training Workflow:**
 
-1. Trainer receives bucket to approximate
-2. SampleGenerator creates training samples from message scope:
-   - Uniformly samples assignments from message scope variables
-   - Computes forward message values at sampled points (factor multiplication + elimination)
-3. DataPreprocessor normalizes samples (handles log-space computations)
-4. Net processes normalized assignments through hidden layers
-5. Loss function (MSE, KL divergence, etc.) compares network output to true values
-6. Backpropagation updates network weights
-7. FactorNN wraps trained net, becomes usable as a factor in further eliminations
+1. User specifies `nn_config` dict with loss function, optimizer, architecture, and data parameters
+2. `FastGM` receives `nn_config` at init (stored as `config` dict)
+3. When `bucket.compute_message_nn()` is called:
+   - `Trainer` instantiates with bucket and config
+   - `SampleGenerator` creates training samples with deterministic seeding
+   - `DataLoader` loads samples and computes forward message values
+   - Optional: `get_backward_message()` computes gradient factors, passes to `DataLoader`
+   - `DataPreprocessor` normalizes targets using logsumexp-based centering
+   - `Net` (neural network) trains with chosen loss function
+   - Trained net approximates the message as a `FactorNN` object
+4. Subsequent bucket elimination uses trained NN instead of exact computation
 
-**Backward Message Computation (for loss functions):**
+**Backward Message Flow (Optional):**
 
-1. get_backward_message() or get_wmb_message_gradient() invoked
-2. Creates new FastGM with remaining factors (not yet eliminated)
-3. Eliminates all variables except those in the bucket's message scope
-4. Returns backward message factor for use in loss computation
+1. User calls `get_backward_message(gm, bucket_var)`
+2. Creates downstream `FastGM` with remaining factors
+3. Computes exact backward message via elimination
+4. `SampleGenerator` evaluates backward factors at training samples
+5. Loss function weights forward message error by backward message importance
+6. Gradient signal focuses on high-importance configurations
 
 **State Management:**
 
-- Config dict passed through all layers, contains training parameters and approximation thresholds
-- FastGM maintains buckets dict mapping variables to FastBucket instances
-- Each bucket maintains its factors and tracks whether it's been processed
-- FactorNN holds reference to trained neural network, can be queried like any other factor
-- Message scopes precalculated at FastGM initialization for routing
+- **FastGM state**: Buckets, elimination order, configuration (immutable after init)
+- **FastBucket state**: Factors list, message scope, cached message (mutable during elimination)
+- **Trainer state**: Network parameters (evolve during training), optimizer state
+- **SampleGenerator state**: Training/validation sample counters (for reproducibility)
+- **DataPreprocessor state**: Normalizing constants computed once from full training data (used across all batches)
 
 ## Key Abstractions
 
 **FastFactor:**
-- Purpose: Represents probability factors in log space with labeled dimensions
+- Purpose: Wrapper for probabilistic factors (in log space) with tensor operations
 - Examples: `nce/inference/factor.py`
-- Pattern: Tensor-based with permutation-aware multiplication and elimination
-- Operations: `__mul__` combines factors, `eliminate()` sums/maxes out variables, `to_exact()` converts NN to exact
-
-**FastGM (Graphical Model):**
-- Purpose: Orchestrates inference over entire model
-- Examples: `nce/inference/graphical_model.py` (1800+ lines)
-- Pattern: Manages buckets, elimination order, message routing
-- Key methods: `eliminate_variables()`, `process_bucket()`, `_create_buckets_from_factors()`
-- Extensibility: Supports UAI file loading, custom elimination orders, various approximation methods
+- Pattern: Lazy tensors with label-based multiplication and marginalization
+- Key methods: `__mul__()` (addition in log space), `eliminate()` (marginalization), `__matmul__()` (true multiplication)
 
 **FastBucket:**
-- Purpose: Container for factors targeting a single variable elimination
+- Purpose: Represents a bucket in the elimination tree, manages message computation
 - Examples: `nce/inference/bucket.py`
-- Pattern: Multiplies contained factors, computes outgoing messages
-- Key methods: `compute_message_exact()`, `compute_message_nn()`, `compute_message_wmb()`
-- Tracks: Complexity metrics, WMB statistics, downstream factors for backward messages
+- Pattern: Can compute message exactly, via NN, via decision tree, or via linear solver (configurable)
+- Key methods: `compute_message_exact()`, `compute_message_nn()`, `_get_nn_input_size()`
 
 **FactorNN:**
-- Purpose: Neural network-based factor that approximates complex messages
+- Purpose: Neural network that approximates a factor/message
 - Examples: `nce/inference/factor_nn.py`
-- Pattern: Extends FastFactor with network evaluation capability
-- Key method: `eliminate()` runs network in batches on all assignments, sums results
-- Integration: Seamlessly replaces exact factors in further eliminations
+- Pattern: Wraps `Net` module, inherits from `FastFactor` interface
+- Integration: Acts as normal factor during further elimination
 
-**Net (Neural Network):**
-- Purpose: Learns to approximate log-space message values
-- Examples: `nce/neural_networks/net.py`
-- Pattern: Configurable MLP or linear model with one-hot encoded inputs
-- Features: Support for bias_only mode, linspace bias, Xavier initialization
-- Forward: Accepts one-hot assignments, outputs log message estimate
+**FastGM:**
+- Purpose: Central orchestrator for graphical model operations
+- Examples: `nce/inference/graphical_model.py`
+- Pattern: Factory for buckets, maintains config dict passed to all downstream objects
+- Key methods: `eliminate_variables()`, `process_bucket()`, `get_bucket()`
 
 **Trainer:**
-- Purpose: Orchestrates neural network training for a bucket
+- Purpose: Manages single bucket training loop
 - Examples: `nce/neural_networks/train.py`
-- Pattern: Sets up dataloader, loss function, optimizer, runs training loop
-- Extensibility: Supports convex early stopping, multiple loss functions, learning rate decay
+- Pattern: Stateful - holds net, optimizer, learning rate scheduler; executes training epochs
+- Loss functions: MSE, KL divergence, message gradient (mg) variants
 
 **SampleGenerator:**
-- Purpose: Generates training samples from message scope and computes their values
+- Purpose: Deterministic sampling with reproducible seeds
 - Examples: `nce/sampling/sample_generator.py`
-- Pattern: Deterministic seeding for reproducibility, supports uniform and exhaustive sampling
-- Integration: Queries bucket factors for forward message values, supports backward factors
+- Pattern: Samples from message scope, computes message/backward values via factor evaluation
+- Seeding: Bucket label + global seed + counter ensures reproducibility
+
+**DataPreprocessor:**
+- Purpose: Normalizes targets for stable learning
+- Examples: `nce/data/data_preprocessor.py`
+- Pattern: Lazy initialization from first batch, caches normalizing constant for all subsequent batches
+- Backward message support: Weighted normalization when bw approximation enabled
 
 ## Entry Points
 
-**FastGM Initialization:**
-- Location: `nce/inference/graphical_model.py` class FastGM.__init__()
-- Triggers: User creates model from UAI file, raw factors, or pre-computed buckets
-- Responsibilities: Loads model, computes elimination order if not provided, initializes buckets, calculates message scopes, optionally populates backward factors
+**Model Loading & Initialization:**
+- Location: `nce/inference/graphical_model.py::FastGM.__init__()`
+- Triggers: `FastGM(uai_file=path)` or `FastGM(factors=list, elim_order=list)`
+- Responsibilities: Load UAI file via pyGMs, parse variables and factors, create buckets, validate device placement
 
-**eliminate_variables():**
-- Location: `nce/inference/graphical_model.py` method eliminate_variables()
-- Triggers: User calls to perform inference (marginal computation, partition function)
-- Responsibilities: Iterates elimination order, processes each bucket, routes messages, accumulates results
+**Training Workflow:**
+- Location: `nce/neural_networks/train.py::Trainer` and `nce/inference/bucket.py::FastBucket.compute_message_nn()`
+- Triggers: `bucket.compute_message_nn(loss_fn=...)`
+- Responsibilities: Create trainer, generate data, train network, return trained NN factor
 
-**process_bucket():**
-- Location: `nce/inference/graphical_model.py` method process_bucket()
-- Triggers: Called for each bucket during eliminate_variables()
-- Responsibilities: Decides between exact/NN/WMB based on complexity, invokes appropriate computation, tracks statistics
+**Inference Execution:**
+- Location: `nce/inference/graphical_model.py::FastGM.eliminate_variables()`
+- Triggers: `gm.eliminate_variables()` or `gm.eliminate_max()`
+- Responsibilities: Process buckets in elimination order, compute/multiply messages, marginalize
 
-**Trainer.train():**
-- Location: `nce/neural_networks/train.py` method Trainer.train()
-- Triggers: Called by bucket.compute_message_nn()
-- Responsibilities: Loads training data, runs training loop with loss computation, early stopping, learning rate scheduling
+**Gradient Computation:**
+- Location: `nce/utils/backward_message.py::get_backward_message()`
+- Triggers: `get_backward_message(gm, bucket_var)`
+- Responsibilities: Create downstream GM, compute exact backward factors, return as list
+
+**Experimentation & Benchmarking:**
+- Location: `nce/problems/test_problems.py`
+- Triggers: `problem = test_problems["grid10x10.f10"]`
+- Responsibilities: Load predefined test problem, provide ground truth partition function and metadata
 
 ## Error Handling
 
-**Strategy:** Exception-based with detailed context
+**Strategy:** Try-catch with logging at critical junctures; raises exceptions for fatal errors.
 
 **Patterns:**
-- Assertions validate tensor shapes, factor labels match expected elimination order
-- Try-except blocks in eliminate_variables() with detailed error reporting showing bucket state, thresholds, factor complexities
-- Tensor validity checks (NaN detection in output messages)
-- Device consistency checks (factors match bucket device type)
-- Graceful fallback in backward factor population: WMB fallback if exact computation fails
+
+- **Factor multiplication**: Logs warnings if elimination fails in a bucket (mismatched scopes)
+- **Device mismatches**: Asserts factor device matches bucket device at construction
+- **Tensor shape errors**: Caught during permutation/reshaping in factor operations, re-raised with context
+- **Numerical stability**: Uses logsumexp for log-space operations, max-shift in unnormalized KL loss
+- **Missing config keys**: Uses `.get()` with defaults rather than KeyError
+
+Example from `nce/inference/bucket.py`:
+```python
+try:
+    message = message.eliminate(self.elim_vars)
+except Exception as e:
+    print(f"Warning: Elimination failed in bucket {self.label} with size {message.tensor.shape if message.tensor is not None else 'None'}: {e}")
+    raise e
+```
 
 ## Cross-Cutting Concerns
 
 **Logging:**
-- Uses print statements with descriptive messages
-- Progress bars via tqdm for elimination and training
-- Optional debug flag in config (config['debug']) gates extra output
-- Message statistics collection when config['gather_message_stats'] = True
+- Console output via `print()` for progress (in Trainer loops, data generation)
+- Statistics gathered in `FastGM.message_stats` list if `gather_message_stats=True`
+- Error tracking in `FastGM.error_tracking_data` if `track_errors=True`
+- No centralized logging framework; structured around FastGM attributes
 
 **Validation:**
-- Factor label validation during multiplication (common labels alignment)
-- Domain size extraction from tensor shapes or matched variables
-- Elimination scope validation (only eliminable variables removed from buckets)
+- Message scope validation: `SampleGenerator.get_message_scope_and_dims()` validates that sampled variables form valid scope
+- Data normalization: `DataPreprocessor` ensures normalizing constant is computed from full dataset, not per-batch
+- Factor device consistency: `FastBucket.__init__()` asserts all factors match device
 
-**Authentication:**
-- Not applicable (pure computational library)
+**Authentication/Secrets:**
+- Not applicable (no external services or credentials)
 
-## Configuration Flow
-
-All configuration is centralized in `nn_config` dict passed through:
-- FastGM receives as parameter, stores in self.config
-- Propagated to buckets via gm.config reference
-- Buckets pass to Trainer
-- Trainer passes to Net, SampleGenerator, loss functions
-- Key config parameters:
-  - `approximation_method`: 'exact', 'nn', 'wmb', 'dt'
-  - `iB`: Maximum bucket width for exact computation
-  - `ecl`: Exact computation limit (max tensor size in elements)
-  - `hidden_sizes`: Neural network architecture
-  - `loss_fn`: Loss function name ('mse', 'kl_div', etc.)
-  - `num_epochs`, `batch_size`, `lr`: Training hyperparameters
-  - `device`: 'cuda' or 'cpu'
+**Threading/Concurrency:**
+- Not explicitly handled; assumes single-threaded use or manual synchronization at notebook level
+- Torch CUDA operations are synchronous by default
+- RNG seeding is deterministic per-bucket (see `SampleGenerator._compute_seed()`)
 
 ---
 
-*Architecture analysis: 2026-01-25*
+*Architecture analysis: 2026-02-21*

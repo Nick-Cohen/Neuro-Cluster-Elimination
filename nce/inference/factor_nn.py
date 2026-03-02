@@ -78,41 +78,7 @@ class FactorNN(FastFactor):
 
         # Create and return the reduced FastFactor
         return FastFactor(reduced_tensor, remaining_labels)
-        """
-        Process a batch of remaining assignments, query the network, and update the reduced tensor.
-        """
-        batch_assignments = torch.stack(batch)
 
-        # Expand batch assignments to include elim variables
-        expanded_assignments = torch.cartesian_prod(
-            *[torch.arange(domain_sizes[idx], device=self.net.device) if idx in elim_indices else batch_assignments[:, remaining_indices.index(idx)]
-              for idx in range(len(self.labels))]
-        )
-
-        # Generate network inputs for the batch
-        inputs = self.prepare_inputs(expanded_assignments, domain_sizes)
-
-        # Query the neural network
-        with torch.no_grad():
-            outputs = self.net(inputs)
-
-        # Reshape outputs to match elim dimensions
-        output_shape = [domain_sizes[idx] if idx in elim_indices else 1 for idx in range(len(self.labels))]
-        outputs = outputs.reshape([batch_assignments.shape[0]] + output_shape[len(remaining_indices):])
-
-        # Reduce along elim dimensions
-        if elimination_scheme == 'sum':
-            reduced_values = torch.logsumexp(outputs, dim=tuple(range(1, len(output_shape) - len(remaining_indices) + 1)))
-        elif elimination_scheme == 'max':
-            reduced_values, _ = outputs.max(dim=tuple(range(1, len(output_shape) - len(remaining_indices) + 1)))
-        else:
-            raise ValueError(f"Unsupported elimination scheme: {elimination_scheme}")
-
-        # Insert reduced values into the reduced tensor
-        for i, assignment in enumerate(batch_assignments):
-            index = tuple(assignment.tolist())
-            reduced_tensor[index] = reduced_values[i]
-        
     def _get_slices(self, assignments, elim_vars, elim_domain_sizes, message_scope):
         """
         Args:
@@ -152,7 +118,6 @@ class FactorNN(FastFactor):
         one_hot_encoded_samples = one_hot_encoded_samples.float().to(self.net.device)
 
         # get the values and convert them back to unnormalized version, all within logspace
-        # print(self.labels)
         values = self.data_processor.undo_normalization(self.net(one_hot_encoded_samples))
         return values.view(len(all_elim_assignments), len(assignments)).T.detach()
         
@@ -262,18 +227,6 @@ class FactorNN(FastFactor):
         # Generate all possible assignments efficiently
         assignments = torch.cartesian_prod(*[torch.arange(size, device=device) for size in domain_sizes])
 
-## prev start
-        # # Create the input tensor efficiently
-        # all_inputs = torch.zeros((assignments.shape[0], total_inputs), device=device)
-        
-        # offset = 0
-        # for i, size in enumerate(domain_sizes):
-        #     if size > 1:
-        #         mask = assignments[:, i].unsqueeze(1) == torch.arange(1, size, device=device)
-        #         all_inputs[:, offset:offset+size-1] = mask.float()
-        #         offset += size - 1
-## prev end  
-## start
         # Create the input tensor efficiently
         if fastGM.lower_dim:
             # Original behavior: drop first category (n-1 encoding)
@@ -300,8 +253,8 @@ class FactorNN(FastFactor):
                     # Handle binary variables (size=1) - just copy the assignment
                     all_inputs[:, offset] = assignments[:, i].float()
                     offset += 1
-## end
-                
+
+
 
         if debug:
             input_creation_end = time.time()
@@ -331,5 +284,3 @@ class FactorNN(FastFactor):
 
         return fast_factor
 
-    def retrain(self, new_loss_fn):
-        pass

@@ -309,7 +309,6 @@ class DecisionTreeLossOptimizer:
             sprev = s+0.
             s = s + (c-s)*.25 + (f.reshape(1,-1)-s)/(4.) # +it?
             if np.abs(s-sprev).max()<.01: break
-            #print(f.round(2)); print(s.round(2));
         if it>=num_iter-1: print(f'Convergence issue? {it+1} iterations'); #warning.warn('Con')
         mhat = dt.predict(dX)
         sf = self.sigma_f if self.sigma_f>0 else 0
@@ -711,7 +710,6 @@ class DecisionTreeLossOptimizer:
             #     patience_counter += 1
                 
             # if patience_counter > 200000 and optimizer.lower() == 'adam':  # Early stopping for Adam
-            #     print(f"Early stopping at iteration {iteration}")
             #     break
                 
             if iteration % 100 == 0:

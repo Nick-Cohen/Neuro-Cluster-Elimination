@@ -32,58 +32,13 @@ The message for the bucket is computed from the remaining ,non-set-aside, factor
 The function will proceed to the end of the elimination order.
 """
 
-def populate_gradient_factors_old(base_gm: FastGM, iB: int) -> None:
+def populate_gradient_factors(base_gm: FastGM, iB: int, ecl: int = None) -> None:
     # Make a copy of the base graphical model
     copied_gm = copy.deepcopy(base_gm)
 
-    # Process buckets in elimination order
-    for i,current_var in enumerate(base_gm.elim_order):
-        current_bucket = base_gm.get_bucket(current_var)
-        copied_bucket = copied_gm.get_bucket(current_var)
-
-        # Collect all downstream factors from the copied GM that exist in buckets after the current bucket in the elimination order
-        all_downstream_factors = []
-        for j in range(i+1, len(base_gm.elim_order)):
-            downstream_bucket = copied_gm.get_bucket(base_gm.elim_order[j])
-            for factor in downstream_bucket.factors:
-                all_downstream_factors.append(factor)
-
-        # Set the approximate_downstream_factors for the current bucket in the original GM
-        current_bucket.approximate_downstream_factors = all_downstream_factors
-
-        # Separate factors that don't include the elimination variable
-        independent_factors = []
-        elimination_factors = []
-        for factor in copied_bucket.factors:
-            if current_var not in factor.labels:
-                independent_factors.append(factor)
-            else:
-                elimination_factors.append(factor)
-
-        # Compute the message
-        if copied_bucket.get_width() <= iB:
-            # Compute exact message if scope is below or equal to iB
-            messages =[copied_gm.process_bucket(copied_bucket)]
-        else:
-            # Use WMB if scope is above iB
-            messages = copied_bucket.compute_wmb_message(iB)
-            
-        # Combine independent factors and message(s)
-        factors_to_move = independent_factors + messages
-
-        # Move factors to the next relevant bucket
-        for factor in factors_to_move:
-            next_var = copied_gm.find_next_bucket(factor.labels, current_var)
-            if next_var:
-                next_bucket = copied_gm.get_bucket(next_var)
-                next_bucket.factors.append(factor)
-
-        # Remove processed factors from the current bucket
-        copied_bucket.factors.clear()
-
-def populate_gradient_factors(base_gm: FastGM, iB: int) -> None:
-    # Make a copy of the base graphical model
-    copied_gm = copy.deepcopy(base_gm)
+    # Use ecl from gm if not explicitly provided
+    if ecl is None:
+        ecl = getattr(base_gm, 'ecl', None)
 
     scheme_info = copied_gm.get_senders_receivers()
     scheme = {info['var']: info['sends_to'] for info in scheme_info}
@@ -100,14 +55,20 @@ def populate_gradient_factors(base_gm: FastGM, iB: int) -> None:
         # send wmb message based on has_summation_var set factors to the bucket indicated by the scheme
         # first redefine factors to make the width-checking and wmb function work
         approximate_bucket.factors = has_summation_var
-        # Compute the message
-        if approximate_bucket.get_width() <= iB:
-            # Compute exact message if scope is below or equal to iB
-            # messages = [copied_gm.process_bucket(approximate_bucket)]
+
+        # Compute the message - use ecl (complexity) if provided, otherwise fall back to iB (width)
+        needs_wmb = False
+        if ecl is not None and ecl > 0:
+            needs_wmb = approximate_bucket.get_ec() > ecl
+        else:
+            needs_wmb = approximate_bucket.get_width() > iB
+
+        if not needs_wmb:
+            # Compute exact message if within bounds
             messages = [approximate_bucket.compute_message_exact()]
         else:
-            # Use WMB if scope is above iB
-            messages = approximate_bucket.compute_wmb_message(iB)
+            # Use WMB if exceeds bounds
+            messages = approximate_bucket.compute_wmb_message(iB, ecl=ecl)
         for message in messages:
             assert message.tensor is not None, f"{current_var}"
         # also accumulate each factor in the does_not_have_summation_var set to the bucket indicated by the scheme
@@ -139,18 +100,23 @@ def get_wmb_message_gradient_factors(factors: List[FastFactor], message_scope, c
     variables_not_eliminated = [var for var in message_scope if var in vars_in_grad_factors]
     elim_order = wtminfill_order(factors, variables_not_eliminated=variables_not_eliminated)
 
-        
-        
+    # CRITICAL: Disable populate_bw_factors to prevent recursive population
+    # This GM is only used for message gradient computation, not for training
+    local_config = dict(config)  # Create a copy
+    local_config['populate_bw_factors'] = False
+
     # Create a graphical model with the factors
-    gm = FastGM(factors=factors, nn_config=config, elim_order=elim_order)
+    gm = FastGM(factors=factors, nn_config=local_config, elim_order=elim_order)
     # Check if factors is empty
     # if there are no gradient factors return a scalar factor
     if len(factors) == 0:
-        return FastFactor(tensor=torch.tensor([0.0], device=config['device']), labels=[])
+        return FastFactor(tensor=torch.tensor(0.0, device=config['device']), labels=[])
     # use wmb elimination to eliminate all the lim vars
-    mg_hat_factors = FastGM._wmb_eliminate(gm, target_scope=message_scope, i_bound=config['iB'], weights='max', combine_factors=False)
+    # Pass ecl (or bw_ecl) to override iB when specified
+    ecl = config.get('bw_ecl', config.get('ecl', None))
+    bw_hat_factors = FastGM._wmb_eliminate(gm, target_scope=message_scope, i_bound=config['iB'], weights='max', combine_factors=False, ecl=ecl)
     # return all remaining factors
-    for factor in mg_hat_factors:
+    for factor in bw_hat_factors:
         for label in factor.labels:
             assert label in message_scope
-    return mg_hat_factors
+    return bw_hat_factors

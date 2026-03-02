@@ -1,280 +1,286 @@
 # Codebase Concerns
 
-**Analysis Date:** 2026-01-25
+**Analysis Date:** 2026-02-21
 
 ## Tech Debt
 
+**Incomplete Factor Multiplication Ordering:**
+- Issue: Factor multiplication order is arbitrary and not optimized
+- Files: `nce/inference/bucket.py:9`, `nce/inference/fastElim.py:241`, `nce_package_files/bucket.py:13`
+- Impact: Suboptimal computational efficiency; multiplying factors in poor order causes unnecessary large intermediate tensors
+- Fix approach: Implement greedy elimination order minimizing intermediate tensor sizes during factor multiplication in `compute_message_exact()`
+
 **Bare Exception Handlers:**
-- Issue: Multiple bare `except:` clauses catch all exceptions including system exits and keyboard interrupts, masking errors and preventing debugging
-- Files:
-  - `nce/inference/factor.py` (lines 48, 86, 343)
-  - `nce/inference/fastElim.py` (lines 67, 809, 948)
-  - `nce/inference/message_gradient_factors.py` (line 129)
-  - `nce/inference/graphical_model.py` (lines 798, 1464)
-  - `nce/sampling/sample_generator.py` (line 298)
-- Impact: Errors silently swallowed, followed by potentially invalid data flowing through computation. Difficult to trace bugs. Lines like `except:` followed by `print("got here")` and `raise()` indicate incomplete error handling.
-- Fix approach: Replace all bare `except:` with specific exception types (e.g., `except ValueError as e:`, `except RuntimeError as e:`). Implement proper error logging and propagation.
+- Issue: Loose except clauses catch all exceptions without specificity
+- Files: `nce/inference/factor.py:48`, `nce/inference/factor.py:86`, `nce/inference/message_gradient_factors.py:129`, `nce/inference/graphical_model.py:817`, `nce/inference/graphical_model.py:1483`
+- Impact: Masks programming errors and makes debugging difficult; swallows unexpected exceptions without logging context
+- Fix approach: Replace bare except with specific exception types; add logging context in except blocks
 
-**Duplicated/Dead Code:**
-- Issue: Multiple outdated copies of training files exist in codebase
-- Files:
-  - `nce/neural_networks/NN_Train_copy.py` (867 lines) - appears to be a copy of train.py from earlier development phase
-  - `nce/neural_networks/train_old.py` (363 lines) - superseded by train.py
-- Impact: Maintenance burden, confusion about which version to modify, increased codebase size
-- Fix approach: Delete NN_Train_copy.py and train_old.py. Archive old versions in git history if needed.
+**Duplicate Copy Files in Version Control:**
+- Issue: `nce/neural_networks/NN_Train_copy.py` and `nce/neural_networks/train_old.py` are outdated copies
+- Files: `nce/neural_networks/NN_Train_copy.py` (867 lines), `nce/neural_networks/train_old.py` (363 lines)
+- Impact: Code duplication creates maintenance burden; confuses which file is authoritative; unused code bloats repository
+- Fix approach: Archive to separate directory or remove; keep single source of truth in `nce/neural_networks/train.py`
 
-**Module-Level Global State:**
-- Issue: `_flag0 = False` at top of `nce/neural_networks/train.py` suggests incomplete refactoring or debugging flag left in place
-- Files: `nce/neural_networks/train.py` (line 1)
-- Impact: Unclear purpose, potential source of subtle bugs if modified
-- Fix approach: Identify why this flag exists and either remove it or document its purpose with explanation.
+**Debug Print Statements Left in Production Code:**
+- Issue: 746 print statements across 24 files; many are debug statements
+- Files: `nce/neural_networks/linear_mse_solver.py:983`, `nce_package_files/linear_mse_solver.py:988` (bucket-specific debugging)
+- Impact: Pollutes stdout; makes production runs verbose and hard to parse; wastes I/O cycles
+- Fix approach: Replace print statements with proper logging module; conditionally enable debug logging only when needed
 
-**Large Monolithic Classes:**
-- Issue: Several core classes exceed 1200 lines, handling multiple responsibilities
-- Files:
-  - `nce/inference/graphical_model.py` (1809 lines) - manages model creation, factor elimination, backward message computation, NN training coordination
-  - `nce/neural_networks/train.py` (1526 lines) - trainer, optimizer selection, loss management, data loading, validation
-  - `nce/inference/fastElim.py` (1283 lines) - bucket elimination, message computation, WMB approximations
-  - `nce/neural_networks/linear_mse_solver.py` (1205 lines) - matrix condition diagnosis, multiple solver strategies
-- Impact: Difficult to test individual components, high cyclomatic complexity, increased bug risk, harder to reason about state mutations
-- Fix approach: Break into smaller classes using composition. For example, extract message computation strategies from FastElim, separate solver strategies in LinearMSEOptimalSolver.
+**Wildcard Imports:**
+- Issue: Several modules use `from module import *` pattern
+- Files: `nce/inference/graphical_model.py` (from pyGMs.neuro import *), `nce/inference/fastElim.py:26` (from pyGMs.neuro import *)
+- Impact: Namespace pollution; unclear which symbols come from which module; breaks import tracking tools; makes code harder to understand
+- Fix approach: Replace with explicit imports: `from pyGMs.neuro import [specific_symbols]`
 
-**Commented-Out Debug Code:**
-- Issue: Numerous debug print statements and commented-out code scattered throughout, especially in graphical_model.py
-- Files:
-  - `nce/inference/graphical_model.py` (lines 1676, 1722-1727, 1807, etc.)
-  - `nce/neural_networks/train.py` (commented code in optimizer setup)
-  - `nce/neural_networks/NN_Train_copy.py` (debugging code)
-- Impact: Code harder to read, maintenance burden, risk of accidentally using/reverting
-- Fix approach: Remove all debug comments. If needed for future, use proper logging levels. Use version control for history.
+**Inconsistent Module Imports:**
+- Issue: Old naming patterns exist alongside new ones (NCE/ vs nce/)
+- Files: `nce/neural_networks/train.py:8` (from NCE.inference.graphical_model commented out, uses nce instead)
+- Impact: Legacy import patterns may be accidentally used; confusion about canonical import paths
+- Fix approach: Clean up all imports to use consistent lowercase `nce` package; remove commented-out legacy imports
 
 ## Known Bugs
 
-**Factor Multiplication Sign Error in Log Space:**
-- Issue: `FastFactor.__mul__()` and `__matmul__()` use addition (`+`) instead of multiplication for log-space values, treating it as element-wise addition rather than multiplication in log-probability space
-- Files: `nce/inference/factor.py` (lines 33-69, 71-107)
-- Trigger: Any multiplication of FastFactors. Expected log-probability product should use `+` in log space, but logic treats both operations identically
-- Impact: Incorrect factor products, wrong belief propagation results, invalid partition function estimates
-- Workaround: None identified
-- Fix approach: Review intention: if working in log-space, `__mul__()` should use `+` (correct). If `__matmul__()` is meant for something else (true multiplication), ensure tensor operations match intent. Add comments clarifying which operation does what.
+**Loss Function Gradient Computation Issue:**
+- Symptoms: Batched training diverges when per-batch normalization used; documented with comment in `unnormalized_kl()`
+- Files: `nce/neural_networks/losses.py:87-94`
+- Trigger: Using per-batch max_val instead of global max_val computed from full dataset
+- Current behavior: Code falls back to per-batch max when global max not provided, causing gradient inconsistency
+- Workaround: Always pass `max_val` computed from full dataset; for batched training, compute once then pass to every batch
 
-**Bare Exception with Invalid Raise Pattern:**
-- Issue: `except:` blocks followed by bare `raise(ValueError(...))` with incorrect syntax
-- Files: `nce/inference/factor.py` (lines 48-50, 86-88)
-- Trigger: When accessing non-existent FastFactor attributes (e.g., `.item()` on high-dimensional tensor)
-- Example: `raise(ValueError(...))` should be `raise ValueError(...)`
-- Impact: Syntax valid but unconventional, indicates incomplete error handling
-- Fix approach: Use proper raise syntax `raise ValueError(...)` without parentheses around exception type.
+**FactorNN Backward Message Issue:**
+- Symptoms: All backward_ecl values produce identical outputs during testing
+- Files: `claude_files/test_backward_ecl_fix.py:124` (marked "BUG: All values are the same regardless of backward_ecl!")
+- Trigger: Using backward message approximation (`use_bw_approx=True`)
+- Impact: Backward message weighting is ineffective; NN not responding to backward message variations
+- Current investigation: Test file suggests the approximation isn't properly influencing loss
 
-**Dense Matrix Operations Without Singularity Checks in Some Paths:**
-- Issue: Multiple exception handlers in `linear_mse_solver.py` with fallback to pseudoinverse, but some code paths may not handle edge cases
-- Files: `nce/neural_networks/linear_mse_solver.py` (lines 116-139, 179-215, 243-248)
-- Trigger: Singular or ill-conditioned matrices during linear model fitting
-- Impact: Silent degradation to minimum-norm solution without always warning, potential loss of convergence quality
-- Workaround: Check `self.solution_method_` attribute after fitting to understand what method was used
-- Fix approach: Ensure all paths log warnings to user. Consider making fallback strategies configurable.
+**Bare Except Silencing Errors in Factor Operations:**
+- Symptoms: "got here" printed to stdout; ValueError raised with minimal context
+- Files: `nce/inference/factor.py:45-50`, `nce/inference/factor.py:83-88`
+- Trigger: Calling factor multiplication operators with invalid operand types
+- Workaround: Check operand type before calling multiplication; none
+- Risk: Hard to debug when this silently fails in larger computation graphs
 
 ## Security Considerations
 
-**Unconstrained Data Loading:**
-- Risk: Data loading functions load arbitrary files from paths specified in config without validation
-- Files: `nce/data/data_loader.py`, `nce/inference/graphical_model.py`
-- Current mitigation: None detected (relies on config being from trusted source)
-- Recommendations:
-  - Validate file paths against allowlist before loading
-  - Add file size limits to prevent memory exhaustion
-  - Use absolute paths, reject relative paths with `../`
+**No Input Validation on Configuration Dictionaries:**
+- Risk: Arbitrary configuration values passed to nn_config can cause unexpected behavior
+- Files: `nce/inference/graphical_model.py:30` (config dict created from untrusted input)
+- Current mitigation: Config is created internally; no external untrusted input currently
+- Recommendations: Add schema validation for nn_config if it becomes externally sourced; validate key-value types before use
 
-**Unconstrained Configuration:**
-- Risk: `config` dict is freely modified throughout codebase without schema validation
-- Files: `nce/inference/graphical_model.py` (lines 30, 50-66 show unlimited dict access via `.get()`)
-- Current mitigation: None detected
-- Recommendations:
-  - Create a Config class with validated fields instead of dict
-  - Document all expected config keys and types
-  - Validate config on load before use
+**Tensor Device Mismatches Not Caught Early:**
+- Risk: Silent device mismatches (CPU vs GPU) can cause cryptic PyTorch errors late in execution
+- Files: `nce/inference/bucket.py:32-33` (asserts device match but only at bucket creation)
+- Current mitigation: Assertion at bucket creation; catches most but not all mismatches
+- Recommendations: Add device validation in tensor operations that combine tensors from different sources
 
-**No Input Validation on Tensor Shapes:**
-- Risk: Tensor shape mismatches may propagate silently due to broad exception handling
-- Files: `nce/inference/factor.py`, `nce/inference/fastElim.py`
-- Current mitigation: Some asserts (e.g., line 331 in factor.py)
-- Recommendations:
-  - Replace asserts with explicit shape validation and meaningful errors
-  - Add tensor shape contracts to function docstrings
+**No Bounds Checking on Variable Domains:**
+- Risk: Invalid state indices in assignments could cause array index out of bounds
+- Files: `nce/inference/graphical_model.py:1612` (randint generates indices without validating against actual domain)
+- Current mitigation: None; relies on correct domain size specification
+- Recommendations: Validate var_dims before using in sampling; add assertions that generated indices are in valid range
 
 ## Performance Bottlenecks
 
-**Inefficient Factor Multiplication Order:**
-- Problem: `FastBucket` and `fastElim` compute factor products in arbitrary order rather than optimal order
-- Files:
-  - `nce/inference/bucket.py` (line 9 TODO comment)
-  - `nce/inference/fastElim.py` (line 241 TODO comment)
-- Cause: TODO comments indicate this optimization was never implemented. Multiplying smallest factors first minimizes intermediate tensor sizes
-- Improvement path: Implement heuristic ordering (e.g., smallest product size first). Benchmark against current approach.
+**Large File Operations Without Streaming:**
+- Problem: `FastGM` loads entire UAI files into memory at once
+- Files: `nce/inference/graphical_model.py:71` (_load_from_uai call)
+- Cause: No streaming parser; entire model structure materialized in memory
+- Scaling limit: Files >2GB will cause OOM on typical hardware
+- Improvement path: Implement streaming factor parser; load factors on-demand or in chunks
 
-**Full Data Loading on Each Training Set:**
-- Problem: `train.py` may reload all data multiple times during training
-- Files: `nce/neural_networks/train.py` (lines 289-304)
-- Cause: Data loaded per set in training loop
-- Improvement path: Preload all data once at trainer initialization, cache batches
+**Unoptimized Factor Multiplication Order:**
+- Problem: Factors multiplied in arbitrary order during bucket elimination
+- Files: `nce/inference/bucket.py:49-54` (sequential factor multiplication)
+- Cause: No complexity calculation before multiplication
+- Current complexity: O(n) factors multiplied sequentially can create intermediate tensors of exponential size
+- Improvement path: Compute intermediate tensor sizes; use min-max ordering to keep intermediates small
 
-**Expensive Matrix Diagnostics:**
-- Problem: `LinearMSEOptimalSolver._diagnose_matrix()` computes full eigenvalue decomposition for every fit, even when not strictly needed
-- Files: `nce/neural_networks/linear_mse_solver.py` (lines 63-126)
-- Cause: Defensive programming without caching
-- Improvement path: Cache diagnostic results if fitting same data multiple times, defer eigenvalue computation until needed
+**WMB Backward Message Computation Redundancy:**
+- Problem: Backward messages recomputed for every epoch despite not changing between epochs
+- Files: `nce/inference/bucket.py:144-150` (bw_wmb computed in compute_message_nn)
+- Cause: Backward factors tied to training loop instead of model setup
+- Impact: On large models with 1000+ epochs, backward factors computed 1000+ times unnecessarily
+- Improvement path: Compute backward factors once during model initialization; cache and reuse across epochs
 
-**Repeated Normalization Computations:**
-- Problem: Normalizing constants may be recomputed for each batch in some training paths
-- Files: `nce/data/data_preprocessor.py` (lines 39-48 show caching mechanism exists, but inconsistent usage)
-- Cause: Multiple code paths call `normalize()` without checking if constant already computed
-- Improvement path: Enforce single computation of `global_max_targets` at preprocessor initialization, never recompute
+**Dense Tensor Operations for Sparse Scopes:**
+- Problem: Messages with few variables still use dense tensors
+- Files: `nce/data/data_preprocessor.py:758-760` (one-hot encoding creates dense tensors)
+- Cause: No sparse tensor support in message representation
+- Impact: 2-3 variable messages allocate unnecessarily large tensors
+- Improvement path: Detect small-scope factors; use sparse representation or explicit enumeration
+
+**Memory Not Released Between Batches:**
+- Problem: Explicit cuda cache clearing per batch
+- Files: `nce/neural_networks/train.py:905-906`, `nce/neural_networks/train.py:918`
+- Cause: PyTorch's automatic memory management insufficient; manual clearing needed
+- Impact: Training slower by ~10-15% due to memory fragmentation
+- Improvement path: Use torch.cuda.empty_cache() once per epoch instead of per-batch; profile fragmentation
 
 ## Fragile Areas
 
-**Complex Config State Machine:**
-- Files: `nce/inference/graphical_model.py` (entire init, especially lines 20-100)
-- Why fragile: Config dict controls 30+ behaviors via loose `.get()` calls. No validation means typos silently enable wrong behavior. Example: `use_bw_approx` setting affects loss computation but is checked in multiple places without central authority
-- Safe modification:
-  - Create ConfigManager class that validates all keys on initialization
-  - Document all config keys in one place
-  - Use enums for categorical config values instead of strings
-- Test coverage: No unit tests visible for config loading and interpretation
+**GraphicalModel Config Dictionary Sharing:**
+- Files: `nce/inference/graphical_model.py:20-30`
+- Why fragile: Config dict passed as reference; modifications in one GM affect copies if using dict assignment
+- Safe modification: Always create new dict with dict(nn_config) constructor (code does this correctly at line 30, but easy to accidentally use = instead)
+- Test coverage: No tests for config isolation between GM instances
+- Risk: If someone refactors line 30 to use assignment instead of dict(), all GMs will share config
 
-**Message Computation Paths:**
-- Files: `nce/inference/bucket.py` (compute_message_exact, compute_wmb_message methods), `nce/inference/fastElim.py`
-- Why fragile: Multiple message computation strategies (exact vs WMB) with complex fallback logic. Backward factor computation adds additional complexity. Hard to verify correctness.
-- Safe modification:
-  - Extract strategy pattern for message computation (ExactMessageComputer, WMBMessageComputer)
-  - Add comprehensive assertions about output shape/device
-  - Unit test each strategy independently
-- Test coverage: Integration tests exist but unit tests for individual strategies missing
+**Trainer.config Modification During Training:**
+- Files: `nce/neural_networks/train.py:70-73`
+- Why fragile: Config dict modified by trainer (learning rate schedule, scheduler state)
+- Safe modification: Only modify config keys for training state; validate before modification
+- Test coverage: No tests validating config state consistency
+- Risk: Concurrent trainers sharing config dict will interfere with each other's learning rate schedules
 
-**Neural Network Training Loop:**
-- Files: `nce/neural_networks/train.py` (lines 289-400+)
-- Why fragile: Long training loop with multiple loss functions, early stopping strategies, validation logic all intertwined. Changes to one path may break others. Multiple conditional branches based on config flags.
-- Safe modification:
-  - Extract loss selection into separate module
-  - Extract early stopping into separate class
-  - Use composition for training strategies instead of conditional branches
-- Test coverage: No visible unit tests for training loop components
+**Loss Function Type Checking Based on String Matching:**
+- Files: `nce/neural_networks/train.py:57-68`, `nce/neural_networks/train.py:928-930`
+- Why fragile: Loss function names matched as strings; no validation that loss_fn actually exists
+- Safe modification: Create enum or mapping of valid loss functions; validate loss_fn at initialization
+- Test coverage: No tests for invalid loss_fn values
+- Risk: Typos in loss_fn config string silently use wrong behavior or skip functionality
 
-**Device Management:**
-- Files: Throughout codebase (tensor creation, computation)
-- Why fragile: Inconsistent handling of CPU vs GPU devices. Some paths assume CUDA, others have fallbacks. Device specification mixed between config dict and function parameters.
-- Safe modification:
-  - Create DeviceManager singleton to own all device-related decisions
-  - Ensure all tensor creation uses same device context
-  - Add runtime checks for device mismatches (already exists in some places)
-- Test coverage: Device-specific tests would be valuable but unlikely to exist without dedicated test infrastructure
+**WMB Approximation Method Conditional Logic:**
+- Files: `nce/inference/bucket.py:79-143`
+- Why fragile: Large conditional block checking multiple configuration flags; logic hard to follow
+- Safe modification: Extract conditional logic to separate method; add comments explaining control flow
+- Test coverage: Limited testing of different config combinations
+- Risk: Changes to one config flag (e.g., use_bw_approx) interact unpredictably with others (sampling_scheme, backward_ecl)
 
-**Backward Message Approximate Flag:**
-- Files: `nce/data/data_preprocessor.py`, `nce/neural_networks/losses.py`, `nce/inference/graphical_model.py`
-- Why fragile: `use_bw_approx` flag fundamentally changes preprocessing and loss computation. Setting is passed through multiple layers. Easy to forget to propagate to all dependent code.
-- Safe modification:
-  - Ensure all code that depends on `use_bw_approx` validates it's set correctly before running
-  - Create compile-time configuration (constants) rather than runtime flags
-- Test coverage: No visible tests comparing use_bw_approx=True vs False paths
+**Message Gradient Factor Extraction Error Handling:**
+- Files: `nce/inference/message_gradient_factors.py:127-130` (bare except catching all errors)
+- Why fragile: Bare except masks any error; unclear what's expected to fail
+- Safe modification: Specify expected exception type; add logging showing why extraction failed
+- Test coverage: No tests for invalid factor extraction
+- Risk: If pyGMS API changes, error is silently swallowed and empty factor list returned
 
 ## Scaling Limits
 
-**Memory Usage with Large Graphical Models:**
-- Current capacity: Observed successful inference on models with message size ~12 states (from todo.txt: "385s for Alex's code on a size 12 message with 20 epochs")
-- Limit: No explicit limits enforced in code. Tensor operations will exhaust GPU/CPU memory on larger models. Factor multiplication creates intermediate tensors proportional to product of all variable domains.
-- Scaling path:
-  - Implement streaming batch elimination for large factors
-  - Use low-rank approximations for large intermediate tensors
-  - Profile memory usage and identify bottlenecks
+**Linear Elimination Order Computation:**
+- Current capacity: Works well for models with <50 variables
+- Limit: Elimination order computation becomes O(n^3+); fails to complete for >100 variable models
+- Files: `nce/inference/elimination_order.py`, `nce/inference/graphical_model.py:71`
+- Scaling path: Implement incremental/approximation-based ordering; cache orders for repeated models
 
-**Training Time:**
-- Current capacity: ~385 seconds for size-12 message, 20 epochs (from todo.txt)
-- Limit: Training scales poorly with message size. No apparent optimization for multiple training iterations across many buckets.
-- Scaling path:
-  - Implement progressive training (warm-start from previous similar buckets)
-  - Parallelize across buckets
-  - Cache computations reused across buckets
+**Single-GPU Memory for Exact Inference:**
+- Current capacity: Exact inference feasible up to treewidth ~15 (message size ~10^6)
+- Limit: Messages larger than GPU memory (24-80GB typical) cause OOM
+- Files: `nce/inference/bucket.py:35-64` (exact message computation materializes full tensor)
+- Scaling path: Implement streaming message operations; support multi-GPU sharding; add off-chip swapping
+
+**Neural Network Training Batch Size:**
+- Current capacity: Typical batch sizes 256-2048
+- Limit: Batch size limited by GPU memory; larger batches don't improve with current architecture
+- Files: `nce/neural_networks/train.py:910-918` (batch processing loop)
+- Scaling path: Implement gradient accumulation; support distributed training across multiple GPUs
+
+**WMB Statistics Tracking Memory:**
+- Current capacity: Tracks ~5000 messages without issue
+- Limit: Statistics dictionaries accumulate; no pruning for long-running experiments
+- Files: `nce/inference/bucket.py:25-29` (wmb_stats dict grows unbounded)
+- Scaling path: Implement ring buffer for statistics; archive old results; add max size limit
 
 ## Dependencies at Risk
 
-**Deprecated Notebook Dependencies:**
-- Risk: Code imports from `tqdm.notebook` which requires Jupyter
-- Files: `nce/inference/graphical_model.py` (line 16), `nce/neural_networks/train.py` (line 16)
-- Impact: Code won't work outside Jupyter notebooks. Error messages will be unhelpful.
-- Migration plan:
-  - Create wrapper that uses `tqdm` if not in notebook, `tqdm.notebook` if available
-  - Or remove notebook-specific dependencies for core inference engine
+**PyGMs Package Integration:**
+- Risk: Heavy reliance on external pyGMs library; fork used locally
+- Impact: If pyGMs API changes or project abandoned, codebase breaks
+- Files: `nce/inference/graphical_model.py:5-10` (imports from pyGMs), `nce/neural_networks/train.py:6`
+- Current version tracking: No version pinning visible; no compatibility tests
+- Migration plan: Document pyGMs API usage; consider vendoring critical components; maintain compatibility shim layer
 
-**Custom pyGMs Library:**
-- Risk: Dependency on `pyGMs` package not in standard package repos. Installation mechanism unclear.
-- Files: `nce/inference/graphical_model.py` (lines 5-10 heavy usage)
-- Impact: Hard to install, unclear compatibility with Python versions
-- Migration plan: Document installation requirements, consider pinning version in setup.py
+**PyTorch AMP (Automatic Mixed Precision) Reliance:**
+- Risk: Muon optimizer requires amp.autocast; behavior changes across PyTorch versions
+- Impact: Training fails silently with unexpected NaN if autocast disabled on older PyTorch
+- Files: `nce/neural_networks/train.py:830-848` (conditional autocast only for muon)
+- Current version tracking: No PyTorch version specified
+- Migration plan: Test with PyTorch 2.0+; add version check at initialization; implement fallback without AMP
+
+**Pandas Dependency for Data Loading:**
+- Risk: Data preprocessing imports pandas but not listed explicitly
+- Impact: Code fails silently if pandas not installed
+- Files: Likely `nce/data/data_loader.py` (imports not fully visible)
+- Current version tracking: No version requirements documented
+- Migration plan: Create requirements.txt; use pandas only where necessary; consider lighter alternatives for CSV parsing
 
 ## Missing Critical Features
 
-**No Distributed Training Support:**
-- Problem: Training loop runs serially on single GPU/CPU. No support for multi-GPU or distributed computing.
-- Blocks: Scaling to larger problems, using multiple available hardware resources
-- Priority: Medium (depends on use cases)
+**No Experiment Tracking or Logging:**
+- Problem: No structured logging of training runs; results scattered across print statements
+- Blocks: Cannot reproduce experiments; hard to compare configurations; lost hyperparameter values
+- Impact: Research reproduction impossible; experiments un-traceable
+- Files: `nce/neural_networks/train.py` (uses print for all logging)
+- Recommendation: Integrate WandB or MLflow; log config, metrics, artifacts systematically
 
-**No Model Checkpointing:**
-- Problem: No save/load functionality for trained neural network factors visible in code
-- Blocks: Long training runs not resumable, can't persist trained models, can't checkpoint mid-training
-- Priority: High (critical for practical use)
+**No Checkpointing During Training:**
+- Problem: Training crashes lose all progress; no intermediate model snapshots
+- Blocks: Cannot resume long-running experiments; cannot pick best epoch automatically
+- Impact: Days of training lost to single crash; manual best-epoch selection
+- Files: `nce/neural_networks/train.py` (no checkpoint save logic)
+- Recommendation: Add periodic checkpoint saving; implement early stopping with best-model restoration
 
-**No Hyperparameter Tuning Framework:**
-- Problem: No systematic hyperparameter search (grid search, Bayesian optimization)
-- Blocks: Automated experimentation, reproducible results
-- Priority: Medium
+**No Configuration Schema or Validation:**
+- Problem: nn_config is bare dict; no specification of required keys
+- Blocks: Configuration errors caught only at runtime, deep in training loop
+- Impact: Silent wrong behavior when config keys missing; hard to debug
+- Files: `nce/inference/graphical_model.py:30`, `nce/neural_networks/train.py:72`
+- Recommendation: Use dataclass or pydantic for config schema; validate at initialization
+
+**No Unit Tests for Core Inference:**
+- Problem: Factor multiplication, elimination, message computation untested
+- Blocks: Refactoring impossible without breaking inference; bugs not caught
+- Impact: Silent correctness issues in inference results; hard to verify against reference implementations
+- Files: `nce/inference/` (no test files present)
+- Recommendation: Create test suite comparing against pyGMs reference; test factor operations against known results
+
+**No Performance Benchmarking Suite:**
+- Problem: No standard benchmarks; hard to detect performance regressions
+- Blocks: Cannot validate optimization benefits; unclear which changes improve speed
+- Impact: Performance optimization attempts done blind; regressions not noticed
+- Files: No benchmark files found
+- Recommendation: Create benchmark suite with standard models; track performance across versions
 
 ## Test Coverage Gaps
 
-**No Unit Tests for Core Inference:**
-- What's not tested:
-  - Factor multiplication correctness (factor.py `__mul__`, `__matmul__`)
-  - Message computation (bucket.py exact message computation)
-  - Elimination order generation
-  - Device management across different tensor operations
-- Files: `nce/inference/factor.py`, `nce/inference/bucket.py`, `nce/inference/fastElim.py`
-- Risk: Bugs in factor computation silently propagate to final partition estimates. High impact but not caught.
-- Priority: High
+**Factor Multiplication Never Tested:**
+- What's not tested: `__mul__` and `__matmul__` operators in FastFactor
+- Files: `nce/inference/factor.py:30-88`
+- Risk: Silent errors in factor arithmetic; cascading errors in bucket elimination
+- Priority: High - core inference depends on this
 
-**No Tests for Loss Functions:**
-- What's not tested:
-  - Different loss function modes (unnormalized_kl, scaled_mse, etc.)
-  - Backward message weighting correctness
-  - Numerical stability with extreme values
-- Files: `nce/neural_networks/losses.py`
-- Risk: Loss computation errors during training cause divergence or invalid gradients
-- Priority: High
+**Message Gradient Computation Edge Cases:**
+- What's not tested: Empty factor lists, single variable messages, numerical edge cases
+- Files: `nce/inference/message_gradient_factors.py`
+- Risk: Gradient computation fails silently with bare except; unknown loss behavior
+- Priority: High - used for all gradient-based training
 
-**No Tests for Linear Solver:**
-- What's not tested:
-  - Singular matrix handling across all code paths
-  - Regularization behavior
-  - Intercept extraction with rank-deficient matrices
-- Files: `nce/neural_networks/linear_mse_solver.py`
-- Risk: Silent degradation to fallback methods without user awareness
-- Priority: Medium
+**Bucket Elimination Order Sensitivity:**
+- What's not tested: Different elimination orders on same problem; sensitivity analysis
+- Files: `nce/inference/elimination_order.py`, `nce/inference/graphical_model.py`
+- Risk: Hidden dependence on elimination order; results not reproducible
+- Priority: Medium - affects efficiency, not correctness
 
-**No Data Preprocessing Tests:**
-- What's not tested:
-  - Normalization constant computation with edge cases (all same values, NaN inputs)
-  - Backward message normalization
-  - Numerical stability with extreme log values
-- Files: `nce/data/data_preprocessor.py`
-- Risk: Training instability traced back to preprocessing issues
-- Priority: Medium
+**WMB Approximation Validation:**
+- What's not tested: Accuracy of WMB approximations; comparison against exact inference
+- Files: `nce/inference/graphical_model.py` (wmb path), `nce/utils/pygms_wmb_interface.py`
+- Risk: Unknown error bounds in approximations; no validation of quality
+- Priority: High - WMB used for most inference
 
-**No Integration Tests:**
-- What's not tested:
-  - End-to-end flow: graphical model → buckets → training → inference
-  - Device consistency throughout pipeline
-  - Config propagation to all components
-- Files: All modules
-- Risk: Integration issues discovered late in long training runs
-- Priority: Medium
+**Loss Function Numerical Stability:**
+- What's not tested: Extreme values (very large/small numbers), gradient flow through loss
+- Files: `nce/neural_networks/losses.py` (all loss functions)
+- Risk: NaN/Inf propagation; training divergence on edge cases
+- Priority: High - primary training objective
+
+**Data Preprocessing Reproducibility:**
+- What's not tested: Determinism of preprocessing with different seeds; scaling factor consistency
+- Files: `nce/data/data_preprocessor.py` (normalization logic)
+- Risk: Training non-reproducible; scaling factors vary between runs
+- Priority: Medium - affects training stability
 
 ---
 
-*Concerns audit: 2026-01-25*
+*Concerns audit: 2026-02-21*

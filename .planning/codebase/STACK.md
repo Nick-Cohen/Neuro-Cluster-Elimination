@@ -1,102 +1,95 @@
 # Technology Stack
 
-**Analysis Date:** 2026-01-25
+**Analysis Date:** 2026-02-21
 
 ## Languages
 
 **Primary:**
-- Python 3.11.7 - All application code, inference engine, neural network training, and utilities
+- Python 3.11.7 - Core implementation for inference, neural networks, data handling, and sampling
 
 ## Runtime
 
 **Environment:**
-- Python 3.11.7 (from `/home/cohenn1/python311/bin/python3.11`)
-- Virtual environment at `venv/` with isolated package dependencies
+- CPython 3.11.7
 
 **Package Manager:**
-- pip (with setuptools 45.2.0)
-- Lockfile: Not detected (no requirements.txt or lock file, uses setup.py)
+- pip
+- Lockfile: Not detected (no requirements.txt or poetry.lock)
 
 ## Frameworks
 
-**Core:**
-- PyTorch (torch) - Deep learning framework for neural network layers and training
-- pyGMs - Graphical models library for factor operations and variable elimination
+**Core ML:**
+- PyTorch 2.0.1+cu117 - Neural network training, inference, and GPU computation (CUDA support)
+- PyGMs 0.1.1 - Probabilistic graphical model inference primitives
+  - Location: `/home/cohenn1/SDBE/PyGMs` (local editable install)
+  - Used by `nce/inference/graphical_model.py`, `nce/inference/bucket.py`, `nce/utils/pygms_conversion.py`
 
-**Neural Networks:**
-- torch.nn - Neural network module definitions (`nce/neural_networks/net.py`)
-- torch.optim - Optimization (Adam, LBFGS optimizers in `nce/neural_networks/train.py`)
-- adabelief-pytorch 0.2.1 - Alternative optimizer (commented out in `nce/neural_networks/net.py`)
+**Optimization:**
+- muon-optimizer 0.1.0 - Advanced optimizer used in `nce/neural_networks/train.py`
+
+**Scientific Computing:**
+- NumPy 1.26.4 - Array operations and numerical utilities
+- SciPy 1.15.2 - Scientific computation utilities
+
+**Machine Learning Utilities:**
+- scikit-learn (sklearn) - DecisionTreeRegressor in `nce/neural_networks/decision_tree.py` and `nce/neural_networks/dt2.py`
 
 **Visualization:**
-- matplotlib.pyplot - Plotting and visualization in `nce/utils/plots.py`
-- torchviz 0.0.3 - Neural network visualization (commented out)
-- torchinfo 1.8.0 - Network summary utilities
-
-**Data Processing:**
-- scikit-learn - DecisionTreeRegressor used in `nce/neural_networks/decision_tree.py`
-- numpy 1.26.4 - Numerical computing throughout
-- scipy 1.10.1 - Scientific computing utilities
+- Matplotlib 3.10.1 - Plotting and visualization used throughout codebase
 
 **Development:**
-- tqdm.notebook - Progress bars in notebooks and training loops (imported in `nce/neural_networks/train.py`)
-- jupyter - Interactive notebook environment for experiments
+- tqdm 4.67.1 - Progress bars in `nce/neural_networks/train.py`, `nce/inference/graphical_model.py`
+- Jupyter/IPython - Notebook environment with tqdm.notebook integration
+
+**Audio/Vision (installed but not directly used in core inference):**
+- torchaudio 2.0.2+cu117
+- torchvision 0.15.2+cu117
 
 ## Key Dependencies
 
 **Critical:**
-- PyTorch (torch) - Core tensor operations in log-space throughout inference layer
-  - Imported in: `nce/inference/factor.py`, `nce/neural_networks/net.py`, `nce/neural_networks/train.py`, `nce/neural_networks/losses.py`, `nce/sampling/sample_generator.py`
-- pyGMs - Graphical models operations and factor manipulation
-  - Imported in: `nce/inference/graphical_model.py`, `nce/inference/fastElim.py`
-- numpy - Array operations and mathematical computations
-  - Used throughout for data preprocessing and manipulation
+- PyTorch 2.0.1 with CUDA 11.7 - GPU acceleration for message approximation networks
+- PyGMs 0.1.1 - Weighted Mini-Bucket elimination and factor/variable abstractions
+- NumPy 1.26.4 - Underlying tensor operations and numerical stability
 
-**Infrastructure:**
-- adabelief-pytorch 0.2.1 - Advanced optimizer option (currently commented out)
-- scikit-learn 0.23.2 - Decision tree algorithms for factor approximation
-- matplotlib 3.3.2 - Visualization for debugging and analysis
+**Optimization:**
+- muon-optimizer 0.1.0 - Alternative to Adam/SGD in message training loops (see `train.py` for usage)
+
+**Alternative/Legacy:**
+- adabelief-pytorch - Referenced in commented code (`nce/neural_networks/net.py` line 13, `NN_Train_copy.py`)
+- scikit-learn - Decision tree approximators for bucket message inference (experimental)
 
 ## Configuration
 
 **Environment:**
-- Python virtual environment at `venv/` with custom python executable
-- Device configuration: Runtime-controlled via `device` config parameter ('cuda' or 'cpu')
-- Configuration passed as Python dictionaries (see `configs/example_nn_config.py`)
+- Device selection: Controlled via `device` parameter (e.g., 'cuda', 'cpu') in config dictionaries
+- No .env file or environment variable loading detected
+- Configuration passed as Python dictionaries in notebooks and scripts
 
 **Build:**
-- `setup.py` - Minimal setuptools configuration with package discovery
-- Package name: "nce"
-- Version: 0.1
-- Packages auto-discovered in `nce` namespace
+- `setup.py` - Minimal setuptools configuration
+  - Location: `/home/cohenn1/NCE/setup.py`
+  - Package name: `nce`
+  - Version: 0.1
+  - Auto-discover packages under `nce/` directory
 
-**Key Configuration Parameters:**
-- `iB`: Mini-bucket i-bound (limits bucket complexity)
-- `ecl`: Exact computation limit (threshold for exact vs NN approximation)
-- `loss_fn`: Loss function selection ('logspace_mse_fdb', 'linspace_mse_fdb', 'approx_smg', etc.)
-- `sampling_scheme`: Sample generation mode ('uniform', 'mg', 'all')
-- `hidden_sizes`: Neural network architecture (list or 'bias_only' for linear models)
-- `device`: 'cuda' or 'cpu'
-- `num_epochs`, `batch_size`, `lr`: Standard training hyperparameters
+- `pyproject.toml` - Build system metadata
+  - Location: `/home/cohenn1/NCE/claude_files/pyproject.toml`
+  - Build backend: setuptools.build_meta
+  - Requires: setuptools>=64, wheel
 
 ## Platform Requirements
 
 **Development:**
-- Linux environment (verified on Ubuntu-based system)
-- Python 3.11.7
-- CUDA-capable GPU (optional, fallback to CPU)
-- Virtual environment with pip
+- Python 3.11+
+- CUDA 11.7 toolkit (for GPU support)
+- C++ compiler (for PyTorch compilation if building from source)
 
 **Production:**
-- Python 3.11.7 runtime
-- PyTorch with CPU or CUDA support
-- Approximately 14990 lines of Python code across inference, neural networks, sampling, and utilities
-
-**Data:**
-- UAI format graphical model files (read via `pyGMs.filetypes.readEvidence14`)
-- Pickle files for serialized models and benchmarks
-- CSV/data files in root and subdirectories (e.g., `casino.csv`)
+- Deployment target: GPU-accelerated systems with CUDA 11.7
+- Fallback to CPU available but not optimized
+- Tested primarily in Jupyter notebook environments
 
 ---
 
-*Stack analysis: 2026-01-25*
+*Stack analysis: 2026-02-21*

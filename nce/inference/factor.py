@@ -1,7 +1,5 @@
 import torch
 import math
-import time
-# from data import DataPreprocessor
 
 class FastFactor:
     def __init__(self, tensor, labels):
@@ -11,8 +9,6 @@ class FastFactor:
         else:
             self.device = self.tensor.device
         self.labels = labels
-        self.scope = self.labels
-        self.vars = labels
         self.is_nn = False
         if tensor is not None:
             self.shape = self.tensor.shape
@@ -21,14 +17,6 @@ class FastFactor:
 
     def __repr__(self):
         return f"FastFactor(tensor={self.tensor}, labels={self.labels})"
-
-    @classmethod
-    def check_tensor_size(cls, tensor):
-        pass
-
-    @classmethod
-    def check_memory_usage(cls):
-        pass
 
     def __mul__(self, other):
         if not isinstance(other, FastFactor):
@@ -42,12 +30,8 @@ class FastFactor:
         # If one factor is a scalar and the other isn't, broadcast the scalar
         if not self.labels:
             return FastFactor(other.tensor + self.tensor.item(), other.labels)
-        try:
-            if not other.labels:
-                return FastFactor(self.tensor + other.tensor.item(), self.labels)
-        except:
-            print("got here")
-            raise(ValueError("Other is not a FastFactor"))
+        if not other.labels:
+            return FastFactor(self.tensor + other.tensor.item(), self.labels)
 
         # Original multiplication logic for non-scalar factors
         common_labels = [label for label in self.labels if label in other.labels]
@@ -80,12 +64,8 @@ class FastFactor:
         # If one factor is a scalar and the other isn't, broadcast the scalar
         if not self.labels:
             return FastFactor(other.tensor + self.tensor.item(), other.labels)
-        try:
-            if not other.labels:
-                return FastFactor(self.tensor + other.tensor.item(), self.labels)
-        except:
-            print("got here")
-            raise(ValueError("Other is not a FastFactor"))
+        if not other.labels:
+            return FastFactor(self.tensor + other.tensor.item(), self.labels)
 
         # Original multiplication logic for non-scalar factors
         common_labels = [label for label in self.labels if label in other.labels]
@@ -198,84 +178,6 @@ class FastFactor:
         self.tensor = self.tensor.to(device)
         return self
 
-    def nn_to_FastFactor(idx, fastGM, data_processor, jit_file = None, net = None, device='cuda', debug=False):
-        if jit_file is None and net is None or jit_file is not None and net is not None:
-            raise ValueError("Exacgtly one of a JIT file or a PyTorch net must be provided")
-        if debug:
-            start_time = time.time()
-
-        # Load the JIT model
-        if debug:
-            load_start = time.time()
-        if jit_file is not None:
-            model = torch.jit.load(jit_file).to(device)
-        else:
-            model = net
-        if debug:
-            load_end = time.time()
-            print(f"Loading model took {load_end - load_start:.4f} seconds")
-
-        # Get the scope and domain sizes
-        scope = fastGM.message_scopes[idx]
-        domain_sizes = torch.tensor([fastGM.vars[fastGM.matching_var(v)].states for v in scope], device=device)
-        
-        # Calculate the total number of inputs
-        total_inputs = (domain_sizes - 1).sum().item()
-        
-        if debug:
-            input_creation_start = time.time()
-        
-        # Generate all possible assignments efficiently
-        assignments = torch.cartesian_prod(*[torch.arange(size, device=device) for size in domain_sizes])
-        
-        if len(assignments.shape) == 1:
-            assignments = assignments.view(-1,1)
-        
-        # Create the input tensor efficiently
-        all_inputs = torch.zeros((assignments.shape[0], total_inputs), device=device)
-        
-        offset = 0
-        for i, size in enumerate(domain_sizes):
-            if size > 1:
-                mask = assignments[:, i].unsqueeze(1) == torch.arange(1, size, device=device)
-                all_inputs[:, offset:offset+size-1] = mask.float()
-                offset += size - 1
-
-        if debug:
-            input_creation_end = time.time()
-            print(f"Creating input tensor took {input_creation_end - input_creation_start:.4f} seconds")
-
-        # Query the model for all inputs
-        if debug:
-            query_start = time.time()
-        with torch.no_grad():
-            outputs = model(all_inputs).reshape(tuple(domain_sizes.tolist()))
-        if debug:
-            query_end = time.time()
-            print(f"Querying model took {query_end - query_start:.4f} seconds")
-            
-        # transform outputs back
-        if data_processor is not None:
-            if not data_processor.is_logspace:
-                outputs = data_processor.convert_back_message_logspace(outputs)
-            else:
-                outputs += data_processor.y_max
-                outputs /= torch.log(torch.tensor(10.0)).to(outputs.device)
-
-        # Create and return the FastFactor
-        if debug:
-            factor_creation_start = time.time()
-        fast_factor = FastFactor(outputs, scope)
-        if debug:
-            factor_creation_end = time.time()
-            print(f"Creating FastFactor took {factor_creation_end - factor_creation_start:.4f} seconds")
-
-        if debug:
-            end_time = time.time()
-            print(f"Total time for nn_to_FastFactor: {end_time - start_time:.4f} seconds")
-
-        return fast_factor
-
     def klargest(self, k):
         # Get top-k values and their indices from the flattened tensor
         topk_values, topk_flat_indices = torch.topk(self.tensor.flatten(), k)
@@ -340,16 +242,10 @@ class FastFactor:
                 slices = tensor.view(view)[tuple(projected_assignments.t())]
             else:
                 slices = tensor.unsqueeze(0).expand(len(assignments), len(tensor))
-        except:
-            print(tensor.shape)
-            print(view)
-            print(projected_assignments.shape)
-            print(projected_assignments.t().shape)
-            # give the error
-            if not projected_assignments.numel() == 0:
-                slices = tensor.view(view)[tuple(projected_assignments.t())]
-            else:
-                slices = tensor.unsqueeze(0).expand(len(assignments), len(tensor))
+        except Exception:
+            print(f"_get_slices error: tensor.shape={tensor.shape}, view={view}, "
+                  f"projected_assignments.shape={projected_assignments.shape}")
+            raise
         
         # reshape slices to match elimination variables in order, e.g. (1,2,2,1) if 2nd and 3rd variables are in tensor
         unexpanded_slice_shape = (len(assignments),) + tuple([v.states if v.label in tensor_labels else 1 for v in elim_vars])

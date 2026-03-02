@@ -1,112 +1,89 @@
 # External Integrations
 
-**Analysis Date:** 2026-01-25
+**Analysis Date:** 2026-02-21
 
 ## APIs & External Services
 
-**Graphical Models Library:**
-- pyGMs - Probabilistic graphical models package
-  - SDK/Client: `import pyGMs as gm` (imported in `nce/inference/graphical_model.py`)
-  - Modules: `pyGMs.Var`, `pyGMs.wmb`, `pyGMs.neuro`, `pyGMs.graphmodel`, `pyGMs.filetypes`
-  - Purpose: Variable definitions, weighted mini-bucket operations, elimination order computation, model file I/O
-
-**No external cloud APIs detected** - This is a self-contained research/ML package with no third-party API integrations (no AWS, Azure, Google Cloud, Stripe, etc.)
+**Probabilistic Graphical Models:**
+- pyGMs - Weighted Mini-Bucket inference framework
+  - SDK/Client: `pyGMs` package (local editable install at `/home/cohenn1/SDBE/PyGMs`)
+  - Usage: Factor graph representation, elimination ordering, message passing
+  - Key imports: `from pyGMs import wmb`, `from pyGMs.graphmodel import eliminationOrder`, `from pyGMs.neuro import *`
+  - Files: `nce/inference/graphical_model.py`, `nce/inference/bucket.py`, `nce/utils/pygms_conversion.py`, `nce/utils/pygms_wmb_interface.py`
 
 ## Data Storage
 
 **Databases:**
-- Not applicable - No database integrations (no SQL, MongoDB, etc.)
+- Not detected - No database integrations found
 
 **File Storage:**
 - Local filesystem only
-  - Model files: UAI format (`*.uai`) loaded via `pyGMs.filetypes.readEvidence14()`
-  - Pickle files: Serialized models and benchmarks (`.pkl` files in `nce/problems/`)
-  - CSV data: Input data files (e.g., `casino.csv` in root)
-  - Checkpoints: Models saved during training (written to root directory)
+  - UAI file format for graphical model definitions (read via `nce/inference/graphical_model.py._load_from_uai()`)
+  - Evidence files read via `pyGMs.filetypes.readEvidence14`
+  - Model checkpoints stored to disk (training artifacts)
+  - Location: Paths specified in configuration dictionaries or test problem definitions
 
 **Caching:**
-- None detected - No Redis, Memcached, or other caching layers
+- In-memory PyTorch tensors during training
+- No external caching service detected
 
 ## Authentication & Identity
 
 **Auth Provider:**
-- Not applicable - No user authentication system
-- No API keys or credentials required
-- This is a batch processing/research tool with no authentication layer
+- Not applicable - No external authentication required
 
 ## Monitoring & Observability
 
 **Error Tracking:**
-- None detected - No Sentry, Datadog, or similar error tracking
+- Not detected - No error tracking service integrated
 
 **Logs:**
-- Console logging only via Python `logging` module (imported in `nce/neural_networks/train.py`)
-- No structured logging or log aggregation
-- Progress tracking via `tqdm.notebook` for training loops
-- Custom statistics collection via `nce/utils/stats.py`
-
-**Metrics/Statistics:**
-- In-memory statistics gathering: `get_message_stats()` in `nce/utils/stats.py`
-- Performance benchmarks stored as pickle files in `nce/problems/` (e.g., `benchmarks_12_4_2025.pkl`)
+- Approach: Direct printing and tqdm progress bars to console
+- Files using logging: `nce/neural_networks/train.py`, `nce/inference/graphical_model.py`
+- No structured logging framework (no logging module or third-party logger)
 
 ## CI/CD & Deployment
 
 **Hosting:**
-- Not applicable - Local development/research tool
-- No cloud deployment infrastructure
+- Not detected - No cloud hosting configuration
 
 **CI Pipeline:**
-- Not detected - No GitHub Actions, GitLab CI, Jenkins, or other CI/CD configured
-- Development conducted via Jupyter notebooks in `notebooks/` directories
+- Not detected - No CI/CD configuration files (.github/workflows, .gitlab-ci.yml, etc.)
 
 ## Environment Configuration
 
 **Required env vars:**
-- Not applicable - No environment variables required for core functionality
-- Configuration passed as Python dictionaries at runtime
+- Not detected - System uses Python dictionaries for configuration
+- Device selection controlled by `device` parameter in config dicts (hardcoded as 'cuda' or 'cpu')
+- No environment variables required for runtime
 
 **Secrets location:**
-- Not applicable - No credentials or secrets management
+- Not applicable - No secrets management detected
 
 ## Webhooks & Callbacks
 
 **Incoming:**
-- None - Not a service that receives webhooks
+- None detected
 
 **Outgoing:**
-- None - No webhook or callback mechanisms
+- None detected
 
-## Data Exchange Formats
+## Computational Resources
 
-**Input Formats:**
-- UAI (Universal AI) graphical model files - Read via `pyGMs.filetypes.readEvidence14()`
-- Python pickle files (`.pkl`) - For serialized model checkpoints and benchmarks
-- CSV files - For tabular data (e.g., `casino.csv`)
+**GPU/CUDA:**
+- PyTorch CUDA 11.7 support
+  - Device: 'cuda' for GPU, 'cpu' for CPU fallback
+  - Examples: `device = 'cuda'` hardcoded in notebooks
+  - Memory management: PyTorch garbage collection, manual .to(device) transfers
+  - Files: All neural network and inference modules
 
-**Output Formats:**
-- Pickle files - Model serialization
-- PNG images - Visualization plots saved from matplotlib
-- Text logs - Console output and experiment results
-
-## Dependencies on External Code
-
-**pyGMs Package:**
-- Used throughout inference layer in `nce/inference/graphical_model.py` (1809 lines)
-- Provides: Graphical model primitives, variable elimination, factor operations
-- Version: Not pinned (no requirements.txt specified)
-
-**PyTorch Ecosystem:**
-- `torch` (PyTorch core)
-- `torch.nn`, `torch.optim`, `torch.utils.data` - NN and training
-- No direct integration with TorchHub or model zoos
-
-**Scientific Python Stack:**
-- numpy - Array operations
-- scipy - Scientific computing
-- scikit-learn - Decision tree algorithms
-
-**No external service dependencies** - The system is completely self-contained and can run offline once models/data are available.
+**Test Problem Data:**
+- External benchmark problems loaded at runtime:
+  - Files: UAI format problem definitions
+  - Sources: `nce/problems.py` (if present) or hardcoded test problems in notebooks
+  - Problems include: grid10x10, grid20x20, pedigree, RBM, and others
+  - Loading: `test_problems[key]` dictionary access pattern
 
 ---
 
-*Integration audit: 2026-01-25*
+*Integration audit: 2026-02-21*

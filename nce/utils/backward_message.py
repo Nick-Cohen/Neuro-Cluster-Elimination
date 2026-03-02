@@ -27,7 +27,7 @@ def _get_backward_factors(gm, bucket_var, backward_factors=None):
     return backward_factors
 
 
-def get_backward_message(gm, bucket_var, backward_factors=None, iB = 100, backward_ecl=None, approximation_method=None, return_factor_list=False):
+def get_backward_message(gm, bucket_var, backward_factors=None, iB = 100, backward_ecl=None, approximation_method=None, return_factor_list=False, return_partitions=False):
     """
     Compute the backward message for a bucket.
 
@@ -40,10 +40,12 @@ def get_backward_message(gm, bucket_var, backward_factors=None, iB = 100, backwa
         approximation_method: Method for approximating backward message ('wmb', 'nn', etc.)
         return_factor_list: If True, returns list of factors instead of multiplied product
                            (used for batched learning to avoid materializing full product)
+        return_partitions: If True, also returns the number of WMB partitions used
 
     Returns:
-        If return_factor_list=False: (bw_msg, message) where bw_msg is a single FastFactor (product of all factors)
-        If return_factor_list=True: (factor_list, message) where factor_list is a list of FastFactors
+        If return_factor_list=False: (bw_msg, message) or (bw_msg, message, bw_partitions)
+        If return_factor_list=True: (factor_list, message) or (factor_list, message, bw_partitions)
+        The third element (bw_partitions) is only included if return_partitions=True
     """
     from nce.inference.graphical_model import FastGM
     from nce.inference.factor import FastFactor
@@ -63,18 +65,33 @@ def get_backward_message(gm, bucket_var, backward_factors=None, iB = 100, backwa
         message = bucket.compute_message_exact()
     else:
         message = None
-        # print(f"  Forward message complexity {bucket_ec} >= 2^20, skipping exact computation")
 
     # Handle edge cases - use 0-dim tensor for scalar factors (empty labels)
     if bucket_scope == []:
-        return FastFactor(torch.tensor(0.0, device=gm.device, requires_grad=False), []), message
+        result = (FastFactor(torch.tensor(0.0, device=gm.device, requires_grad=False), []), message)
+        return result + (0,) if return_partitions else result
     if backward_factors == []:
-        return FastFactor(torch.tensor(0.0, device=gm.device, requires_grad=False), []), message
+        result = (FastFactor(torch.tensor(0.0, device=gm.device, requires_grad=False), []), message)
+        return result + (0,) if return_partitions else result
+
+    # Separate scalar factors (empty labels) from non-scalar factors.
+    # Scalar factors are constants in logspace - we need to accumulate them
+    # and add back to the final result.
+    scalar_factors = [f for f in backward_factors if not f.labels]
+    backward_factors_filtered = [f for f in backward_factors if f.labels]
+
+    # Accumulate scalar constants (sum in logspace = product in linear space)
+    scalar_constant = torch.tensor(0.0, device=gm.device, requires_grad=False)
+    for sf in scalar_factors:
+        scalar_constant = scalar_constant + sf.tensor.squeeze()
+
+    # If all factors were scalar, return the accumulated constant as the backward message
+    if not backward_factors_filtered:
+        result = (FastFactor(scalar_constant, []), message)
+        return result + (0,) if return_partitions else result
 
     # Compute elimination order for downstream factors
-    downstream_elim_order = wtminfill_order(backward_factors, variables_not_eliminated=bucket_scope)
-    # print("deo is ", downstream_elim_order)
-    # device_copy=str(gm.device)
+    downstream_elim_order = wtminfill_order(backward_factors_filtered, variables_not_eliminated=bucket_scope)
 
     # Create a copy of the config for the downstream GM
     downstream_config = copy.deepcopy(gm.config)
@@ -83,7 +100,6 @@ def get_backward_message(gm, bucket_var, backward_factors=None, iB = 100, backwa
     # Override approximation method if specified
     if approximation_method is not None:
         downstream_config['approximation_method'] = approximation_method
-        print(f"Using approximation method '{approximation_method}' for downstream GM")
 
     # Override ecl in config BEFORE creating FastGM (critical fix!)
     if backward_ecl is not None:
@@ -99,12 +115,11 @@ def get_backward_message(gm, bucket_var, backward_factors=None, iB = 100, backwa
     effective_iB_from_ecl = int(math.log2(downstream_config['ecl'])) if downstream_config['ecl'] > 0 else 0
     # Use min of provided iB and effective iB from ecl
     effective_iB = min(iB, effective_iB_from_ecl)
-    print(f"  Backward ecl={downstream_config['ecl']}, effective iB from ecl: {effective_iB_from_ecl}, using min(iB={iB}, effective={effective_iB_from_ecl}) = {effective_iB}")
 
     # Override iB in config with the effective value
     downstream_config['iB'] = effective_iB
 
-    downstream_gm = FastGM(factors=backward_factors, elim_order=downstream_elim_order, reference_fastgm=gm, device=gm.device, nn_config=downstream_config)
+    downstream_gm = FastGM(factors=backward_factors_filtered, elim_order=downstream_elim_order, reference_fastgm=gm, device=gm.device, nn_config=downstream_config)
     downstream_gm.is_primary = False
 
     # Print backward computation info
@@ -119,8 +134,6 @@ def get_backward_message(gm, bucket_var, backward_factors=None, iB = 100, backwa
         if mess_size > max_ec:
             max_ec = mess_size
 
-    print(f"  Backward computation: iB={effective_iB}, ecl={downstream_gm.ecl}, induced_width={backward_induced_width}, max_table_size={max_ec}")
-
     # Check if approximation will be used (need BOTH width <= iB AND ec <= ecl for exact)
     will_approximate = backward_induced_width > effective_iB or max_ec > downstream_gm.ecl
     if will_approximate:
@@ -129,40 +142,51 @@ def get_backward_message(gm, bucket_var, backward_factors=None, iB = 100, backwa
             reasons.append(f"width {backward_induced_width} > iB {effective_iB}")
         if max_ec > downstream_gm.ecl:
             reasons.append(f"max_table_size {max_ec} > ecl {downstream_gm.ecl}")
-        print(f"  -> Will use approximation ({', '.join(reasons)})")
-    else:
-        print(f"  -> Exact computation (width {backward_induced_width} <= iB {effective_iB} and max_table_size {max_ec} <= ecl {downstream_gm.ecl})")
 
-    downstream_gm.eliminate_variables(all_but=bucket_scope)
+    elim_result = downstream_gm.eliminate_variables(all_but=bucket_scope)
+
+    # Capture any scalar constants accumulated during elimination (from root_bucket)
+    # These are scalars produced when WMB mini-buckets eliminate to scalars
+    elim_scalar = torch.tensor(0.0, device=gm.device, requires_grad=False)
+    if elim_result is not None and not elim_result.labels:
+        # elim_result is a scalar factor - add its value to our accumulated constant
+        elim_scalar = elim_result.tensor.squeeze()
+
+    # Total scalar constant = input scalars + elimination scalars
+    total_scalar_constant = scalar_constant + elim_scalar
 
     # Track backward pass partitions
     bw_partitions = downstream_gm.wmb_fw_partitions  # Partitions during backward message computation
-    if bw_partitions > 0:
-        print(f"  Backward message WMB partitions: {bw_partitions}")
 
     if return_factor_list:
         # Return list of factors for batched learning (avoids materializing full product)
         factor_list = downstream_gm.get_all_factors()
         if not factor_list:
-            # Empty list case: return list with scalar factor (0-dim tensor)
-            factor_list = [FastFactor(torch.tensor(0.0, device=gm.device, requires_grad=False), [])]
-        # print(f"  Backward message: returning list of {len(factor_list)} factors (batched mode)")
-        return factor_list, message
+            # Empty list case: return list with scalar factor containing the accumulated constant
+            factor_list = [FastFactor(total_scalar_constant, [])]
+        else:
+            # Add scalar constant to the first factor in the list (logspace addition)
+            if total_scalar_constant != 0.0:
+                first_factor = factor_list[0]
+                factor_list[0] = FastFactor(first_factor.tensor + total_scalar_constant, first_factor.labels)
+        result = (factor_list, message)
+        return result + (bw_partitions,) if return_partitions else result
     else:
         # Return multiplied product (original behavior for backward compatibility)
         bw_msg = downstream_gm.get_joint_distribution()
         if bw_msg is None:
-            bw_msg = FastFactor(torch.tensor(0.0, device=gm.device, requires_grad=False), [])
+            bw_msg = FastFactor(total_scalar_constant, [])
+        else:
+            # Add scalar constant to the backward message (logspace addition)
+            if total_scalar_constant != 0.0:
+                bw_msg = FastFactor(bw_msg.tensor + total_scalar_constant, bw_msg.labels)
 
-        # Debug: print first 10 values of flattened approximate backward message
-        flat_bw = bw_msg.tensor.flatten()
-        # print(f"  Backward message first 10 values: {flat_bw[:min(10, len(flat_bw))].tolist()}")
-
-        return bw_msg, message
+        result = (bw_msg, message)
+        return result + (bw_partitions,) if return_partitions else result
 
 
 # Alias for backward compatibility
-def get_message_gradient(gm, bucket_var, backward_factors=None, iB=100, backward_ecl=None, approximation_method=None, return_factor_list=False):
+def get_message_gradient(gm, bucket_var, backward_factors=None, iB=100, backward_ecl=None, approximation_method=None, return_factor_list=False, return_partitions=False):
     """
     Alias for get_backward_message() for backward compatibility.
 
@@ -171,4 +195,4 @@ def get_message_gradient(gm, bucket_var, backward_factors=None, iB=100, backward
 
     Note: The parameter 'backward_factors' was previously called 'gradient_factors'.
     """
-    return get_backward_message(gm, bucket_var, backward_factors, iB, backward_ecl, approximation_method, return_factor_list)
+    return get_backward_message(gm, bucket_var, backward_factors, iB, backward_ecl, approximation_method, return_factor_list, return_partitions)

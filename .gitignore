@@ -1,3 +1,9 @@
 notebooks/
 problems/
 notes.txt
+venv/
+build/
+__pycache__/
+.claude/ai-ops/
+.knowledge/
+nce_package_files/

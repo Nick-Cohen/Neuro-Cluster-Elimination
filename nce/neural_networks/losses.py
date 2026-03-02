@@ -137,7 +137,6 @@ def unnormalized_kl_old(outputs, targets, bw_hat=None, sigma_f=None, sigma_g=Non
     # bw_hat is treated as a constant (gradients not tracked through it)
     if bw_hat is not None:
         bw_hat_detached = bw_hat.detach()
-        # print('outputs dim is ', outputs.shape, ' bw_hat dim is ', bw_hat_detached.shape)
         outputs = outputs + bw_hat_detached
         targets = targets + bw_hat_detached
 
@@ -346,10 +345,8 @@ def mg_sampled_loss_loo_fdb(outputs, targets, bw_hat=None, sigma_f=0, sigma_g=0,
     estimated_memory_gb = estimated_memory_bytes / (1024**3)
     
     if estimated_memory_gb > max_memory_gb:
-        # print(f"Estimated memory usage: {estimated_memory_gb:.2f} GB > {max_memory_gb} GB. Using for-loop version.")
         return mg_sampled_loss_loo_fdb_loop(outputs, targets, bw_hat, sigma_f, sigma_g, rho, num_bw_samples)
     else:
-        # print(f"Estimated memory usage: {estimated_memory_gb:.2f} GB <= {max_memory_gb} GB. Using vectorized version.")
         return mg_sampled_loss_loo_fdb_vectorized(outputs, targets, bw_hat, sigma_f, sigma_g, rho, num_bw_samples)
 
 # def mg_sampled_loss_loo_fdb_vectorized(outputs, targets, bw_hat=None, sigma_f=0, sigma_g=0, rho=0, num_bw_samples=100):
@@ -551,11 +548,9 @@ def gil1(outputs, targets, bw_hat):
     # adding mgh in first for numerical stability to prevent really tiny differences being swallowed even when bw_hat is very large
     
     # bw_hat = 0 # debug
-    # print('outputs: ', outputs[:5])
-    # print('targets: ', targets[:5])
     s1 = outputs + bw_hat
     s2 = targets + bw_hat
-    
+
     max_s = max(torch.max(s1),torch.max(s2))
     max_s.detach_()
 
@@ -576,16 +571,13 @@ def gil1c(outputs, targets, bw_hat):
     # adding mgh in first for numerical stability to prevent really tiny differences being swallowed even when bw_hat is very large
     
     # bw_hat = 0 # debug
-    
-    # print(bw_hat[:10])
-    # exit(1)
-    
+
     s1 = outputs + bw_hat
     s2 = targets + bw_hat
-    
+
     max_s = max(torch.max(s1),torch.max(s2))
     max_s.detach_()
-    
+
     target_sampled_Z = torch.logsumexp((s2 - max_s).flatten(), dim=0)
     output_sampled_Z = torch.logsumexp((s1 - max_s).flatten(), dim=0)
     
@@ -598,13 +590,10 @@ def gil1c_linear(outputs, targets, bw_hat, normalizer):
     # adding mgh in first for numerical stability to prevent really tiny differences being swallowed even when bw_hat is very large
     
     # bw_hat = 0 # debug
-    
-    # print(bw_hat[:10])
-    # exit(1)
-    
+
     s1 = outputs + bw_hat
     s2 = targets + bw_hat
-    
+
     # max_s = max(torch.max(s1),torch.max(s2))
     max_s2 = torch.max(s2)
     # max_s.detach_()
@@ -652,8 +641,6 @@ def w_gil1c(outputs, targets, bw_hat, normalizer):
     
     # return output_sampled_Z - target_sampled_Z
     log_err_ratio = torch.abs(target_sampled_Z - output_sampled_Z)
-    # compute batch's Z divided by sampled Z bZ_hat/Z_hat
-    print('got here')
     # compute log first
     # logw = (max(target_sampled_Z, output_sampled_Z) + max_s) - normalizer
     logw = (target_sampled_Z + max_s) - normalizer
@@ -681,8 +668,6 @@ def gil2(outputs, targets, bw_hat, normalizer = torch.tensor([9.0])):
     # adding mgh in first for numerical stability to prevent really tiny differences being swallowed even when bw_hat is very large
     
     # bw_hat = 0 # debug
-    # print('outputs: ', outputs[:5])
-    # print('targets: ', targets[:5])
     # s1 = outputs + bw_hat/2
     # s2 = targets + bw_hat/2
     

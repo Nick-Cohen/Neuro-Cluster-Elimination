@@ -1,194 +1,183 @@
 # Coding Conventions
 
-**Analysis Date:** 2026-01-25
+**Analysis Date:** 2026-02-21
 
 ## Naming Patterns
 
 **Files:**
-- Snake case for module files: `data_loader.py`, `message_gradient.py`, `graphical_model.py`
-- Snake case for class-specific files: `factor.py`, `bucket.py`
-- Legacy/temporary/copy files use descriptive suffixes: `train_old.py`, `NN_Train_copy.py`, `linear_mse_solver.py`
+- Snake case for module files: `data_loader.py`, `message_gradient.py`, `graphical_model.py`, `factor.py`, `bucket.py`
+- Legacy/temporary files use descriptive suffixes: `train_old.py`, `NN_Train_copy.py`, `linear_mse_solver.py`
+- Test files: `test_*.py` or `*_test.py` in `/home/cohenn1/NCE/notebooks/` directories
 
 **Classes:**
-- PascalCase for all classes: `FastFactor`, `FastBucket`, `FastGM`, `Net`, `Memorizer`, `Trainer`, `LinearMSEOptimalSolver`
-- Special purpose classes use descriptive names: `FactorNN`, `BitVectorLookup`, `SimpleConvexEarlyStopping`
+- PascalCase for all classes: `FastFactor`, `FastBucket`, `FastGM`, `Net`, `Memorizer`, `Trainer`, `DataPreprocessor`
+- Special purpose classes: `FactorNN`, `BitVectorLookup`, `SimpleConvexEarlyStopping`, `DecisionTreeLossOptimizer`
 
 **Functions:**
-- Snake case for all functions: `compute_message_exact()`, `eliminate_variables()`, `get_message_stats()`, `shuffle_batches()`
-- Private functions prefixed with underscore: `_make_dataloader()`, `_get_loss_fn()`, `_diagnose_matrix()`, `_solve_cholesky()`
-- Helper methods in classes follow same convention: `_load_from_uai()`, `_create_buckets_from_factors()`
+- Snake case: `compute_message_exact()`, `eliminate_variables()`, `get_message_stats()`, `shuffle_batches()`
+- Private functions prefixed with underscore: `_make_dataloader()`, `_get_loss_fn()`, `_initialize_normalizing_constant()`
+- Verb-first pattern common: `get_*`, `compute_*`, `load_*`, `create_*`, `populate_*`
 
 **Variables:**
-- Snake case for instance and local variables: `hidden_sizes`, `sample_generator`, `device`, `nn_config`, `loss_fn`
-- Class attributes use snake case: `self.bucket`, `self.gm`, `self.tensor`, `self.labels`
-- Configuration dictionaries use lowercase keys: `'hidden_sizes'`, `'loss_fn'`, `'num_samples'`, `'lr'`, `'device'`
-- Underscore-suffixed attributes for computed properties: `weights_`, `bias_`, `solution_method_`, `condition_number_`
-
-**Constants/Config Keys:**
-- Uppercase for boolean config flags: `'exact'`, `'debug'`, `'track_errors'`, `'use_memorizer'`, `'use_bw_approx'`, `'populate_bw_factors'`
-- Lowercase hyphenated or underscore-separated for complex config keys: `'lower_dim'`, `'seed'`, `'inverse_time_decay_constant'`, `'8-5-benchmark'`
-- Numeric parameters lowercase: `'iB'` (bucket i-bound), `'ecl'` (exact complexity limit), `'num_samples'`, `'num_epochs'`
+- Snake case for all variables: `hidden_sizes`, `sample_generator`, `device`, `nn_config`, `bucket_var`, `message_scope`
+- Boolean flags with `is_` or `use_` prefix: `is_nn`, `is_primary`, `use_bw_approx`, `use_memorizer`, `use_linspace_bias`
+- Config dictionary keys: lowercase with underscores: `'hidden_sizes'`, `'loss_fn'`, `'num_samples'`, `'device'`, `'iB'`, `'ecl'`
+- Class attributes follow snake case: `self.bucket`, `self.gm`, `self.tensor`, `self.labels`, `self.device`
 
 ## Code Style
 
 **Formatting:**
-- No enforced linter (no `.eslintrc`, `.pylintrc`, or `pyproject.toml` config in repo root)
-- Default Python conventions: 4-space indentation, max line length ~100-120 characters (varies)
-- Multi-line function definitions indent parameters naturally
+- No explicit linting tool configured (no .eslintrc, .prettierrc, or pylintrc in repo root)
+- PEP 8 broadly followed: 4-space indentation
+- Line length varies (some exceeding 100 chars)
+- Import statements at file top, some conditional imports inside functions
 
-**Import Organization:**
-- Standard library first: `import torch`, `import math`, `import time`, `import sys`
-- Third-party imports: `import torch.nn as nn`, `from torch.utils.data import DataLoader`, `import pyGMs as gm`
-- Relative imports for internal modules: `from .losses import *`, `from .factor import FastFactor`, `from nce.inference import FastBucket`
-- Wildcard imports used in some files: `from .losses import *` in `train.py`, `from nce.data import *`
-- Type imports at function level or in comments: `from typing import List, Dict, Any, Tuple, IO`
+**Linting:**
+- Manual validation via assertions and type checking
+- Type hints selectively used in function signatures
+- Type imports: `from typing import List, Dict, Any, Tuple, IO`
 
-**Import Patterns:**
-- No path aliases detected (no jsconfig/tsconfig equivalents)
-- Imports mixed throughout files (not always at top) when used conditionally:
+## Import Organization
+
+**Order:**
+1. Standard library: `import sys`, `import os`, `import math`, `import time`, `import argparse`, `import xml.etree.ElementTree`
+2. Third-party: `import torch`, `import torch.nn as nn`, `import torch.nn.functional as F`, `import numpy as np`, `import matplotlib.pyplot as plt`, `from pyGMs import *`, `from tqdm.notebook import tqdm`
+3. Local imports: `from nce.inference import ...`, `from nce.neural_networks import ...`, `from nce.data import ...`
+4. Relative imports: `from .factor import FastFactor`, `from .losses import *`
+
+**Path Aliases:**
+- No path aliases configured
+- Absolute imports preferred: `from nce.inference.graphical_model import FastGM`
+- Wildcard imports in some files: `from pyGMs.neuro import *`, `from .losses import *`
+- Conditional imports used to avoid circular dependencies:
   ```python
   def compute_message_nn(self, ...):
       from nce.neural_networks.net import Net, Memorizer
-      from nce.utils.plots import plot_fastfactor_comparison
+      from nce.neural_networks.train import Trainer
   ```
-
-## Type Annotations
-
-**Function Signatures:**
-- Sparse type hints in some modules, dense in others
-- Type hints used in function parameters and return types where present:
-  ```python
-  def load(self, num_samples: int = 0, all: bool = False, is_validation: bool = False) -> tuple:
-  def _diagnose_matrix(self, XtX: torch.Tensor) -> Dict[str, Any]:
-  def forward(self, x: torch.Tensor) -> torch.Tensor:
-  ```
-- Return type hints often use generic types: `-> tuple`, `-> torch.Tensor`, `-> Tuple[torch.Tensor, bool]`
-
-**Variable Annotations:**
-- Type hints in docstrings for parameters without inline annotations
-- Tensor operations use PyTorch type system implicitly
 
 ## Error Handling
 
-**Strategy:** Broad exception catching with optional logging/re-raising
-
 **Patterns:**
-- Generic `Exception` catching with conditional re-raise:
+- Try-except blocks for critical operations with informative messages:
   ```python
   try:
       message = message.eliminate(self.elim_vars)
   except Exception as e:
-      print(f"Warning: Elimination failed in bucket {self.label}...")
+      print(f"Warning: Elimination failed in bucket {self.label} with size {message.tensor.shape if message.tensor is not None else 'None'}: {e}")
       raise e
   ```
-- Silent exception suppression (try-except without handler):
+- Assertions for invariants and preconditions:
   ```python
-  try:
-      if not other.labels:
-          return FastFactor(self.tensor + other.tensor.item(), self.labels)
-  except:
-      print("got here")
-      raise(ValueError("Other is not a FastFactor"))
+  assert self.device in str(factor.device), f"Factor device {factor.device} does not match bucket device type {self.device}"
+  assert message.tensor is not None
+  assert not (message.tensor is None and len(message.labels) > 0), f"{self.label}"
   ```
-- Silent exception handling in matrix diagnosis with fallback return:
+- ValueError for invalid inputs:
   ```python
-  except Exception as e:
-      if self.verbose:
-          print(f"Warning: Could not diagnose matrix condition: {e}")
-      return {...error dict...}
+  raise ValueError(f"Cannot use compute_linear_mse_message: {e}")
+  raise ValueError(f"NN exact message for bucket {self.label} contains NaN values")
+  ```
+- RuntimeError for state violations:
+  ```python
+  raise RuntimeError("Could not find Linear layer in the network")
+  ```
+- Print statements for warnings (common pattern):
+  ```python
+  print(f"Warning: Could not compute exact message for plotting: {e}")
+  print(f"[DataPreprocessor] ERROR: NaN in y_vals input!")
   ```
 
 ## Logging
 
-**Framework:** `print()` statements (no structured logging framework detected)
+**Framework:** `print()` statements and console output
 
 **Patterns:**
-- Debug output: `print(f"Warning: {message}")`, `print("Computing backward message with bw ecl ", backward_ecl)`
-- Status messages: `print(f"Bucket {self.label}: Using Memorizer (lookup table)")`
-- Verbose conditionals: `if self.verbose:` or `if self.config.get('debug', True):`
-- Deprecation notices in docstrings: `"""OLD VERSION - kept for reference."""`
+- Debug output via f-string print: `print(f"Bucket {self.label}: Using Memorizer (lookup table)")`
+- Conditional logging: `if self.debug:` or `if self.config.get('debug', True):`
+- Progress tracking: `from tqdm.notebook import tqdm` for notebook environments
+- Status messages with context: `print("Computing backward message with bw ecl ", backward_ecl)`
+- Statistics gathering through utility functions: `from nce.utils.stats import get_message_stats`, `get_gm_message_stats()`
 
 ## Comments
 
 **When to Comment:**
-- Complex mathematical operations: Comments explain loss functions, elimination orders, tensor operations
-- Non-obvious control flow: Conditionals with business logic include inline explanation
-- Configuration flags: Comments explain conditional behavior based on config settings
-- Numerical stability: Comments explain max normalization, regularization choices
+- Critical correctness notes (marked with CRITICAL):
+  ```python
+  # CRITICAL: Create a NEW copy of config dict to avoid sharing with other GMs
+  # Using dict() ensures each GM has its own independent config
+  self.config = dict(nn_config) if nn_config else {}
+  ```
+- Numerical stability warnings:
+  ```python
+  # CRITICAL: For batched training, max_val MUST be computed from full dataset
+  # and passed in. Per-batch max_val causes gradient inconsistency and training divergence
+  ```
+- Algorithm explanation:
+  ```python
+  # Multiply all factors
+  # Eliminate variables
+  # Handle edge cases
+  ```
+- Config interpretation:
+  ```python
+  # Handle 'bias_only' mode: learn only a single constant (bias term)
+  self.bias_only = (hidden_sizes == 'bias_only')
+  ```
+- TODO/FIXME for known issues:
+  ```python
+  # TODO: Multiply factors in a more sensible order, e.g. subsumed multiplications first
+  # TODO: will need to grab list of factors in the future
+  ```
 
 **JSDoc/TSDoc:**
-- Comprehensive docstrings used in key methods:
+- Docstrings use triple quotes with Args and Returns sections:
   ```python
   def load(self, num_samples: int = 0, all: bool = False, is_validation: bool = False) -> tuple:
       """Load training data by sampling and computing message/backward values.
 
       Args:
           num_samples: Number of samples to generate (ignored if all=True)
-          ...
+          all: If True, enumerate all assignments instead of sampling
+          is_validation: If True, generates validation set
+
       Returns:
-          Tuple of (x, y, bw) where:
-          - x: One-hot encoded assignments
-          ...
+          Tuple of (x, y, bw) where...
       """
   ```
-- Docstrings follow standard Python convention (triple quotes, parameter/return sections)
-- Docstrings used in classes and public methods, sparse in private methods
-- Parameter descriptions in comments above functions where docstrings absent
+- Comprehensive docstrings in public methods, sparse in private methods
+- Emphasis on Args, Returns; implementation details in body comments
 
 ## Function Design
 
-**Size:** Functions vary widely from 5-line getters to 300+ line training loops
-- Small focused functions: 5-20 lines for utilities and accessors
-- Medium functions: 30-100 lines for core algorithms
-- Large functions: 200+ lines for orchestration methods (e.g., `Trainer.train()`)
+**Size:**
+- Small functions: 5-30 lines (getters, utilities)
+- Medium functions: 30-150 lines (core algorithms like `forward()`, `load()`)
+- Large functions: 200+ lines (orchestration like `compute_message_nn()`, `train()`)
 
 **Parameters:**
-- Typically 1-5 parameters for public methods
-- Optional parameters use defaults: `def __init__(self, ..., hidden_sizes=None)`
-- Config objects passed as `self.config` (dict) rather than individual parameters
-- Variadic parameters rare; **kwargs not commonly used
+- Config dictionaries passed as `bucket.config` or `self.config` (dict) rather than individual args
+- Named parameters preferred over positional
+- Optional parameters with None defaults: `def __init__(self, ..., hidden_sizes=None)`
+- Type hints selective: `def forward(self, x: torch.Tensor) -> torch.Tensor:`
 
 **Return Values:**
-- Single return values (scalar, tensor, object) most common
-- Tuple returns for multi-value results: `Tuple[torch.Tensor, torch.Tensor]`, `(x, y, bw)`
-- Optional returns: `None` returned on error paths or when not applicable
+- Single returns common: `return torch.Tensor`, `return FastFactor`
+- Tuple returns for multiple values: `return (bw_msg, message)` or `return (bw_msg, message, bw_partitions)`
+- Dictionary returns for structured data: `return {'input': ..., 'target': ..., 'bw_hat': ...}`
+- None returns on error paths or when not applicable
 
 ## Module Design
 
 **Exports:**
-- No explicit `__all__` definitions detected
-- Classes and functions exported implicitly (all public)
-- Modules used via direct import: `from nce.inference.graphical_model import FastGM`
+- No `__all__` declarations detected
+- Public classes/functions exported by default
+- Private functions prefixed with underscore: `_initialize_normalizing_constant()`, `_get_backward_factors()`
 
 **Barrel Files:**
-- `__init__.py` files exist but mostly empty: `from nce.inference import *` style imports used
-- Some initialization in `__init__.py` for package setup (`setup.py` minimal)
-
-## Assertion Patterns
-
-**Validation:**
-- Assertions used for invariants in critical code:
-  ```python
-  assert self.device in str(factor.device), f"Factor device {factor.device}..."
-  assert not (message.tensor is None and len(message.labels) > 0), f"{self.label}"
-  assert not(factor.tensor is None and not factor.is_nn), f"{bucket.label}"
-  ```
-- Assertions check device consistency, tensor validity, factor structure
-- Runtime errors for invalid user input: `raise ValueError(...)`, `raise Exception(...)`
-
-## Tensor Operations
-
-**Device Management:**
-- Explicit device tracking: `device = self.device` or `device = self.config['device']`
-- Device consistency checked in assertions
-- Tensor creation specifies device: `torch.tensor(..., device=device)`
-- CUDA support: `if device == 'cuda': torch.cuda.manual_seed(seed)`
-
-**Tensor Shapes:**
-- Shape comments in docstrings: `# (num_samples, input_dim)`, `# (batch_size,)`
-- Reshaping and view operations documented with expected dimensions
-- Broadcasting operations explicit with reshape/unsqueeze: `combined = torch.stack([...], dim=-1)`
+- Package `__init__.py` files typically empty: `/home/cohenn1/NCE/nce/__init__.py`, `/home/cohenn1/NCE/nce/inference/__init__.py`
+- No centralized re-exports; consumers import directly: `from nce.inference.graphical_model import FastGM`
 
 ---
 
-*Convention analysis: 2026-01-25*
+*Convention analysis: 2026-02-21*

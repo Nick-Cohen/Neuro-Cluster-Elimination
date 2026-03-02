@@ -1,5 +1,48 @@
+1/30/2026----------------------------------------------
+
+Confirm with alex's code that wmb estimates are identical
+
+
+11/6/2025
+385s for Alex's code on a size 12 message with 20 epochs
+----------------------------------------------
+
+interested in phi and phi_hat squared difference
+model the first two moments of this error
+There's a closed form solution of the expected square error
+phi and phi_hat will look gaussian about those states in the minibatching
+
+f+b, f_hat + b ----> is a 2d gaussian
+
+doing this, imagine I haven't included the next n states, take those are logsumexp them with the next n states
+
+arrived at this via unscented common filter
+
+for tiny batch, add that batches influence, and 
+
+Jonathan Udidia's paper talks about how loopy BP converges
+
+Loopy BP like a non-temperature moderated weighted minibucket
+------------------
+
+Resolve how to do the minibatching
+effective sampling
+
+comment out the LOO loss
+
+rho sigma_f sigma_g
+
+
+
+
+------------------------------------------------------------------------
+
 Test loss functions
 
 Add multiple elimination functionality
 
 Compute approximate message gradients in advance
+
+AI Stats
+sept 25
+october 2nd
