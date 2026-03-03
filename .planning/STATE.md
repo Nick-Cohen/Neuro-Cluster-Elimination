@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 Phase: 4 of 4 (Plotting Integration)
 Plan: 2 of 2 in current phase
 Status: Milestone complete
-Last activity: 2026-02-28 - Completed quick task 007: disable nbe_early_stopping, launch grid10x10 + probs12_4 experiments
+Last activity: 2026-03-03 - Completed quick task 010: add neuroBE config sets to benchmark_problems
 
 Progress: [##########] 100%
 
@@ -64,6 +64,7 @@ Recent decisions affecting current work:
 - Averaged plots only generated when num_runs > 1 (04-01)
 - Lazy import inside try block for fault isolation (04-02)
 - Plot failures don't fail experiments (nice-to-have pattern) (04-02)
+- Benchmark config pairing: dual export (dict by key + ordered list) for flexible usage (quick-3)
 
 ### Pending Todos
 
@@ -85,11 +86,12 @@ None.
 | 007 | Disable nbe_early_stopping, launch grid10x10 + probs12_4 benchmarks | 2026-02-28 | 8f4f839 | [7-disable-nbe-early-stopping-run-grid10x10](./quick/7-disable-nbe-early-stopping-run-grid10x10/) |
 | 008 | Fix quantization model: rewrite QuantizationSolver with recursive binary splitting | 2026-03-03 | 41072c8 | [1-fix-the-quantization-model-for-fast-exec](./quick/1-fix-the-quantization-model-for-fast-exec/) |
 | 009 | Create benchmark_problems module with neuro_be_sanity_check set | 2026-03-03 | a7ff31a | [2-create-benchmark-problems-module-with-ne](./quick/2-create-benchmark-problems-module-with-ne/) |
+| 010 | Add optional neuroBE config sets to benchmark_problems module | 2026-03-03 | 6a95ebf | [3-add-optional-nn-config-sets-to-benchmark](./quick/3-add-optional-nn-config-sets-to-benchmark/) |
 
 ## Session Continuity
 
-Last session: 2026-03-03 23:41
-Stopped at: Completed quick task 2 (benchmark_problems module)
+Last session: 2026-03-03 23:55
+Stopped at: Completed quick task 3 (neuroBE config sets for benchmark_problems)
 Resume file: None
 
 ---
