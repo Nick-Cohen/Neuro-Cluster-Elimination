@@ -84,11 +84,12 @@ None.
 | 006 | Write usage guide for running probs12_4 experiments | 2026-02-28 | 57acf5a | [6-write-usage-guide-for-running-12-4-exper](./quick/6-write-usage-guide-for-running-12-4-exper/) |
 | 007 | Disable nbe_early_stopping, launch grid10x10 + probs12_4 benchmarks | 2026-02-28 | 8f4f839 | [7-disable-nbe-early-stopping-run-grid10x10](./quick/7-disable-nbe-early-stopping-run-grid10x10/) |
 | 008 | Fix quantization model: rewrite QuantizationSolver with recursive binary splitting | 2026-03-03 | 41072c8 | [1-fix-the-quantization-model-for-fast-exec](./quick/1-fix-the-quantization-model-for-fast-exec/) |
+| 009 | Create benchmark_problems module with neuro_be_sanity_check set | 2026-03-03 | a7ff31a | [2-create-benchmark-problems-module-with-ne](./quick/2-create-benchmark-problems-module-with-ne/) |
 
 ## Session Continuity
 
-Last session: 2026-03-03 20:40
-Stopped at: Completed quick task 1 (auto tasks), awaiting checkpoint:human-verify for quantization plot
+Last session: 2026-03-03 23:41
+Stopped at: Completed quick task 2 (benchmark_problems module)
 Resume file: None
 
 ---
