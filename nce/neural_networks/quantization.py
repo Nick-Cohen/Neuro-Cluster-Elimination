@@ -1,28 +1,30 @@
 """
 Quantization-based message approximation.
 
-Implements optimal K-segment quantization of messages using dynamic programming
-with divide-and-conquer optimization for O(K N log N) complexity.
+Implements K-segment quantization of messages using recursive binary splitting.
+The algorithm works by recursively splitting the sorted message into halves,
+each half subdivided with its allocated quanta. This is a greedy heuristic
+(not globally optimal like DP), but simpler and faster.
 
-For UKL loss:
-    val = logsumexp(f[m:n] + b[m:n]) - logsumexp(b[m:n])
+For UKL loss (optimal segment value):
+    val = logsumexp(f[l:r] + b[l:r]) - logsumexp(b[l:r])
 
-For MSE loss:
-    val = mean(f[m:n])
+For MSE loss (optimal segment value):
+    val = mean(f[l:r])
 """
 
 import torch
-import numpy as np
 from typing import List, Tuple, Optional
 from ..inference.factor import FastFactor
 
 
 class QuantizationSolver:
     """
-    Optimal K-segment quantization solver using DP with D&C optimization.
+    K-segment quantization solver using recursive binary splitting.
 
     Given a sorted message f and backward message b (sorted by f's values),
-    finds optimal partition into K contiguous segments minimizing total loss.
+    finds a partition into K contiguous segments minimizing total loss
+    via a greedy recursive binary split heuristic.
     """
 
     def __init__(
@@ -50,255 +52,189 @@ class QuantizationSolver:
         self.loss_type = loss_type
         self.device = device
 
-        # Precompute arrays for O(1) interval cost
-        self._precompute_prefix_sums()
-
-    def _precompute_prefix_sums(self):
-        """Precompute prefix sums for O(1) interval cost evaluation."""
-
-        if self.loss_type == 'ukl':
-            # For UKL: need u = f + b, t = b
-            u = self.f + self.b
-            t = self.b
-
-            # Global max for numerical stability
-            self.su = u.max().item()
-            self.st = t.max().item()
-
-            # Scaled weights
-            wu = torch.exp(u - self.su)
-            wt = torch.exp(t - self.st)
-
-            # Prefix sums (0-indexed, W[i] = sum of wu[0:i])
-            # We prepend 0 for easier interval computation
-            self.W = torch.zeros(self.N + 1, device=self.device)
-            self.P = torch.zeros(self.N + 1, device=self.device)
-            self.V = torch.zeros(self.N + 1, device=self.device)
-
-            self.W[1:] = torch.cumsum(wu, dim=0)
-            self.P[1:] = torch.cumsum(wu * self.f, dim=0)
-            self.V[1:] = torch.cumsum(wt, dim=0)
-
-        else:  # MSE
-            # For MSE: need prefix sums of f and f^2
-            self.S = torch.zeros(self.N + 1, device=self.device)  # sum of f
-            self.S2 = torch.zeros(self.N + 1, device=self.device)  # sum of f^2
-
-            self.S[1:] = torch.cumsum(self.f, dim=0)
-            self.S2[1:] = torch.cumsum(self.f ** 2, dim=0)
-
-    def _cost_ukl(self, l: int, r: int) -> float:
+    def segment_value(self, l: int, r: int) -> float:
         """
-        Compute UKL cost for interval [l, r] (0-indexed, inclusive).
+        Compute the optimal constant value for segment f[l:r] (exclusive r).
 
-        Cost = P - W * (su + log(W)) + W * (st + log(V))
+        For UKL: q = logsumexp(f[l:r] + b[l:r]) - logsumexp(b[l:r])
+        For MSE: q = mean(f[l:r])
 
-        where W, P, V are computed from prefix sums over [l, r].
+        Args:
+            l: Start index (inclusive)
+            r: End index (exclusive)
+
+        Returns:
+            Optimal constant value for this segment
         """
-        # Convert to 1-indexed for prefix sum access
-        l1 = l + 1
-        r1 = r + 1
-
-        Wv = self.W[r1] - self.W[l1 - 1]
-        Pv = self.P[r1] - self.P[l1 - 1]
-        Vv = self.V[r1] - self.V[l1 - 1]
-
-        # Handle edge cases
-        if Wv <= 0 or Vv <= 0:
-            return float('inf')
-
-        cost = Pv - Wv * (self.su + torch.log(Wv)) + Wv * (self.st + torch.log(Vv))
-        return cost.item()
-
-    def _cost_mse(self, l: int, r: int) -> float:
-        """
-        Compute MSE cost for interval [l, r] (0-indexed, inclusive).
-
-        For MSE with constant val = mean(f[l:r+1]):
-        Cost = sum((f[i] - val)^2) = sum(f^2) - n * val^2
-             = S2[r+1] - S2[l] - (S[r+1] - S[l])^2 / n
-        """
-        l1 = l + 1
-        r1 = r + 1
-
-        n = r - l + 1
-        if n <= 0:
-            return float('inf')
-
-        sum_f = self.S[r1] - self.S[l1 - 1]
-        sum_f2 = self.S2[r1] - self.S2[l1 - 1]
-
-        cost = sum_f2 - (sum_f ** 2) / n
-        return cost.item()
-
-    def _cost(self, l: int, r: int) -> float:
-        """Compute cost for interval [l, r] based on loss type."""
-        if self.loss_type == 'ukl':
-            return self._cost_ukl(l, r)
-        else:
-            return self._cost_mse(l, r)
-
-    def _compute_value_ukl(self, l: int, r: int) -> float:
-        """
-        Compute optimal quantization value for interval [l, r] under UKL.
-
-        val = log(Z) - log(B) = log(sum(exp(u))) - log(sum(exp(t)))
-            = (su + log(W)) - (st + log(V))
-        """
-        l1 = l + 1
-        r1 = r + 1
-
-        Wv = self.W[r1] - self.W[l1 - 1]
-        Vv = self.V[r1] - self.V[l1 - 1]
-
-        if Wv <= 0 or Vv <= 0:
-            # Fallback to mean of f
-            return self.f[l:r+1].mean().item()
-
-        val = (self.su + torch.log(Wv)) - (self.st + torch.log(Vv))
-        return val.item()
-
-    def _compute_value_mse(self, l: int, r: int) -> float:
-        """Compute optimal quantization value for interval [l, r] under MSE."""
-        l1 = l + 1
-        r1 = r + 1
-
-        n = r - l + 1
-        if n <= 0:
+        if r <= l:
             return 0.0
 
-        sum_f = self.S[r1] - self.S[l1 - 1]
-        return (sum_f / n).item()
+        f_seg = self.f[l:r]
+        b_seg = self.b[l:r]
 
-    def _compute_value(self, l: int, r: int) -> float:
-        """Compute optimal quantization value for interval based on loss type."""
         if self.loss_type == 'ukl':
-            return self._compute_value_ukl(l, r)
+            # q = logsumexp(f + b) - logsumexp(b)
+            joint = f_seg + b_seg
+            log_numerator = torch.logsumexp(joint, dim=0)
+            log_denominator = torch.logsumexp(b_seg, dim=0)
+            return (log_numerator - log_denominator).item()
         else:
-            return self._compute_value_mse(l, r)
+            # MSE: mean of f
+            return f_seg.mean().item()
+
+    def segment_ukl_loss(self, l: int, r: int, q: float) -> float:
+        """
+        Compute the UKL loss for assigning constant value q to segment [l, r).
+
+        Uses the unnormalized KL divergence formula:
+            targets = f[l:r] + b[l:r]   (exact joint in log space)
+            outputs = q + b[l:r]          (quantized joint in log space)
+            max_val = max(targets.max(), outputs.max())
+            p_tilde = exp(targets - max_val)
+            q_tilde = exp(outputs - max_val)
+            loss = sum(p_tilde * (log_p_tilde - log_q_tilde) - p_tilde + q_tilde)
+
+        For MSE: loss = sum((f[l:r] - q)^2)
+
+        Args:
+            l: Start index (inclusive)
+            r: End index (exclusive)
+            q: Constant value assigned to this segment
+
+        Returns:
+            Loss value for this segment
+        """
+        if r <= l:
+            return 0.0
+
+        f_seg = self.f[l:r]
+        b_seg = self.b[l:r]
+
+        if self.loss_type == 'ukl':
+            targets = f_seg + b_seg
+            outputs = q + b_seg
+            max_val = max(targets.max().item(), outputs.max().item())
+            p_tilde = torch.exp(targets - max_val)
+            q_tilde = torch.exp(outputs - max_val)
+            # Clamp to avoid log(0)
+            log_p = targets - max_val  # = log(p_tilde), no clamp needed as it's just subtraction
+            log_q = outputs - max_val  # = log(q_tilde), same
+            loss = (p_tilde * (log_p - log_q) - p_tilde + q_tilde).sum()
+            return loss.item()
+        else:
+            # MSE
+            return ((f_seg - q) ** 2).sum().item()
+
+    def _split(self, l: int, r: int, k: int) -> Tuple[List[int], List[float]]:
+        """
+        Recursive binary splitting for segment [l, r) with k quanta.
+
+        Args:
+            l: Start index (inclusive)
+            r: End index (exclusive)
+            k: Number of quanta to use for this segment
+
+        Returns:
+            boundaries: List of boundary indices (length k+1, starts with l, ends with r)
+            values: List of k quantization values
+        """
+        # Guard: if segment has fewer elements than quanta, assign one per element
+        n = r - l
+        if n <= 0:
+            return [l], []
+        if k >= n:
+            # Each element gets its own value
+            boundaries = list(range(l, r + 1))
+            values = [self.f[i].item() for i in range(l, r)]
+            return boundaries, values
+
+        # Base case: k=1
+        if k == 1:
+            q = self.segment_value(l, r)
+            return [l, r], [q]
+
+        # k=2: try every split point
+        if k == 2:
+            best_s = l + 1
+            best_loss = float('inf')
+            best_q_left = 0.0
+            best_q_right = 0.0
+
+            for s in range(l + 1, r):
+                q_left = self.segment_value(l, s)
+                q_right = self.segment_value(s, r)
+                loss_left = self.segment_ukl_loss(l, s, q_left)
+                loss_right = self.segment_ukl_loss(s, r, q_right)
+                total = loss_left + loss_right
+
+                if total < best_loss:
+                    best_loss = total
+                    best_s = s
+                    best_q_left = q_left
+                    best_q_right = q_right
+
+            return [l, best_s, r], [best_q_left, best_q_right]
+
+        # k>2: find best binary split as if k=2, then recurse
+        k_left = k // 2
+        k_right = k - k_left
+
+        # Find best binary split point
+        best_s = l + k_left  # must leave room for k_left and k_right elements
+        best_loss = float('inf')
+
+        for s in range(l + k_left, r - k_right + 1):
+            q_left = self.segment_value(l, s)
+            q_right = self.segment_value(s, r)
+            loss_left = self.segment_ukl_loss(l, s, q_left)
+            loss_right = self.segment_ukl_loss(s, r, q_right)
+            total = loss_left + loss_right
+
+            if total < best_loss:
+                best_loss = total
+                best_s = s
+
+        # Recursively split each half
+        left_boundaries, left_values = self._split(l, best_s, k_left)
+        right_boundaries, right_values = self._split(best_s, r, k_right)
+
+        # Merge: left_boundaries ends with best_s, right_boundaries starts with best_s
+        # so we drop the duplicate best_s from the boundary join
+        merged_boundaries = left_boundaries + right_boundaries[1:]
+        merged_values = left_values + right_values
+
+        return merged_boundaries, merged_values
 
     def solve(self) -> Tuple[List[int], List[float], float]:
         """
-        Find optimal K-segment partition using DP with D&C optimization.
+        Find K-segment partition using recursive binary splitting.
 
         Returns:
             boundaries: List of K+1 boundary indices [0, b1, b2, ..., N]
             values: List of K quantization values for each segment
-            total_cost: Total loss of the optimal partition
+            total_cost: Total loss of the partition
         """
         N = self.N
         K = self.K
 
-        # Handle edge cases
+        # Handle edge case: K >= N (each element gets its own segment)
         if K >= N:
-            # Each element gets its own segment
             boundaries = list(range(N + 1))
             values = [self.f[i].item() for i in range(N)]
             return boundaries, values, 0.0
 
-        if K == 1:
-            # Single segment
-            boundaries = [0, N]
-            values = [self._compute_value(0, N - 1)]
-            total_cost = self._cost(0, N - 1)
-            return boundaries, values, total_cost
+        # Recursive splitting
+        boundaries, values = self._split(0, N, K)
 
-        # DP with divide and conquer
-        # dp[j] = min cost for covering prefix [0, j) with current number of buckets
-        # prev[j] = dp values from previous k
-
-        INF = float('inf')
-
-        # Base case: k=1 (one bucket covering [0, j))
-        prev = np.full(N + 1, INF)
-        prev[0] = 0.0
-        for j in range(1, N + 1):
-            prev[j] = self._cost(0, j - 1)
-
-        # Store optimal split points for backtracking
-        # opt_history[k][j] = optimal split point for dp[k][j]
-        opt_history = []
-
-        # DP for k = 2 to K
-        for k in range(2, K + 1):
-            cur = np.full(N + 1, INF)
-            opt = np.full(N + 1, -1, dtype=int)
-
-            # Use divide and conquer optimization
-            self._solve_dc(k, 0, N, 0, N - 1, prev, cur, opt)
-
-            opt_history.append(opt.copy())
-            prev = cur.copy()
-
-        # Backtrack to find boundaries
-        boundaries = [N]
-        j = N
-        for k in range(K - 1, 0, -1):
-            opt_k = opt_history[k - 1]
-            i = opt_k[j]
-            boundaries.append(i)
-            j = i
-        boundaries.append(0)
-        boundaries.reverse()
-
-        # Compute values for each segment
-        values = []
+        # Compute total cost
+        total_cost = 0.0
         for seg_idx in range(K):
             l = boundaries[seg_idx]
-            r = boundaries[seg_idx + 1] - 1
-            values.append(self._compute_value(l, r))
-
-        total_cost = prev[N]
+            r = boundaries[seg_idx + 1]
+            q = values[seg_idx]
+            total_cost += self.segment_ukl_loss(l, r, q)
 
         return boundaries, values, total_cost
-
-    def _solve_dc(
-        self,
-        k: int,
-        lo: int,
-        hi: int,
-        opt_lo: int,
-        opt_hi: int,
-        prev: np.ndarray,
-        cur: np.ndarray,
-        opt: np.ndarray
-    ):
-        """
-        Divide and conquer DP solver.
-
-        Solves dp[k][lo:hi+1] given that optimal split points are in [opt_lo, opt_hi].
-
-        The monotonicity property ensures opt[j] <= opt[j+1], enabling D&C.
-        """
-        if lo > hi:
-            return
-
-        mid = (lo + hi) // 2
-
-        # Find best split point for dp[k][mid]
-        best_cost = float('inf')
-        best_i = opt_lo
-
-        # Search range: [opt_lo, min(mid - 1, opt_hi)]
-        # We need at least one element in the last segment, so i < mid
-        search_hi = min(mid - 1, opt_hi)
-
-        for i in range(opt_lo, search_hi + 1):
-            if i < k - 1:
-                # Need at least k-1 elements for k-1 buckets
-                continue
-
-            cost = prev[i] + self._cost(i, mid - 1)
-            if cost < best_cost:
-                best_cost = cost
-                best_i = i
-
-        cur[mid] = best_cost
-        opt[mid] = best_i
-
-        # Recurse
-        self._solve_dc(k, lo, mid - 1, opt_lo, best_i, prev, cur, opt)
-        self._solve_dc(k, mid + 1, hi, best_i, opt_hi, prev, cur, opt)
 
 
 def quantize_message(
@@ -309,7 +245,7 @@ def quantize_message(
     device: str = 'cuda'
 ) -> Tuple[FastFactor, dict]:
     """
-    Quantize a message into K levels optimally under the given loss.
+    Quantize a message into K levels using recursive binary splitting.
 
     Args:
         exact_message: The exact message to quantize (FastFactor)
@@ -371,66 +307,3 @@ def quantize_message(
     }
 
     return quantized_message, info
-
-
-def verify_monotonicity(
-    f_sorted: torch.Tensor,
-    b_sorted: torch.Tensor,
-    loss_type: str = 'ukl',
-    num_samples: int = 1000,
-    device: str = 'cuda'
-) -> Tuple[bool, List[int]]:
-    """
-    Verify that optimal split points are monotonic (required for D&C optimization).
-
-    Tests on a subset of the data to check if opt[j] <= opt[j+1].
-
-    Args:
-        f_sorted: Sorted message values
-        b_sorted: Backward message (same sort order)
-        loss_type: 'ukl' or 'mse'
-        num_samples: Number of samples to test
-        device: Device for computation
-
-    Returns:
-        is_monotonic: True if monotonicity holds
-        opt: Optimal split points for k=2
-    """
-    # Subsample if needed
-    N = len(f_sorted)
-    if N > num_samples:
-        step = N // num_samples
-        indices = torch.arange(0, N, step, device=device)[:num_samples]
-        f_sub = f_sorted[indices]
-        b_sub = b_sorted[indices]
-    else:
-        f_sub = f_sorted
-        b_sub = b_sorted
-
-    N_sub = len(f_sub)
-
-    # Create solver
-    solver = QuantizationSolver(f_sub, b_sub, 2, loss_type, device)
-
-    # Compute dp for k=1
-    prev = np.full(N_sub + 1, float('inf'))
-    prev[0] = 0.0
-    for j in range(1, N_sub + 1):
-        prev[j] = solver._cost(0, j - 1)
-
-    # Compute optimal split points for k=2
-    opt = []
-    for j in range(2, N_sub + 1):
-        best_i = 0
-        best_cost = float('inf')
-        for i in range(1, j):
-            cost = prev[i] + solver._cost(i, j - 1)
-            if cost < best_cost:
-                best_cost = cost
-                best_i = i
-        opt.append(best_i)
-
-    # Check monotonicity
-    is_monotonic = all(opt[i] <= opt[i + 1] for i in range(len(opt) - 1))
-
-    return is_monotonic, opt
