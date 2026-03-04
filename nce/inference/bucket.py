@@ -97,6 +97,17 @@ class FastBucket:
         if use_memorizer:
             print(f"Bucket {self.label}: Using Memorizer (lookup table)")
 
+            # Handle "nbe,<epsilon>" string format for num_samples
+            num_samples_cfg = self.config.get('num_samples')
+            if isinstance(num_samples_cfg, str) and num_samples_cfg.startswith('nbe'):
+                if ',' in num_samples_cfg:
+                    epsilon = float(num_samples_cfg.split(',')[1])
+                else:
+                    epsilon = 0.25  # default from NeuroBE Config.h
+                nbe_result = self.get_nbe_num_samples(epsilon)
+                self.config['num_samples'] = nbe_result['total']
+                print(f"Bucket {self.label}: NBE num_samples (eps={epsilon}): total={nbe_result['total']}, train={nbe_result['n_train']}, val={nbe_result['n_val']}")
+
             # Create a dummy net for initialization (needed for Trainer/dataloader)
             net = Net(self, hidden_sizes=[])
             t = Trainer(net=net, bucket=self, stats=self.stats)
@@ -206,6 +217,17 @@ class FastBucket:
                     message_size = self.get_message_size()
                     h = b * math.ceil(math.log2(message_size)) if message_size > 1 else b
                     hidden_sizes = [h, h]
+
+            # Handle "nbe,<epsilon>" string format for num_samples
+            num_samples_cfg = self.config.get('num_samples')
+            if isinstance(num_samples_cfg, str) and num_samples_cfg.startswith('nbe'):
+                if ',' in num_samples_cfg:
+                    epsilon = float(num_samples_cfg.split(',')[1])
+                else:
+                    epsilon = 0.25  # default from NeuroBE Config.h
+                nbe_result = self.get_nbe_num_samples(epsilon)
+                self.config['num_samples'] = nbe_result['total']
+                print(f"Bucket {self.label}: NBE num_samples (eps={epsilon}): total={nbe_result['total']}, train={nbe_result['n_train']}, val={nbe_result['n_val']}")
 
             net = Net(self, hidden_sizes=hidden_sizes)
             t = Trainer(net=net, bucket=self, stats=self.stats)
@@ -1019,6 +1041,38 @@ class FastBucket:
         # Append the message to the factors list
         self.factors.append(message)
         
+    @staticmethod
+    def compute_nbe_num_samples(w, l, epsilon):
+        """Compute NeuroBE number of samples for a bucket.
+
+        Formula: nSamples = floor((pd + ln(1000)) / epsilon)
+        where pd = temp * ln(temp/l), temp = (l-1)*w^2 + l*w + 4
+
+        NeuroBE uses 80:20 split: 80% training, 20% validation.
+
+        Args:
+            w: bucket width (number of variables in message scope)
+            l: max domain size of variables in scope
+            epsilon: error tolerance parameter
+
+        Returns:
+            dict with keys: 'total', 'n_train', 'n_val'
+        """
+        import math
+        temp = (l - 1) * w**2 + l * w + 4
+        pd = temp * math.log(temp / l)
+        n_total = int(math.floor((pd + math.log(1000)) / epsilon))
+        n_train = int(math.floor(n_total * 0.8))
+        n_val = n_total - n_train
+        return {'total': n_total, 'n_train': n_train, 'n_val': n_val}
+
+    def get_nbe_num_samples(self, epsilon):
+        """Compute NeuroBE num_samples for this bucket using its actual width and domain sizes."""
+        w = len(self.get_message_scope())
+        dims = self.get_message_dimension()
+        l = max(dims) if dims else 2
+        return FastBucket.compute_nbe_num_samples(w, l, epsilon)
+
     def get_message_scope(self):
         scope = set()
         for factor in self.factors:

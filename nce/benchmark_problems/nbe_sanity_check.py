@@ -1,10 +1,11 @@
 """nbe_sanity_check benchmark set.
 
-Contains 4 models for quick sanity-checking of neural bucket elimination:
+Contains 5 models for quick sanity-checking of neural bucket elimination:
 - pedigree13: large pedigree network (1077 vars, width 32)
 - grid40x40.f10: large grid model (1600 vars, width 54)
 - grid20x20.f10: medium grid model (400 vars)
 - rbm_20: restricted Boltzmann machine (40 vars, width 20)
+- grid10x10.f5.wrap: small grid model (100 vars)
 
 Usage:
     from nce.benchmark_problems import nbe_sanity_check
@@ -28,6 +29,7 @@ _MODEL_KEYS = [
     'grids/grid40x40.f10',
     'grids/grid20x20.f10',
     'dbn/rbm_20',
+    'grids/grid10x10.f5.wrap',
 ]
 
 # Per-model neuroBE hidden_sizes multiplier.
@@ -36,6 +38,25 @@ _HIDDEN_SIZES_MAP = {
     'grids/grid40x40.f10': 'nbe,1',
     'grids/grid20x20.f10': 'nbe,1',
     'dbn/rbm_20': 'nbe,3',
+    'grids/grid10x10.f5.wrap': 'nbe,1',
+}
+
+# Per-model neuroBE num_samples epsilon values.
+_NUM_SAMPLES_MAP = {
+    'pedigree/pedigree13': 'nbe,0.1',
+    'grids/grid40x40.f10': 'nbe,0.35',
+    'grids/grid20x20.f10': 'nbe,0.35',
+    'dbn/rbm_20': 'nbe,0.1',
+    'grids/grid10x10.f5.wrap': 'nbe,0.35',
+}
+
+# Per-model i-bound values.
+_IB_MAP = {
+    'pedigree/pedigree13': 20,
+    'grids/grid40x40.f10': 20,
+    'grids/grid20x20.f10': 10,
+    'dbn/rbm_20': 20,
+    'grids/grid10x10.f5.wrap': 10,
 }
 
 
@@ -67,20 +88,20 @@ def _build_nbe_configs():
             'num_epochs2': 0,
             'nbe_early_stopping': False,
             'nbe_warmup_epochs': 0,
-            'skip_early_stopping': True,
+            'skip_early_stopping': False,
             'sampling_scheme': 'uniform',
             'batch_size': 256,
             'set_size': 50000,
-            'num_samples': 'nbe',
+            'num_samples': _NUM_SAMPLES_MAP[key],
             'num_batches_per_set': 1,
-            'loss_fn': 'unnormalized_kl',
+            'loss_fn': 'weighted_mse',
             'traced_losses': [],
             'val_set': True,
             'fdb': False,
-            'use_bw_approx': True,
+            'use_bw_approx': False,
             'populate_bw_factors': False,
             'ecl': 2**22,
-            'iB': 10,
+            'iB': _IB_MAP[key],
             'approximation_method': 'wmb',
             'bw_ecl': None,
             'backward_ecl': 2**22,
