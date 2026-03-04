@@ -113,13 +113,14 @@ Loss function names ending in `_fdb` indicate "forward diff barrier" (stop-gradi
 
 ### Benchmark Problems
 
-Benchmark problem sets are defined in `nce/benchmark_problems/`. Each set is a list of
-pyGMs `Model` objects retrieved via the UAI catalogue.
+Benchmark problem sets are defined in `nce/benchmark_problems/`. Each set is a `BenchmarkSet`
+object with `.problems` (list of pyGMs `Model` objects) and `.configs` (dict of config lists)
+attributes.
 
 ```python
-from nce.benchmark_problems import neuro_be_sanity_check
-for model in neuro_be_sanity_check:
-    fastgm = FastGM(model=model, nn_config=config, device=device)
+from nce.benchmark_problems import nbe_sanity_check
+for model, config in zip(nbe_sanity_check.problems, nbe_sanity_check.configs['nbe']):
+    fastgm = FastGM(model=model, nn_config=config, device=config['device'])
 ```
 
 For instructions on creating new benchmark sets, see `docs/creating_benchmark_sets.md`.
