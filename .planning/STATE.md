@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 Phase: 4 of 4 (Plotting Integration)
 Plan: 2 of 2 in current phase
 Status: Milestone complete
-Last activity: 2026-03-03 - Completed quick task 011: restructure benchmark_problems, rename to nbe_sanity_check
+Last activity: 2026-03-04 - Completed quick task 012: implement NeuroBE num_samples function
 
 Progress: [##########] 100%
 
@@ -67,6 +67,9 @@ Recent decisions affecting current work:
 - Benchmark config pairing: dual export (dict by key + ordered list) for flexible usage (quick-3)
 - BenchmarkSet class consolidates problems + configs into single importable object (quick-4)
 - Config dicts fully populated with all 42 fields from reference get_config() template (quick-4)
+- NeuroBE formula computes 48997 not 48999 for w=20,l=3,eps=0.1 - floating-point difference from doc table (quick-5)
+- 'nbe,<value>' config string pattern for deferred computation based on bucket properties (quick-5)
+- Config updates: loss_fn='weighted_mse', skip_early_stopping=False, use_bw_approx=False for NeuroBE defaults (quick-5)
 
 ### Pending Todos
 
@@ -90,11 +93,12 @@ None.
 | 009 | Create benchmark_problems module with neuro_be_sanity_check set | 2026-03-03 | a7ff31a | [2-create-benchmark-problems-module-with-ne](./quick/2-create-benchmark-problems-module-with-ne/) |
 | 010 | Add optional neuroBE config sets to benchmark_problems module | 2026-03-03 | 6a95ebf | [3-add-optional-nn-config-sets-to-benchmark](./quick/3-add-optional-nn-config-sets-to-benchmark/) |
 | 011 | Restructure benchmark_problems: BenchmarkSet class, rename to nbe_sanity_check | 2026-03-03 | 8fb968a | [4-restructure-benchmark-problems-rename-to](./quick/4-restructure-benchmark-problems-rename-to/) |
+| 012 | Implement NeuroBE num_samples function, update configs, add grid10x10 | 2026-03-04 | 9412ad8 | [5-implement-nbe-num-samples-function-updat](./quick/5-implement-nbe-num-samples-function-updat/) |
 
 ## Session Continuity
 
-Last session: 2026-03-04 00:14
-Stopped at: Completed quick task 4 (restructure benchmark_problems, rename to nbe_sanity_check)
+Last session: 2026-03-04 00:52
+Stopped at: Completed quick task 5 (implement NeuroBE num_samples function)
 Resume file: None
 
 ---

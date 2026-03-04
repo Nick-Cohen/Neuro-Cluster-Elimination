@@ -1,0 +1,127 @@
+2026-03-04
+- Implemented NeuroBE num_samples function (compute_nbe_num_samples) on FastBucket
+  - Formula: nSamples = floor((pd + ln(1000)) / epsilon), pd = temp * ln(temp/l)
+  - Added 'nbe,<epsilon>' config string resolution in compute_message_nn
+  - Updated nbe_sanity_check: 5 models (added grid10x10.f5.wrap), per-model epsilon/iB
+  - Config defaults: loss_fn='weighted_mse', skip_early_stopping=False, use_bw_approx=False
+  - Test on rbm_20 width-20 bucket (var 28): total=24056 samples at eps=0.1
+- Created small_problems benchmark set (24 unique models from probs12_4 iB10+iB15, deduplicated)
+  - ECL values set from auto_ecl in problem_ecl_values.csv
+  - Config template from full_algorithm_12_4_bwecl.py (nn model, hidden_sizes=[3,3])
+  - Added set_bw_ecl() helper for bulk bw_ecl updates across all problems
+  - Test file: notebooks/_3-2026/claude_experiments/test_small_problems.py
+- Researched NeuroBE sample allocation algorithm from paper + code
+  - Documented algorithm at docs/neurobe_sample_allocation_algorithm.md
+  - Extracted epsilon values per benchmark at docs/neurobe_epsilon_values.md
+...............
+2026-03-03
+- Created nce.benchmark_problems module for named benchmark problem sets via pyGMs catalog
+  - neuro_be_sanity_check: pedigree13 (1077 vars), grid40x40.f10 (1600), grid20x20.f10 (400), rbm_20 (40)
+  - catalog_utils.py handles pedigree index patching, default .model_cache path
+  - Wrote docs/creating_benchmark_sets.md with step-by-step guide for adding new sets
+  - Updated CLAUDE.md with Benchmark Problems section
+- Rewrote QuantizationSolver (nce/neural_networks/quantization.py) with recursive binary splitting
+  - Replaced DP+D&C algorithm with simpler greedy recursive binary split heuristic
+  - segment_value uses logsumexp(f+b) - logsumexp(b) for numerically stable UKL optimal value
+  - segment_ukl_loss computes unnormalized KL divergence per segment
+  - k=1 base case, k=2 linear scan over all split points, k>2 recursive halving
+  - Verified on grid10x10.f5.wrap: K=8 on 16-element message, total_cost=0.0065, visual match confirmed
+  - Public quantize_message() API unchanged
+- Created test script: notebooks/March-2026/claude_experiments/test_quantization.py (gitignored)
+- Awaiting human checkpoint verify on quantization_grid10x10_K8.png
+- Created experiment_bw_ecl_quick.py: auto-determines minimum ECL per problem for >1 NN
+  - For each problem, finds the ECL where only 2-7 NNs need training (vs. 9-58 with original ECL)
+  - Significantly reduces training time while still exercising backward weighting
+  - ECL ranges: 2^14 to 2^24 depending on problem (vs. fixed 2^10 or 2^15 in original)
+- Added optional neuroBE config sets to benchmark_problems module (quick task 3)
+  - neuro_be_sanity_check_configs: dict keyed by catalogue key with per-model neuroBE params
+  - neuro_be_sanity_check_configs_list: ordered list for zip() with models
+  - pedigree13/rbm_20 use nbe,3; grids use nbe,1 for hidden_sizes
+  - Test script: notebooks/March-2026/test_benchmark_configs.py (all 4 models PASS)
+- Restructured benchmark_problems: renamed neuro_be_sanity_check to nbe_sanity_check (quick task 4)
+  - Created BenchmarkSet class with .problems and .configs['nbe'] attributes
+  - Fully populated config dicts with all 42 fields from reference get_config() template
+  - Single import: from nce.benchmark_problems import nbe_sanity_check
+  - Updated CLAUDE.md, docs/creating_benchmark_sets.md, test_benchmark_configs.py
+- Launched full experiment: 360 work items (30 problems x 4 bw_ecl x 3 runs) on GPUs 1,2,3
+  - bw_ecl values: 0 (no bw), 2^4, forward_ecl, 2^30
+- First results validated: smokers_20.uai (no bw) Z_error = 0.015, 0.105, 0.107 across 3 runs
+  - ~8900 sec/run (vs ~10000 sec original with 9 NNs → ~10% faster with only 2 NNs)
+  - Per-bucket: ~90 min (524k samples) + ~45 min (262k samples) = ~135 min total training
+...............
+2026-03-02
+- Committed all dead code cleanup changes: 95 files changed, 5,321 insertions, 14,324 deletions
+  - Deleted old duplicate top-level dirs (NCE/, data/, inference/, neural_networks/, sampling/, utils/)
+  - Removed dead files within nce/ (nn_factors.py, utils.py, message_trainer.py, message_gradient.py, factor_qdecision_tree.py)
+  - Added previously untracked source files (message_gradient_factors.py, linear_mse_solver.py, quantization.py, backward_sensitivity.py, pygms_conversion.py, pygms_wmb_interface.py)
+  - Cleaned up unused imports and dead code paths in active modules
+- Executed Phase 3 (Needs Decision) of refactoring plan: 8 items
+  - CM-04: Removed if True:/if False: debug blocks in sample_generator.py, graphical_model.py, train.py (4 locations)
+  - CM-05: Removed ~89 commented-out print/dprint statements across 7 files (background agent)
+  - EF-01: Fixed 3 bare except: clauses → except Exception: with proper re-raise (factor.py, graphical_model.py, message_gradient_factors.py)
+  - EF-03: Removed swallowed exception (try/except: 1+1) in message_gradient_factors.py
+  - NM-02: Removed scope/vars aliases from FastFactor, consolidated to .labels only
+  - OR-01: Removed unused shuffle_batches function and import
+  - ST-01/ST-03: Removed _make_dataloader_old, compute_gradient_values_old, DataPreprocessor_old (~564 lines)
+  - ST-02: Added nce_package_files/ to .gitignore (stale snapshot directory)
+- ~2,067 additional lines removed in this phase
+- All 31 Python files compile successfully
+...............
+- Executed Phase 2 (Verify Before Applying) of refactoring plan: 5 items
+  - DC-09: Deleted nce/inference/nn_factors.py (70 lines) and removed import from __init__.py
+  - NM-01: Fixed __all__ export list in nce/inference/__init__.py (removed non-existent symbol, added actual exports)
+  - CM-01: Removed commented-out get_message_gradient method from graphical_model.py (~26 lines)
+  - CM-02: Removed commented-out get_message_stats and graph_message_stats_old from graphical_model.py (~350 lines)
+  - ST-04: Removed broken create_data_loaders function from data_loader.py and __init__.py (~42 lines)
+- Verified all imports and compilation pass after changes
+- ~490 additional lines of dead/commented code removed
+...............
+2026-03-01 (session 3)
+- Executed Phase 1 (Safe Auto-Apply) of refactoring plan: 17 items across 6 categories
+  - Deleted 8 dead files: utils.py, message_trainer.py, fastElim.py (1283 lines),
+    factor_qdecision_tree.py (220 lines), NN_Train_copy.py (867 lines), dt2.py (698 lines),
+    message_gradient.py (131 lines), train_old.py (363 lines)
+  - Removed unreachable code after return in FactorNN.eliminate() (DC-10)
+  - Removed populate_gradient_factors_old() from message_gradient_factors.py (DC-14)
+  - Removed _old methods from data_loader.py and sample_generator.py (DC-12, DC-13)
+  - Removed duplicate nn_to_FastFactor from FastFactor class (DC-11)
+  - Fixed wildcard import: `from typing import *` -> `from typing import List, Tuple` (NM-04)
+  - Removed _flag0 unused variable from train.py (NM-03)
+  - Removed 5 debug "got here" print statements (EF-02)
+  - Removed 3 empty stubs: retrain(), check_tensor_size(), check_memory_usage() (OR-02, OR-03)
+  - Removed version markers and commented-out code in factor_nn.py (CM-03)
+  - Removed unused `time` import from factor.py
+- Verified all imports and compilation pass after changes
+- ~3,900 lines of dead code removed total
+...............
+2026-03-01 (session 2)
+- Produced comprehensive refactoring plan: 33 proposed changes across 6 categories
+  - 14 DEAD_CODE items (~4,200 lines removable)
+  - 5 COMMENTS items (commented-out code blocks, debug prints)
+  - 4 NAMING items (__all__ fix, attribute aliases, wildcard imports)
+  - 3 EFFICIENCY items (bare except clauses, swallowed exceptions)
+  - 4 STRUCTURE items (old training path consolidation, nce_package_files)
+  - 3 ORGANIZATION items (stubs, utility placement)
+  - Output: .claude/ai-ops/refactoring-plan.md
+- Extended knowledge graph with 2 new patterns:
+  - data-normalization: normalizing constant pipeline
+  - one-hot-encoding: lower-dim vs full encoding modes
+- Verified all P1 dead code findings against actual codebase
+- Discovered additional issues: broken create_data_loaders function, _flag0 unused variable,
+  __all__ referencing non-existent symbol, 731 print statements across codebase
+...............
+2026-03-01 (session 1)
+- Completed full codebase trace: mapped all 30+ modules, 10+ classes, and their relationships
+  - Output: .claude/ai-ops/state/codebase-trace.md
+- Identified dead code: 6 completely dead files, 3 superseded modules, 5+ dead code blocks in active files
+  - ~3500-4000 lines of dead code identified
+  - Key dead files: fastElim.py, NN_Train_copy.py, dt2.py, train_old.py, message_gradient.py, factor_qdecision_tree.py
+  - Empty files: utils.py, message_trainer.py
+  - Output: .claude/ai-ops/state/dead-code-report.md
+- Built knowledge graph with 8 concept entries and 2 pattern entries:
+  - Concepts: variable-elimination, weighted-mini-bucket, backward-messages, unnormalized-kl-divergence,
+    factor-operations, neural-network-factors, loss-functions, sample-generation, cluster-elimination, quantization
+  - Patterns: log-space-convention, three-layer-architecture
+  - Updated _index.md and _context.md
+- Marked 3 P1 checklist items as done
+...............
