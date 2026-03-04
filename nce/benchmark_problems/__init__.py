@@ -1,19 +1,11 @@
 """Benchmark problem sets for NCE experiments.
 
 Usage:
-    from nce.benchmark_problems import neuro_be_sanity_check, neuro_be_sanity_check_configs
+    from nce.benchmark_problems import nbe_sanity_check
 
-    for model in neuro_be_sanity_check:
-        config = neuro_be_sanity_check_configs.get(model.modelfile)
-        print(model.modelfile, config)
-
-    # Or use the list form for easy zipping:
-    from nce.benchmark_problems import neuro_be_sanity_check_configs_list
-
-    for model, config in zip(neuro_be_sanity_check, neuro_be_sanity_check_configs_list):
+    for model, config in zip(nbe_sanity_check.problems, nbe_sanity_check.configs['nbe']):
         print(model.modelfile, config)
 """
-from .neuro_be_sanity_check import neuro_be_sanity_check
-from .neuro_be_sanity_check import neuro_be_sanity_check_configs
-from .neuro_be_sanity_check import neuro_be_sanity_check_configs_list
+from .nbe_sanity_check import nbe_sanity_check
+from .nbe_sanity_check import BenchmarkSet
 from .catalog_utils import get_catalog
