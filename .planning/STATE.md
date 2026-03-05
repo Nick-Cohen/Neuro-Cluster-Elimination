@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 Phase: 4 of 4 (Plotting Integration)
 Plan: 2 of 2 in current phase
 Status: Milestone complete
-Last activity: 2026-03-05 - Completed quick task 015: Execute NBE eval plan phases 0a-1, fix 4 config bugs
+Last activity: 2026-03-05 - Completed quick task 016: Change ecl from 2^iB to 2^(iB-1)
 
 Progress: [##########] 100%
 
@@ -104,6 +104,7 @@ None.
 | 013 | Create comprehensive NBE algorithm evaluation plan | 2026-03-05 | - | [6-create-comprehensive-nbe-algorithm-evalu](./quick/6-create-comprehensive-nbe-algorithm-evalu/) |
 | 014 | Fix NBE configs, update eval plan, create pre-smoke scripts | 2026-03-05 | 5722360 | [7-fix-nbe-configs-update-eval-plan-create-](./quick/7-fix-nbe-configs-update-eval-plan-create-/) |
 | 015 | Execute NBE evaluation plan (Phases 0a-1), fix 4 config bugs | 2026-03-05 | ea208ef | [8-execute-the-nbe-evaluation-plan-from-doc](./quick/8-execute-the-nbe-evaluation-plan-from-doc/) |
+| 016 | Change ecl from 2^iB to 2^(iB-1) matching NeuroBE internals | 2026-03-05 | 59d5dc2 | [9-change-ecl-from-2-ib-to-2-ib-1-in-nbe-co](./quick/9-change-ecl-from-2-ib-to-2-ib-1-in-nbe-co/) |
 | 015 | Execute NBE evaluation plan Phases 0a-3, fix set_size/model.X bugs | 2026-03-05 | fb93b9f | [8-execute-the-nbe-evaluation-plan-from-doc](./quick/8-execute-the-nbe-evaluation-plan-from-doc/) |
 
 ## Session Continuity
