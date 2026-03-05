@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 Phase: 4 of 4 (Plotting Integration)
 Plan: 2 of 2 in current phase
 Status: Milestone complete
-Last activity: 2026-03-05 - Completed quick task 014: fix NBE configs, update eval plan, create pre-smoke scripts
+Last activity: 2026-03-05 - Completed quick task 8: execute NBE evaluation plan Phases 0a-3
 
 Progress: [##########] 100%
 
@@ -73,6 +73,10 @@ Recent decisions affecting current work:
 - Constructor auto-calls dope_factors() when config['dope_factors']=True, no manual call needed (quick-7)
 - matching_var() converts int label to Var before eliminate_variables(up_to=var) (quick-7)
 - get_log_partition_function() is the correct inference API, not run() (quick-7)
+- ecl=2^22 benchmark config results in num_trained=0 for ALL 5 sanity check models (quick-8)
+- set_size must be clamped to num_samples when NBE adaptive sampling gives fewer samples than set_size (quick-8)
+- FactorNN.tensor is None (lazy representation); access labels/is_nn instead of tensor.shape (quick-8)
+- catalog Model uses model.num_vars not model.X (quick-8)
 
 ### Pending Todos
 
@@ -99,11 +103,12 @@ None.
 | 012 | Implement NeuroBE num_samples function, update configs, add grid10x10 | 2026-03-04 | 9412ad8 | [5-implement-nbe-num-samples-function-updat](./quick/5-implement-nbe-num-samples-function-updat/) |
 | 013 | Create comprehensive NBE algorithm evaluation plan | 2026-03-05 | - | [6-create-comprehensive-nbe-algorithm-evalu](./quick/6-create-comprehensive-nbe-algorithm-evalu/) |
 | 014 | Fix NBE configs, update eval plan, create pre-smoke scripts | 2026-03-05 | 5722360 | [7-fix-nbe-configs-update-eval-plan-create-](./quick/7-fix-nbe-configs-update-eval-plan-create-/) |
+| 015 | Execute NBE evaluation plan Phases 0a-3, fix set_size/model.X bugs | 2026-03-05 | fb93b9f | [8-execute-the-nbe-evaluation-plan-from-doc](./quick/8-execute-the-nbe-evaluation-plan-from-doc/) |
 
 ## Session Continuity
 
-Last session: 2026-03-05 20:05
-Stopped at: Completed quick task 7 (fix NBE configs, update eval plan, create pre-smoke scripts)
+Last session: 2026-03-05 20:37
+Stopped at: Quick task 8 - checkpoint:human-verify after Tasks 1-2 (Phases 0a-3 complete)
 Resume file: None
 
 ---

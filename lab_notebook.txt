@@ -1,3 +1,27 @@
+2026-03-05
+- Executed NBE evaluation plan Phases 0a-3 (quick task 8):
+  - Phase 0a: grid10x10 exact log Z = 169.40834 (num_trained=0), 6.2s
+  - Phase 0b: pedigree13 single bucket 302 trained 1 epoch (29.7s) - pipeline validated
+  - Phase 1 practice: grid10x10 num_trained=0 (max width=21, 2^21 < ecl=2^22)
+  - Phase 1 full: Same result as Phase 0a (all buckets exact)
+  - Phase 2: rbm_20 ablation (5 variants, all num_trained=0)
+  - Phase 3: 4/5 problems (grid40x40 missing ord file), all num_trained=0
+  - Key finding: ecl=2^22 benchmark config prevents any NN training on all 5 models
+  - Bug fixed: set_size > num_samples caused 0 training iterations; added clamp in train.py
+  - Bug fixed: model.X -> model.num_vars in 3 pre-smoke scripts
+  - Bug fixed: FactorNN.tensor is None (lazy), script fixed to use type/labels/is_nn
+- Fixed 6 NBE config bugs in nbe_sanity_check.py:
+  - loss_fn: 'weighted_mse' -> 'weighted_logspace_mse' (correct registered name)
+  - backward_iB: hardcoded 10 -> matches per-model iB
+  - dope_factors: False -> True (prevents -inf NaN)
+  - num_epochs: 10000 -> 500, lr: 0.01 -> 0.001 (NeuroBE Config.h values)
+  - backward_ecl: 2**22 -> None (irrelevant for NBE)
+- Rewrote NBE evaluation plan with Phase 0a (exact baseline) and Phase 0b (single bucket NN test)
+  - Corrected API usage: get_log_partition_function() not run(), matching_var() for int-to-Var
+  - Simplified Phase 3 output table, fixed hidden_sizes explanation
+- Created 3 pre-smoke test scripts: phase0a_exact, phase0b_single_bucket, practice_1epoch
+  - Verified FastGM constructor auto-calls dope_factors() when config flag is True
+...............
 2026-03-04
 - Implemented NeuroBE num_samples function (compute_nbe_num_samples) on FastBucket
   - Formula: nSamples = floor((pd + ln(1000)) / epsilon), pd = temp * ln(temp/l)
