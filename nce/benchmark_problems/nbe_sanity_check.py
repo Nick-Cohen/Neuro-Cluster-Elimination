@@ -7,6 +7,12 @@ Contains 5 models for quick sanity-checking of neural bucket elimination:
 - rbm_20: restricted Boltzmann machine (40 vars, width 20)
 - grid10x10.f5.wrap: small grid model (100 vars)
 
+NeuroBE hyperparameters (from NeuroBE Config.h):
+- num_epochs=500
+- lr=0.001
+- loss_fn='weighted_logspace_mse'
+- dope_factors=True (replaces -inf with finite values for stable training)
+
 Usage:
     from nce.benchmark_problems import nbe_sanity_check
 
@@ -78,13 +84,13 @@ def _build_nbe_configs():
             'device': 'cuda',
             'hidden_sizes': _HIDDEN_SIZES_MAP[key],
             'optimizer': 'adam',
-            'lr': 0.01,
+            'lr': 0.001,
             'lr_decay': 1.0,
             'momentum': 0.9,
             'inverse_time_decay_constant': 100,
             'patience': 20,
             'min_lr': 1e-8,
-            'num_epochs': 10000,
+            'num_epochs': 500,
             'num_epochs2': 0,
             'nbe_early_stopping': False,
             'nbe_warmup_epochs': 0,
@@ -94,7 +100,7 @@ def _build_nbe_configs():
             'set_size': 50000,
             'num_samples': _NUM_SAMPLES_MAP[key],
             'num_batches_per_set': 1,
-            'loss_fn': 'weighted_mse',
+            'loss_fn': 'weighted_logspace_mse',
             'traced_losses': [],
             'val_set': True,
             'fdb': False,
@@ -104,8 +110,8 @@ def _build_nbe_configs():
             'iB': _IB_MAP[key],
             'approximation_method': 'wmb',
             'bw_ecl': None,
-            'backward_ecl': 2**22,
-            'backward_iB': 10,
+            'backward_ecl': None,
+            'backward_iB': _IB_MAP[key],
             'use_linspace_bias': False,
             'use_memorizer': False,
             'display_intermediate': False,
@@ -113,7 +119,7 @@ def _build_nbe_configs():
             'plot_messages': False,
             'debug': False,
             'lower_dim': False,
-            'dope_factors': False,
+            'dope_factors': True,
             'gather_message_stats': False,
             'stratify_samples': False,
             'seed': 42,
