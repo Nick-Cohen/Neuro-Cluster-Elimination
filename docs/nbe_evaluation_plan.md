@@ -2,33 +2,49 @@
 
 ## Goal
 
-Systematically evaluate the NeuroBE (NBE) algorithm implementation in this codebase against both our standard NN baselines and, where possible, against results from the original NeuroBE paper.
+Systematically evaluate the NeuroBE (NBE) algorithm implementation in this codebase by running pre-smoke tests, smoke tests, ablation studies, and comparison against the original NeuroBE paper results.
 
 ## Current State
 
 ### What We Have
 - **Benchmark set:** `nbe_sanity_check` with 5 models (pedigree13, grid40x40.f10, grid20x20.f10, rbm_20, grid10x10.f5.wrap)
 - **NBE-specific features implemented:**
-  - `compute_nbe_num_samples(w, l, epsilon)` — per-bucket sample count from the paper's formula
-  - `hidden_sizes='nbe,<b>'` — per-bucket NN sizing: `h = b * ceil(log2(message_size))`
-  - `nbe_early_stopping` — validation-based early stopping (currently disabled in configs)
-  - `weighted_logspace_mse` — weighted MSE loss function
+  - `compute_nbe_num_samples(w, l, epsilon)` -- per-bucket sample count from the paper's formula
+  - `hidden_sizes='nbe,<b>'` -- per-bucket NN sizing: one hidden layer of size `h = b * ceil(log2(message_size))`
+  - `nbe_early_stopping` -- validation-based early stopping (currently disabled in configs)
+  - `weighted_logspace_mse` -- weighted MSE loss function in log-space
 - **Baseline configs:** `small_problems` benchmark set with standard NN configs (fixed hidden sizes, fixed num_samples=100k, unnormalized_kl loss)
 - **Experiment runner:** YAML-config-based, multi-GPU, multi-run, auto-plotting
 
-### Known Issues to Fix Before Evaluation
+### NeuroBE Paper Parameters (from Config.h)
+- `num_epochs = 500`
+- `lr = 0.001`
+- `dope_factors = True` (replace -inf with -5 for stable training)
+- `loss_fn = 'weighted_logspace_mse'`
+- Log Z comparison values can come from the NeuroBE paper (prompts/NeuroBE.pdf) but exact match is not expected due to different num_trained counts and implementation differences.
 
-1. **Loss function name mismatch:** `nbe_sanity_check` configs use `'weighted_mse'` but the registered loss function is `'weighted_logspace_mse'`. Fix the config to use the correct name, or add an alias.
-2. **`backward_iB` is hardcoded to 10** in all nbe_sanity_check configs, but `iB` varies per model (10 or 20). `backward_iB` should match `iB`.
-3. **`nbe,<epsilon>` resolution in compute_message_nn** — verify this is wired up correctly end-to-end (the string → int conversion must happen before Trainer sees it).
+### Pre-Requisites Checklist
+
+- [x] Fix loss_fn name: `'weighted_mse'` -> `'weighted_logspace_mse'` (DONE - quick task 7, Task 1)
+- [x] Fix backward_iB: matches per-model iB via `_IB_MAP[key]` (DONE - quick task 7, Task 1)
+- [x] Fix dope_factors: `False` -> `True` (DONE - quick task 7, Task 1)
+- [x] Fix num_epochs: `10000` -> `500` (DONE - quick task 7, Task 1)
+- [x] Fix lr: `0.01` -> `0.001` (DONE - quick task 7, Task 1)
+- [x] Fix backward_ecl: `2**22` -> `None` (irrelevant for NBE since use_bw_approx=False) (DONE - quick task 7, Task 1)
+- [ ] Verify `'nbe,<epsilon>'` num_samples resolution works end-to-end in compute_message_nn
+- [x] Verify `'nbe,<b>'` hidden_sizes resolution works (already tested)
+- [ ] Confirm all 5 benchmark models can be loaded (catalogue + cache refresh)
+- [ ] Confirm `weighted_logspace_mse` loss function works correctly in training loop
+
+**Note:** `bw_ib`, `bw_ecl`, and `backward_ecl` are irrelevant for NBE since `use_bw_approx=False` is the default. Setting `backward_ecl=None` makes this explicit.
 
 ---
 
 ## Evaluation Phases
 
-### Phase 1: Smoke Test (grid10x10.f5.wrap, exact mode)
+### Phase 0a: Exact Computation Baseline
 
-**Purpose:** Verify the full NBE pipeline works end-to-end on the smallest problem before scaling up.
+**Purpose:** Verify that exact bucket elimination works on grid10x10.f5.wrap by using very high ecl and iB values (forcing all buckets to be computed exactly, no NN training).
 
 **Setup:**
 ```python
@@ -37,33 +53,120 @@ from nce.inference.graphical_model import FastGM
 
 model = nbe_sanity_check.problems[4]  # grid10x10.f5.wrap
 config = dict(nbe_sanity_check.configs['nbe'][4])
-config['ecl'] = 2**30       # exact computation everywhere
-config['iB'] = 30           # effectively exact
-config['device'] = 'cpu'    # no GPU needed for small problem
+config['ecl'] = 2**30       # force exact computation everywhere
+config['iB'] = 30           # effectively exact (no mini-buckets)
+config['device'] = 'cpu'
+
+fastgm = FastGM(model=model, nn_config=config, device='cpu')
+# dope_factors is called automatically by constructor since config['dope_factors']=True
+log_z = fastgm.get_log_partition_function()
+print(f"Log Z estimate: {log_z}")
 ```
 
 **What to check:**
-- Does `FastGM(model=model, nn_config=config)` construct without errors?
-- Does `fastgm.run()` complete?
+- Does `FastGM` construct without errors?
+- Does `get_log_partition_function()` complete?
+- Is the log Z estimate reasonable (compare to `model.ln_z` if available)?
+
+**Output:** Single log Z estimate, confirmation that exact mode works.
+
+**Script:** `notebooks/March-2026/claude_experiments/nbe_eval_phase0a_exact.py`
+
+---
+
+### Phase 0b: Single Bucket NN Test
+
+**Purpose:** Test NN training on ONE large bucket in isolation, verifying that the NN training pipeline (sampling, loss function, optimizer) works for a single bucket before running full inference.
+
+**Setup:**
+```python
+from nce.benchmark_problems import nbe_sanity_check
+from nce.inference.graphical_model import FastGM
+
+model = nbe_sanity_check.problems[0]  # pedigree13 (1077 vars, width 32)
+config = dict(nbe_sanity_check.configs['nbe'][0])
+config['ecl'] = 2**30       # exact mode for all preceding buckets
+config['iB'] = 30
+config['num_epochs'] = 1    # just 1 epoch to test pipeline
+config['device'] = 'cpu'
+
+fastgm = FastGM(model=model, nn_config=config, device='cpu')
+# dope_factors called automatically by constructor
+
+# Find large buckets -- returns INTEGER labels (not Var objects)
+large_labels = fastgm.get_large_message_buckets(iB=15, debug=True)
+target_label = large_labels[0]  # integer
+
+# CRITICAL: Convert int label to Var object before passing to eliminate_variables
+target_var = fastgm.matching_var(target_label)
+fastgm.eliminate_variables(up_to=target_var)
+
+# get_bucket accepts int or Var
+bucket = fastgm.get_bucket(target_label)
+bucket.compute_message_nn()
+```
+
+**Key API notes:**
+- `get_large_message_buckets()` returns **integer labels** (var.label values)
+- `eliminate_variables(up_to=...)` expects a **Var object**
+- Use `fastgm.matching_var(int_label)` to convert integer -> Var
+- `get_bucket()` accepts either int or Var
+
+**Output:** Confirmation that a single bucket can be trained, message shape printed.
+
+**Script:** `notebooks/March-2026/claude_experiments/nbe_eval_phase0b_single_bucket.py`
+
+---
+
+### Phase 1: Smoke Test (grid10x10.f5.wrap, full NBE pipeline)
+
+**Purpose:** Verify the full NBE pipeline works end-to-end on the smallest problem. Run with num_epochs=1 first (practice), then with the correct num_epochs=500.
+
+**Practice run (1 epoch):**
+```python
+model = nbe_sanity_check.problems[4]  # grid10x10.f5.wrap
+config = dict(nbe_sanity_check.configs['nbe'][4])
+config['num_epochs'] = 1
+config['device'] = 'cpu'
+# Use benchmark defaults for ecl and iB (ecl=2**22, iB=10)
+
+fastgm = FastGM(model=model, nn_config=config, device='cpu')
+log_z = fastgm.get_log_partition_function()
+```
+
+**Full run (500 epochs):**
+```python
+config = dict(nbe_sanity_check.configs['nbe'][4])
+config['device'] = 'cpu'
+# ecl=2**22 and iB=10 are already set by benchmark config
+
+fastgm = FastGM(model=model, nn_config=config, device='cpu')
+log_z = fastgm.get_log_partition_function()
+```
+
+**What to check:**
 - Does the `'nbe,0.35'` num_samples string resolve to an integer per bucket?
-- Does the `'nbe,1'` hidden_sizes string resolve to `[h, h]` per bucket?
-- Is the log Z estimate reasonable (compare to exact value from `model.logZ` or `model.ln_z`)?
+- Does the `'nbe,1'` hidden_sizes string resolve to a single hidden layer of size `h = 1 * ceil(log2(message_size))`?
+- Is the log Z estimate reasonable (compare to exact value from Phase 0a)?
+- How many buckets used NN training? (`fastgm.num_trained`)
 
-**Output:** Single log Z estimate, per-bucket sample counts printed, confirmation of end-to-end flow.
+**Output:** Log Z estimate, per-bucket sample counts, number of trained buckets, timing.
 
-**Script location:** `notebooks/March-2026/claude_experiments/nbe_eval_phase1_smoke.py`
+**Scripts:**
+- Practice: `notebooks/March-2026/claude_experiments/nbe_eval_practice_1epoch.py`
+- Full: `notebooks/March-2026/claude_experiments/nbe_eval_phase1_smoke.py` (to be created later)
 
 ---
 
 ### Phase 2: Single-Problem Deep Dive (rbm_20)
 
-**Purpose:** rbm_20 is the problem with the largest bucket widths (up to 20) in our sanity check set, so NBE's adaptive sampling matters most here. Run it and analyze per-bucket behavior.
+**Purpose:** rbm_20 has the highest width (20) among the sanity check set, so NBE's adaptive sampling matters most here. (Note: pedigree13 has width 32 and grid40x40.f10 has width 54, but those are larger problems better suited for Phase 3.)
 
 **Setup:**
 ```python
 model = nbe_sanity_check.problems[3]  # rbm_20
 config = dict(nbe_sanity_check.configs['nbe'][3])
-config['track_errors'] = True   # record per-bucket errors
+config['track_errors'] = True
 config['device'] = 'cuda'
 ```
 
@@ -82,6 +185,11 @@ config['device'] = 'cuda'
 | NBE-fixed-loss | nbe,0.1 | nbe,3 | unnormalized_kl | Remove weighted loss |
 | Baseline | 50000 | [3,3] | unnormalized_kl | Our standard approach |
 
+**hidden_sizes explanation:**
+- `'nbe,1'` means scaling factor b=1, so `h = 1 * ceil(log2(message_size))`, giving ONE hidden layer of that size
+- `'nbe,3'` means `h = 3 * ceil(log2(message_size))`, giving ONE hidden layer of that size
+- `[3,3]` means two hidden layers of size 3 each (fixed, not adaptive)
+
 **Output:** Table of log Z errors, timing, and per-bucket stats for each variant.
 
 **Script location:** `notebooks/March-2026/claude_experiments/nbe_eval_phase2_rbm20.py`
@@ -90,37 +198,31 @@ config['device'] = 'cuda'
 
 ### Phase 3: Full Benchmark Evaluation
 
-**Purpose:** Run NBE on all 5 sanity check problems and compare to baselines.
+**Purpose:** Run NBE on all 5 sanity check problems.
 
-**Setup:** Use the experiment runner framework with YAML configs.
+**Setup:** Use the experiment runner framework with YAML configs, or run scripts directly.
 
 **Experiment matrix:**
 
-| Problem | NBE Config | Baseline Config | Runs |
-|---------|-----------|----------------|------|
-| pedigree13 | nbe,0.1 / nbe,3 / weighted_logspace_mse / iB=20 | 50k / [3,3] / ukl / iB=20 | 3 |
-| grid40x40.f10 | nbe,0.35 / nbe,1 / weighted_logspace_mse / iB=20 | 50k / [3,3] / ukl / iB=20 | 3 |
-| grid20x20.f10 | nbe,0.35 / nbe,1 / weighted_logspace_mse / iB=10 | 50k / [3,3] / ukl / iB=10 | 3 |
-| rbm_20 | nbe,0.1 / nbe,3 / weighted_logspace_mse / iB=20 | 50k / [3,3] / ukl / iB=20 | 3 |
-| grid10x10.f5.wrap | nbe,0.35 / nbe,1 / weighted_logspace_mse / iB=10 | 50k / [3,3] / ukl / iB=10 | 3 |
+| Problem | iB | ecl | hidden_sizes | num_samples | Runs |
+|---------|-----|------|-------------|-------------|------|
+| pedigree13 | 20 | 2^22 | nbe,3 | nbe,0.1 | 3 |
+| grid40x40.f10 | 20 | 2^22 | nbe,1 | nbe,0.35 | 3 |
+| grid20x20.f10 | 10 | 2^22 | nbe,1 | nbe,0.35 | 3 |
+| rbm_20 | 20 | 2^22 | nbe,3 | nbe,0.1 | 3 |
+| grid10x10.f5.wrap | 10 | 2^22 | nbe,1 | nbe,0.35 | 3 |
 
-**Metrics to compare:**
-- Log Z error (estimate - exact)
-- Total wall-clock time
-- Total samples generated across all buckets
-- Number of NN-trained buckets (vs exact computation)
+**Output table:**
 
-**Expected output:**
-```
-| Problem         | NBE LogZ Error | Baseline LogZ Error | NBE Time | Baseline Time | NBE Samples | Baseline Samples |
-|-----------------|----------------|---------------------|----------|---------------|-------------|------------------|
-| pedigree13      |                |                     |          |               |             |                  |
-| grid40x40.f10   |                |                     |          |               |             |                  |
-| ...             |                |                     |          |               |             |                  |
-```
+| Problem | num_trained | num_vars | total_time | log_Z_true | log_Z_estimate | abs_err |
+|---------|-------------|----------|------------|------------|----------------|---------|
+| pedigree13 | | 1077 | | | | |
+| grid40x40.f10 | | 1600 | | | | |
+| grid20x20.f10 | | 400 | | | | |
+| rbm_20 | | 40 | | | | |
+| grid10x10.f5.wrap | | 100 | | | | |
 
 **Script location:** `notebooks/March-2026/claude_experiments/nbe_eval_phase3_full.py`
-**Config files:** `notebooks/March-2026/claude_experiments/nbe_eval_nbe.yaml`, `nbe_eval_baseline.yaml`
 
 ---
 
@@ -128,7 +230,7 @@ config['device'] = 'cuda'
 
 **Purpose:** Test whether `nbe_early_stopping` can reduce training time without sacrificing accuracy.
 
-**Setup:** Re-run the Phase 3 NBE configs with early stopping enabled:
+**Setup:** Re-run Phase 3 NBE configs with early stopping enabled:
 ```python
 config['nbe_early_stopping'] = True
 config['nbe_warmup_epochs'] = 50   # try different warmup values
@@ -138,7 +240,7 @@ config['num_epochs'] = 10000       # cap (early stopping should terminate before
 **Variants:**
 | Warmup Epochs | Expected Behavior |
 |---------------|-------------------|
-| 0 | Aggressive — may stop too early |
+| 0 | Aggressive -- may stop too early |
 | 10 | Moderate |
 | 50 | Conservative |
 | 100 | Very conservative |
@@ -163,9 +265,9 @@ config['num_epochs'] = 10000       # cap (early stopping should terminate before
 **What to compare:**
 - Average sample count per bucket (ours vs paper)
 - Log Z accuracy (if paper reports it)
-- Hidden layer sizes (our `nbe,b` vs paper's scaling)
+- Hidden layer sizes (our `nbe,b` gives one layer of `b * ceil(log2(message_size))` vs paper's scaling)
 
-**Note:** The paper uses a different notation (eta/η instead of epsilon/ε) and a slightly different formula. The mapping is documented in `docs/neurobe_epsilon_values.md`.
+**Note:** The paper uses a different notation (eta instead of epsilon) and a slightly different formula. The mapping is documented in `docs/neurobe_epsilon_values.md`.
 
 **Script location:** `notebooks/March-2026/claude_experiments/nbe_eval_phase5_paper.py`
 
@@ -174,43 +276,53 @@ config['num_epochs'] = 10000       # cap (early stopping should terminate before
 ## Execution Order
 
 ```
-Phase 1 (Smoke Test)
-  └─ Fix bugs found
-      └─ Phase 2 (Deep Dive on rbm_20)
-          └─ Phase 3 (Full Benchmark)
-              ├─ Phase 4 (Early Stopping)  [can run in parallel with Phase 5]
-              └─ Phase 5 (Paper Comparison)
+Phase 0a (Exact Computation Baseline)
+  |
+  v
+Phase 0b (Single Bucket NN Test)
+  |
+  v
+Phase 1 - Practice (1-epoch full run on grid10x10)
+  |
+  v
+Phase 1 - Full (500-epoch run on grid10x10)
+  |
+  v
+Phase 2 (Deep Dive + Ablation on rbm_20)
+  |
+  v
+Phase 3 (Full Benchmark - all 5 problems)
+  |
+  +---> Phase 4 (Early Stopping)  [can run in parallel with Phase 5]
+  |
+  +---> Phase 5 (Paper Comparison)
 ```
-
-## Pre-Requisites Checklist
-
-- [ ] Fix loss_fn name: change `'weighted_mse'` to `'weighted_logspace_mse'` in nbe_sanity_check configs
-- [ ] Fix backward_iB: should match per-model iB (currently hardcoded to 10)
-- [ ] Verify `'nbe,<epsilon>'` num_samples resolution works end-to-end in compute_message_nn
-- [ ] Verify `'nbe,<b>'` hidden_sizes resolution works (already tested)
-- [ ] Confirm all 5 benchmark models can be loaded (catalogue + cache refresh)
-- [ ] Confirm `weighted_logspace_mse` loss function works correctly in training loop
 
 ## Success Criteria
 
-1. **Phase 1:** grid10x10.f5.wrap runs end-to-end with NBE config, produces a log Z estimate
-2. **Phase 2:** rbm_20 ablation shows which NBE component contributes most to accuracy
-3. **Phase 3:** All 5 problems produce results; NBE vs baseline comparison table populated
-4. **Phase 4:** Early stopping reduces training time by >20% with <5% accuracy degradation
-5. **Phase 5:** Our sample counts and hidden sizes are within 2x of paper's reported values
+1. **Phase 0a:** grid10x10.f5.wrap exact elimination produces a log Z value
+2. **Phase 0b:** Single bucket NN trains for 1 epoch without errors on pedigree13
+3. **Phase 1:** grid10x10.f5.wrap runs end-to-end with NBE config, produces a log Z estimate
+4. **Phase 2:** rbm_20 ablation shows which NBE component contributes most to accuracy
+5. **Phase 3:** All 5 problems produce results; output table populated
+6. **Phase 4:** Early stopping reduces training time by >20% with <5% accuracy degradation
+7. **Phase 5:** Our sample counts and hidden sizes are within 2x of paper's reported values
 
 ## File Structure
 
 ```
 notebooks/March-2026/claude_experiments/
-├── nbe_eval_phase1_smoke.py           # Phase 1: smoke test
-├── nbe_eval_phase2_rbm20.py           # Phase 2: rbm_20 deep dive + ablation
-├── nbe_eval_phase3_full.py            # Phase 3: full benchmark comparison
-├── nbe_eval_phase4_earlystop.py       # Phase 4: early stopping evaluation
-├── nbe_eval_phase5_paper.py           # Phase 5: paper comparison
-├── nbe_eval_nbe.yaml                  # YAML config for NBE experiments
-├── nbe_eval_baseline.yaml             # YAML config for baseline experiments
-└── nbe_eval_results/                  # Output directory for all results
+├── nbe_eval_phase0a_exact.py           # Phase 0a: exact computation baseline
+├── nbe_eval_phase0b_single_bucket.py   # Phase 0b: single bucket NN test
+├── nbe_eval_practice_1epoch.py         # Phase 1 practice: 1-epoch full run
+├── nbe_eval_phase1_smoke.py            # Phase 1: full 500-epoch smoke test
+├── nbe_eval_phase2_rbm20.py            # Phase 2: rbm_20 deep dive + ablation
+├── nbe_eval_phase3_full.py             # Phase 3: full benchmark comparison
+├── nbe_eval_phase4_earlystop.py        # Phase 4: early stopping evaluation
+├── nbe_eval_phase5_paper.py            # Phase 5: paper comparison
+└── nbe_eval_results/                   # Output directory for all results
+    ├── phase0a/
+    ├── phase0b/
     ├── phase1/
     ├── phase2/
     ├── phase3/
