@@ -22,7 +22,7 @@ config['num_epochs'] = 1
 config['device'] = 'cpu'
 
 print(f"Model: {model.modelfile}")
-print(f"Num vars: {len(model.X)}")
+print(f"Num vars: {model.num_vars}")
 print(f"Config: num_epochs=1, device=cpu")
 print(f"  ecl={config['ecl']} (benchmark default)")
 print(f"  iB={config['iB']} (benchmark default)")
@@ -64,7 +64,7 @@ print("=" * 60)
 print("RESULTS")
 print("=" * 60)
 print(f"Problem: {model.modelfile}")
-print(f"Num vars: {len(model.X)}")
+print(f"Num vars: {model.num_vars}")
 print(f"Log Z estimate: {log_z}")
 print(f"Num trained (NN buckets): {fastgm.num_trained}")
 print(f"Total time: {t_total:.2f}s")

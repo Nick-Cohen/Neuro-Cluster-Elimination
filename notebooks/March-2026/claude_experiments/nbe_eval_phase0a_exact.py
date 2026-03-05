@@ -21,7 +21,7 @@ config['iB'] = 30           # very high i-bound -> no mini-bucket splitting
 config['device'] = 'cpu'    # no GPU needed for exact computation on small problem
 
 print(f"Model: {model.modelfile}")
-print(f"Num vars: {len(model.X)}")
+print(f"Num vars: {model.num_vars}")
 print(f"Config overrides: ecl=2^30, iB=30, device=cpu")
 print(f"dope_factors: {config['dope_factors']}")
 print()

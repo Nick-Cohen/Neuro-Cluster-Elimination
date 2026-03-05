@@ -26,7 +26,7 @@ config['num_epochs'] = 1    # just 1 epoch to test the pipeline
 config['device'] = 'cpu'
 
 print(f"Model: {model.modelfile}")
-print(f"Num vars: {len(model.X)}")
+print(f"Num vars: {model.num_vars}")
 print(f"Config: ecl=2^30, iB=30, num_epochs=1, device=cpu")
 print(f"dope_factors: {config['dope_factors']}")
 print()
@@ -107,8 +107,10 @@ try:
     message = bucket.compute_message_nn()
     t_train = time.time() - t0
     print(f"Training completed in {t_train:.2f}s")
-    print(f"Message tensor shape: {message.tensor.shape}")
+    # compute_message_nn returns a FactorNN (tensor=None; it's lazy/lazy-evaluated)
+    print(f"Message type: {type(message).__name__}")
     print(f"Message labels: {message.labels}")
+    print(f"Message is_nn: {getattr(message, 'is_nn', False)}")
     print()
     print("Phase 0b complete: single bucket NN training succeeded.")
 except Exception as e:

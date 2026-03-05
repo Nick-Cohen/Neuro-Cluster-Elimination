@@ -261,6 +261,11 @@ class Trainer:
                 batch_size = self.config['batch_size']
             num_batches_per_set = (set_size + batch_size - 1) // batch_size
         else:
+            # If num_samples < set_size (e.g. NBE adaptive sampling gives fewer samples than the
+            # default set_size of 50000), clamp set_size to num_samples so we get at least 1 set.
+            if num_samples < set_size:
+                print(f'Note: num_samples ({num_samples}) < set_size ({set_size}). Clamping set_size to num_samples.')
+                set_size = num_samples
             num_sets = num_samples // set_size
             num_batches_per_set = set_size // batch_size
         if set_size % batch_size != 0:
