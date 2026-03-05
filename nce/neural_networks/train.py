@@ -196,7 +196,8 @@ class Trainer:
             init_batches = self.dataloader.load_all()
         else:
             batch_size = self.config['batch_size']
-            num_batches_per_set = self.config['set_size'] // batch_size
+            init_set_size = self.config.get('set_size') or self.config['num_samples']
+            num_batches_per_set = init_set_size // batch_size
             stratify = self.config.get('stratify_samples', False)
             init_batches = self.dataloader.load_batches(batch_size, num_batches_per_set, stratify_samples=stratify)
         print(f"Initialized normalizing constant from training data: {self.data_preprocessor.normalizing_constant:.4f}")
@@ -247,7 +248,7 @@ class Trainer:
             num_epochs = override_epochs
         else:
             num_epochs = self.config['num_epochs']
-        set_size = self.config['set_size']
+        set_size = self.config.get('set_size') or num_samples
 
         # Check for full data batch mode BEFORE using set_size
         if self.dataloader.sample_generator.sampling_scheme == 'all':

@@ -20,9 +20,15 @@ class FastGM:
     def __init__(self, model=None, elim_order=None, evid=None,buckets=None, factors=None, uai_file=None, device="cuda", reference_fastgm=None, nn_config=None, stats=None):
         if model is not None:
             uai_file = model.file
-            elim_order = model.order
-            evid = model.evidence
-            self.logSS = model.logSS
+            try:
+                elim_order = model.order
+            except (ValueError, Exception):
+                elim_order = None  # will be computed from .vo file or min-fill
+            try:
+                evid = model.evidence
+            except (ValueError, Exception):
+                evid = None
+            self.logSS = getattr(model, 'logSS', None)
         else:
             self.logSS = None
         # CRITICAL: Create a NEW copy of config dict to avoid sharing with other GMs
@@ -404,6 +410,12 @@ class FastGM:
                 self.num_trained += 1
                 print(f"Bucket {bucket.label}: training DT ({self.num_trained})", flush=True)
                 output_message = bucket.compute_message_dt()
+            elif self.config.get('approximation_method') == 'quantization':
+                self.num_trained += 1
+                num_states = self.config.get('quantization_states', self.ecl)
+                loss_fn = self.config.get('loss_fn', 'unnormalized_kl')
+                print(f"Bucket {bucket.label}: quantizing ({self.num_trained}, K={num_states})", flush=True)
+                output_message = bucket.compute_message_quantization(num_states=num_states, loss_fn=loss_fn)
             elif self.config.get('approximation_method') == 'wmb':
                 # Use compute_wmb_message which returns a LIST of messages
                 # This keeps mini-bucket messages separate to respect ecl
