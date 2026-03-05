@@ -1,13 +1,21 @@
 2026-03-05
-- Executed NBE evaluation plan Phases 0a-3 (quick task 8):
-  - Phase 0a: grid10x10 exact log Z = 169.40834 (num_trained=0), 6.2s
-  - Phase 0b: pedigree13 single bucket 302 trained 1 epoch (29.7s) - pipeline validated
-  - Phase 1 practice: grid10x10 num_trained=0 (max width=21, 2^21 < ecl=2^22)
-  - Phase 1 full: Same result as Phase 0a (all buckets exact)
-  - Phase 2: rbm_20 ablation (5 variants, all num_trained=0)
-  - Phase 3: 4/5 problems (grid40x40 missing ord file), all num_trained=0
-  - Key finding: ecl=2^22 benchmark config prevents any NN training on all 5 models
-  - Bug fixed: set_size > num_samples caused 0 training iterations; added clamp in train.py
+- Quick task 11: Fix hidden sizes script to capture bucket widths during elimination
+  - Bug: old script read widths pre-elimination (max 4), all buckets appeared "exact"
+  - Fix: used config['custom_hidden_sizes'] callback (called inside compute_message_nn during elimination)
+  - Result: 33 NN-eligible buckets, induced widths 10-21, h range 10-21 for grid10x10.f5.wrap
+  - Callback captures {label, width, ec, msg_size, hidden_sizes} and returns hidden_sizes for training
+- Quick task 10: Log per-bucket hidden sizes for grid10x10.f5.wrap with NBE config
+  - Script nbe_log_hidden_sizes.py created and run; output to nbe_eval_results/grid10x10_hidden_sizes.txt
+  - Result: 0 NN-eligible buckets for grid10x10 (max bucket width=4, iB=10, ecl=512)
+  - Confirms sparse graph structure — all 100 buckets qualify for exact computation
+- Fixed 4 critical NBE config bugs preventing NN training:
+  1. ecl hardcoded 2^22 → 2^iB per model (pedigree/grid40/rbm=2^20, grid20/grid10=2^10)
+  2. approximation_method 'wmb' → 'nn' (was using WMB fallback, not neural nets)
+  3. set_size=50000 → None (defaults to num_samples; train.py handles None)
+  4. num_trained double-counted in process_bucket + bucket.py (removed duplicate)
+- Phase 1 full (grid10x10, 500 epochs): log Z=154.29, exact=169.41, err=15.12, 26 NN buckets, 428s
+- rbm_20 has 0 NN-eligible buckets (width=20=iB=20) - need lower iB from Nick
+- Pinged Nick re: rbm_20 iB question
   - Bug fixed: model.X -> model.num_vars in 3 pre-smoke scripts
   - Bug fixed: FactorNN.tensor is None (lazy), script fixed to use type/labels/is_nn
 - Fixed 6 NBE config bugs in nbe_sanity_check.py:
