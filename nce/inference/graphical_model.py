@@ -403,18 +403,15 @@ class FastGM:
                 output_messages = bucket.compute_wmb_message(self.iB)
                 return output_messages
             elif self.config.get('approximation_method') == 'nn':
-                self.num_trained += 1
-                print(f"Bucket {bucket.label}: training ({self.num_trained})", flush=True)
+                print(f"Bucket {bucket.label}: training NN", flush=True)
                 output_message = bucket.compute_message_nn()
             elif self.config.get('approximation_method') == 'dt':
-                self.num_trained += 1
-                print(f"Bucket {bucket.label}: training DT ({self.num_trained})", flush=True)
+                print(f"Bucket {bucket.label}: training DT", flush=True)
                 output_message = bucket.compute_message_dt()
             elif self.config.get('approximation_method') == 'quantization':
-                self.num_trained += 1
                 num_states = self.config.get('quantization_states', self.ecl)
                 loss_fn = self.config.get('loss_fn', 'unnormalized_kl')
-                print(f"Bucket {bucket.label}: quantizing ({self.num_trained}, K={num_states})", flush=True)
+                print(f"Bucket {bucket.label}: quantizing (K={num_states})", flush=True)
                 output_message = bucket.compute_message_quantization(num_states=num_states, loss_fn=loss_fn)
             elif self.config.get('approximation_method') == 'wmb':
                 # Use compute_wmb_message which returns a LIST of messages
