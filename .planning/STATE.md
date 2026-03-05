@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 Phase: 4 of 4 (Plotting Integration)
 Plan: 2 of 2 in current phase
 Status: Milestone complete
-Last activity: 2026-03-04 - Completed quick task 012: implement NeuroBE num_samples function
+Last activity: 2026-03-05 - Completed quick task 014: fix NBE configs, update eval plan, create pre-smoke scripts
 
 Progress: [##########] 100%
 
@@ -70,6 +70,9 @@ Recent decisions affecting current work:
 - NeuroBE formula computes 48997 not 48999 for w=20,l=3,eps=0.1 - floating-point difference from doc table (quick-5)
 - 'nbe,<value>' config string pattern for deferred computation based on bucket properties (quick-5)
 - Config updates: loss_fn='weighted_mse', skip_early_stopping=False, use_bw_approx=False for NeuroBE defaults (quick-5)
+- Constructor auto-calls dope_factors() when config['dope_factors']=True, no manual call needed (quick-7)
+- matching_var() converts int label to Var before eliminate_variables(up_to=var) (quick-7)
+- get_log_partition_function() is the correct inference API, not run() (quick-7)
 
 ### Pending Todos
 
@@ -95,11 +98,12 @@ None.
 | 011 | Restructure benchmark_problems: BenchmarkSet class, rename to nbe_sanity_check | 2026-03-03 | 8fb968a | [4-restructure-benchmark-problems-rename-to](./quick/4-restructure-benchmark-problems-rename-to/) |
 | 012 | Implement NeuroBE num_samples function, update configs, add grid10x10 | 2026-03-04 | 9412ad8 | [5-implement-nbe-num-samples-function-updat](./quick/5-implement-nbe-num-samples-function-updat/) |
 | 013 | Create comprehensive NBE algorithm evaluation plan | 2026-03-05 | - | [6-create-comprehensive-nbe-algorithm-evalu](./quick/6-create-comprehensive-nbe-algorithm-evalu/) |
+| 014 | Fix NBE configs, update eval plan, create pre-smoke scripts | 2026-03-05 | 5722360 | [7-fix-nbe-configs-update-eval-plan-create-](./quick/7-fix-nbe-configs-update-eval-plan-create-/) |
 
 ## Session Continuity
 
-Last session: 2026-03-05 18:57
-Stopped at: Completed quick task 6 (NBE evaluation plan)
+Last session: 2026-03-05 20:05
+Stopped at: Completed quick task 7 (fix NBE configs, update eval plan, create pre-smoke scripts)
 Resume file: None
 
 ---
