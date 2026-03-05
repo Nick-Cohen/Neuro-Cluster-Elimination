@@ -106,7 +106,7 @@ def _build_nbe_configs():
             'fdb': False,
             'use_bw_approx': False,
             'populate_bw_factors': False,
-            'ecl': 2**_IB_MAP[key],
+            'ecl': 2**(_IB_MAP[key] - 1),
             'iB': _IB_MAP[key],
             'approximation_method': 'nn',
             'bw_ecl': None,
