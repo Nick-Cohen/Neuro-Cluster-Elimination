@@ -107,7 +107,7 @@ None.
 | 015 | Execute NBE evaluation plan (Phases 0a-1), fix 4 config bugs | 2026-03-05 | ea208ef | [8-execute-the-nbe-evaluation-plan-from-doc](./quick/8-execute-the-nbe-evaluation-plan-from-doc/) |
 | 016 | Change ecl from 2^iB to 2^(iB-1) matching NeuroBE internals | 2026-03-05 | 59d5dc2 | [9-change-ecl-from-2-ib-to-2-ib-1-in-nbe-co](./quick/9-change-ecl-from-2-ib-to-2-ib-1-in-nbe-co/) |
 | 015 | Execute NBE evaluation plan Phases 0a-3, fix set_size/model.X bugs | 2026-03-05 | fb93b9f | [8-execute-the-nbe-evaluation-plan-from-doc](./quick/8-execute-the-nbe-evaluation-plan-from-doc/) |
-| 017 | Log per-bucket hidden sizes to file for grid10x10.f5.wrap with NBE config | 2026-03-05 | - | [10-log-per-bucket-hidden-sizes-to-file-for-](./quick/10-log-per-bucket-hidden-sizes-to-file-for-/) |
+| 017 | Log per-bucket hidden sizes to file for grid10x10.f5.wrap with NBE config | 2026-03-05 | c3fe0a3 | [10-log-per-bucket-hidden-sizes-to-file-for-](./quick/10-log-per-bucket-hidden-sizes-to-file-for-/) |
 
 ## Session Continuity
 
