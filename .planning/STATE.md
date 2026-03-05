@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 Phase: 4 of 4 (Plotting Integration)
 Plan: 2 of 2 in current phase
 Status: Milestone complete
-Last activity: 2026-03-05 - Completed quick task 016: Change ecl from 2^iB to 2^(iB-1)
+Last activity: 2026-03-05 - Completed quick task 017: Log per-bucket hidden sizes for grid10x10
 
 Progress: [##########] 100%
 
@@ -77,6 +77,7 @@ Recent decisions affecting current work:
 - set_size must be clamped to num_samples when NBE adaptive sampling gives fewer samples than set_size (quick-8)
 - FactorNN.tensor is None (lazy representation); access labels/is_nn instead of tensor.shape (quick-8)
 - catalog Model uses model.num_vars not model.X (quick-8)
+- grid10x10 has max bucket width=4 (sparse graph); iB=10 means ALL buckets are exact, 0 NN-eligible (quick-10)
 
 ### Pending Todos
 
@@ -106,11 +107,12 @@ None.
 | 015 | Execute NBE evaluation plan (Phases 0a-1), fix 4 config bugs | 2026-03-05 | ea208ef | [8-execute-the-nbe-evaluation-plan-from-doc](./quick/8-execute-the-nbe-evaluation-plan-from-doc/) |
 | 016 | Change ecl from 2^iB to 2^(iB-1) matching NeuroBE internals | 2026-03-05 | 59d5dc2 | [9-change-ecl-from-2-ib-to-2-ib-1-in-nbe-co](./quick/9-change-ecl-from-2-ib-to-2-ib-1-in-nbe-co/) |
 | 015 | Execute NBE evaluation plan Phases 0a-3, fix set_size/model.X bugs | 2026-03-05 | fb93b9f | [8-execute-the-nbe-evaluation-plan-from-doc](./quick/8-execute-the-nbe-evaluation-plan-from-doc/) |
+| 017 | Log per-bucket hidden sizes to file for grid10x10.f5.wrap with NBE config | 2026-03-05 | - | [10-log-per-bucket-hidden-sizes-to-file-for-](./quick/10-log-per-bucket-hidden-sizes-to-file-for-/) |
 
 ## Session Continuity
 
-Last session: 2026-03-05 20:37
-Stopped at: Quick task 8 - checkpoint:human-verify after Tasks 1-2 (Phases 0a-3 complete)
+Last session: 2026-03-05 23:25
+Stopped at: Completed quick task 10 - log per-bucket hidden sizes for grid10x10
 Resume file: None
 
 ---
