@@ -1,5 +1,15 @@
 # NCE Project - Claude Code Guidance
 
+## Notifications
+
+**MANDATORY:** Whenever you complete a task, finish a phase, encounter a blocker, or are waiting for user input, ping Nick on Discord:
+
+```bash
+~/.claude/ai-ops/scripts/ping_nick.sh "brief description of what finished or what's needed"
+```
+
+- Never skip this step — the user depends on these pings to know when to check in
+
 This file provides guidance to Claude Code when working with code in this repository.
 
 ## Project Overview
@@ -75,6 +85,37 @@ Neural network configurations are Python dictionaries (see `configs/example_nn_c
 - `num_epochs`, `batch_size`, `lr`: Standard NN training hyperparameters
 - `hidden_sizes`: List of hidden layer sizes (empty list = linear model)
 - `device`: 'cuda' or 'cpu'
+
+## Experiment Execution Rules
+
+**NEVER invent timeouts, resource limits, or runtime assumptions.** If you don't know how long
+an experiment will take:
+1. Check existing run data in the project (notebooks/, nbe_eval_results/, lab_notebook.txt)
+2. Estimate from the computation: num_epochs x num_buckets x per-epoch cost
+3. If still uncertain, ASK the user via Discord ping before running
+4. When in doubt, run WITHOUT a timeout rather than with an arbitrary one
+
+**"Full" experiments mean full.** When the user says "run the full experiment" or "all epochs",
+do not add timeouts, reduce epochs, or truncate in any way unless explicitly told to.
+
+**Before running any experiment that trains neural networks:**
+- Check the config's num_epochs value
+- Count NN-eligible buckets (use get_large_message_buckets or prior run data)
+- If total training iterations > 10,000, warn the user about expected runtime
+- Run long experiments in background with no timeout; ping Discord when done
+
+## Assumption Escalation
+
+When you are about to hardcode a value that the user did not specify (timeout, batch size,
+number of iterations, resource limits, etc.):
+
+1. **Is this value observable?** Check existing data, configs, or prior runs.
+2. **Is this value derivable?** Can you compute a reasonable value from known quantities?
+3. **If neither:** STOP and ask the user. Ping Discord:
+   `~/.claude/ai-ops/scripts/ping_nick.sh "Need input: [what you need to know and why]"`
+
+**Never** silently invent operational parameters. A missing timeout is better than a wrong one.
+The cost of asking is minutes. The cost of a wrong assumption is hours or days.
 
 ## Working with the Codebase
 
