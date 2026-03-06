@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 Phase: 4 of 4 (Plotting Integration)
 Plan: 2 of 2 in current phase
 Status: Milestone complete
-Last activity: 2026-03-05 - Completed quick task 019: Design benchmark experiment WMSE vs UKL across small_problems
+Last activity: 2026-03-06 - Quick task 020: full NBE experiment running in background (500 epochs, no timeout)
 
 Progress: [##########] 100%
 
@@ -114,7 +114,7 @@ None.
 | 017 | Log per-bucket hidden sizes to file for grid10x10.f5.wrap with NBE config | 2026-03-05 | c3fe0a3 | [10-log-per-bucket-hidden-sizes-to-file-for-](./quick/10-log-per-bucket-hidden-sizes-to-file-for-/) |
 | 018 | Fix hidden sizes script: capture bucket widths during elimination (induced width 10-21, 33 NN buckets) | 2026-03-05 | 1e1e8b7 | [11-fix-hidden-sizes-script-capture-bucket-w](./quick/11-fix-hidden-sizes-script-capture-bucket-w/) |
 | 019 | Design benchmark experiment: WMSE vs UKL across 24 small_problems (5 configs, 120 experiments) | 2026-03-05 | 539d67a | [13-design-benchmark-experiment-with-wmse-an](./quick/13-design-benchmark-experiment-with-wmse-an/) |
-| 020 | Run full NBE experiment (500 epochs) on all 5 nbe_sanity_check problems; add epochs_trained/trained_hidden_sizes to FastBucket; all problems timed out at 10min | 2026-03-05 | cca2941 | [12-run-full-nbe-experiment-on-all-5-problem](./quick/12-run-full-nbe-experiment-on-all-5-problem/) |
+| 020 | Run full NBE experiment (500 epochs) on all 5 problems, log epochs-to-early-stopping per bucket | 2026-03-06 | cca2941 | [12-run-full-nbe-experiment-on-all-5-problem](./quick/12-run-full-nbe-experiment-on-all-5-problem/) |
 
 ## Session Continuity
 
