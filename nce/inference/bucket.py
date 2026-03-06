@@ -319,6 +319,8 @@ class FastBucket:
                 t.data_preprocessor.use_bw_approx = True
 
             t.train()
+            self.epochs_trained = t.losses[-1][0] + 1 if t.losses else 0
+            self.trained_hidden_sizes = hidden_sizes
             if self.config.get('loss_fn2') is not None and self.config.get('num_epochs2') is not None:
                 t.train(new_loss_fn=self.config['loss_fn2'], override_epochs=self.config['num_epochs2'])
 
