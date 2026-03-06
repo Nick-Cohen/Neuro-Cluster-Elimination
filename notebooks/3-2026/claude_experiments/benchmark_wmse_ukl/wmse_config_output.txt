@@ -1,0 +1,107 @@
+# WMSE (weighted_logspace_mse) Configuration - Full nn_config Dict
+# Representative problem: bn/BN_1 (auto_ecl=524287)
+# Generated for benchmark experiment: WMSE vs UKL
+#
+# This is the exact nn_config dict that would be passed to FastGM for
+# Configuration 1 (WMSE, no backward info) on the BN_1 problem.
+# All 42 fields are shown with their values and explanations.
+
+nn_config = {
+    # --- Device ---
+    'device': 'cuda',                        # 1. GPU training
+
+    # --- Neural Network Architecture ---
+    'hidden_sizes': [3, 3],                  # 2. Two hidden layers with 3 units each (small_problems default)
+
+    # --- Optimizer Settings ---
+    'optimizer': 'adam',                     # 3. Adam optimizer
+    'lr': 0.01,                              # 4. Learning rate
+    'lr_decay': 1,                           # 5. No learning rate decay (multiplier=1)
+    'momentum': 0.9,                         # 6. Momentum (for SGD, unused by Adam)
+    'inverse_time_decay_constant': 10,       # 7. Inverse time decay constant
+    'patience': 1,                           # 8. Patience for lr scheduler
+    'min_lr': 1e-8,                          # 9. Minimum learning rate floor
+
+    # --- Training Epochs ---
+    'num_epochs': 5000,                      # 10. User-specified epoch count
+    'num_epochs2': 0,                        # 11. No second training phase
+    'nbe_early_stopping': False,             # 12. NeuroBE early stopping disabled
+    'skip_early_stopping': True,             # 13. All early stopping disabled -- train full 5000 epochs
+
+    # --- Sampling Configuration ---
+    'sampling_scheme': 'all',                # 14. Enumerate full message space (no random sampling)
+    'batch_size': 10000000,                  # 15. Very large; ensures single batch (>= message_size for all problems)
+    'set_size': 100000,                      # 16. Overridden by sampling_scheme='all' -> set_size = message_size
+    'num_samples': 100000,                   # 17. Overridden by sampling_scheme='all' -> num_samples = message_size
+    'num_batches_per_set': 1,                # 18. Overridden; computed as ceil(message_size / batch_size) = 1
+    'seed': 42,                              # 19. Fixed random seed for reproducibility
+
+    # --- Loss Function ---
+    'loss_fn': 'weighted_logspace_mse',      # 20. NeuroBE WMSE loss (the key experimental variable)
+    'traced_losses': [],                     # 21. No additional losses to trace during training
+    'val_set': 'all',                        # 22. Full enumeration for validation set
+    'fdb': False,                            # 23. No forward-diff barrier
+
+    # --- Approximation Thresholds ---
+    'ecl': 524287,                           # 24. Exact computation limit for BN_1 (auto_ecl from small_problems)
+    'iB': 100,                               # 25. Effectively unlimited mini-bucket width
+    'approximation_method': 'nn',            # 26. Use neural network approximation
+
+    # --- Backward Approximation Settings ---
+    'use_bw_approx': False,                  # 27. NO backward approximation (WMSE config)
+    'populate_bw_factors': False,            # 28. Do NOT populate backward factors
+    'bw_ecl': 0,                             # 29. No backward ECL (no backward info)
+    'backward_ecl': 0,                       # 30. No backward ECL
+    'backward_iB': 100,                      # 31. Backward mini-bucket width (unused when bw_ecl=0)
+
+    # --- Feature Flags ---
+    'use_linspace_bias': False,              # 32. No linear-space bias correction
+    'use_memorizer': False,                  # 33. No memorizer network
+    'display_intermediate': False,           # 34. No intermediate display during training
+    'track_errors': False,                   # 35. No per-epoch error tracking
+    'plot_messages': False,                  # 36. No message plots during training
+    'debug': False,                          # 37. Debug mode off
+    'lower_dim': False,                      # 38. No lower-dimensional projection
+
+    # --- Data Processing ---
+    'dope_factors': False,                   # 39. No factor doping (consistent with small_problems)
+    'gather_message_stats': False,           # 40. No message gradient statistics collection
+    'stratify_samples': False,               # 41. No stratified sampling
+
+    # --- [42 fields total] ---
+    # Note: Field count matches the config template from small_problems._build_default_configs()
+    # plus the experiment-specific overrides (loss_fn, num_epochs, batch_size, bw settings).
+}
+
+# ===================================================================
+# Key differences from default small_problems config:
+#
+# Changed from default:
+#   loss_fn:  'unnormalized_kl' -> 'weighted_logspace_mse'
+#   num_epochs:  10000 -> 5000
+#   batch_size:  100000 -> 10000000
+#   use_bw_approx:  True -> False  (default has True but bw_ecl=0, so no effect)
+#
+# Unchanged from default:
+#   All other 38 fields match small_problems._build_default_configs() for BN_1
+#
+# For other problems, only 'ecl' changes (to that problem's auto_ecl value).
+# All other fields are identical across all 24 problems for Config 1.
+# ===================================================================
+
+# Config field count verification:
+# Device:                1 field  (device)
+# NN Architecture:       1 field  (hidden_sizes)
+# Optimizer:             6 fields (optimizer, lr, lr_decay, momentum, inverse_time_decay_constant, patience, min_lr)
+#   ... correction: 7 fields
+# Training Epochs:       4 fields (num_epochs, num_epochs2, nbe_early_stopping, skip_early_stopping)
+# Sampling:              5 fields (sampling_scheme, batch_size, set_size, num_samples, num_batches_per_set, seed)
+#   ... correction: 6 fields
+# Loss:                  4 fields (loss_fn, traced_losses, val_set, fdb)
+# Approximation:         3 fields (ecl, iB, approximation_method)
+# Backward:              5 fields (use_bw_approx, populate_bw_factors, bw_ecl, backward_ecl, backward_iB)
+# Flags:                 7 fields (use_linspace_bias, use_memorizer, display_intermediate, track_errors, plot_messages, debug, lower_dim)
+# Data Processing:       3 fields (dope_factors, gather_message_stats, stratify_samples)
+#
+# Total: 1 + 1 + 7 + 4 + 6 + 4 + 3 + 5 + 7 + 3 = 41 fields
+# Plus 'seed' in sampling = 42 fields. Confirmed.
