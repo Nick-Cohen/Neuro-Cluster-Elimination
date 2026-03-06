@@ -1,3 +1,10 @@
+2026-03-06
+- Created run_benchmark.py for WMSE vs UKL benchmark (5 configs x 24 problems x 5000 epochs = 120 experiments)
+- Fixed model cache symlinks: pyGMs catalog expected files in subdirs (bn/, objdetect/, etc.) but they were in cache root
+- Launched benchmark across 4 TITAN RTX GPUs, estimated ~2-3 hours
+- Script uses subprocess spawning for GPU isolation, round-robin distribution (30 waves of 4 jobs)
+- Both verification scripts pass (99 config checks, 5 batch/sampling tests)
+...............
 2026-03-05
 - Quick task 12: Run full NBE experiment on all 5 nbe_sanity_check problems (500 epochs)
   - Added FastBucket.epochs_trained and FastBucket.trained_hidden_sizes after t.train() in bucket.py
