@@ -1,4 +1,11 @@
 2026-03-05
+- Quick task 13: Design benchmark experiment comparing WMSE vs UKL losses
+  - 5 configurations: WMSE(no-bw), UKL(no-bw), UKL(bw=8), UKL(bw=ecl), UKL(bw=2^30)
+  - 24 problems from small_problems, 120 total experiments
+  - Documented 10 open questions (batch_size='all' workaround, per-problem bw_ecl, etc.)
+  - Created verification scripts: config correctness (99 checks PASS), full-data training (5 tests PASS)
+  - Key decision: batch_size=10000000 instead of 'all' to avoid worker.py changes
+...............
 - Quick task 11: Fix hidden sizes script to capture bucket widths during elimination
   - Bug: old script read widths pre-elimination (max 4), all buckets appeared "exact"
   - Fix: used config['custom_hidden_sizes'] callback (called inside compute_message_nn during elimination)

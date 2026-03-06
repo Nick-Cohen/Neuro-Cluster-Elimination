@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 Phase: 4 of 4 (Plotting Integration)
 Plan: 2 of 2 in current phase
 Status: Milestone complete
-Last activity: 2026-03-05 - Completed quick task 018: Fix hidden sizes script to capture bucket widths during elimination
+Last activity: 2026-03-05 - Completed quick task 019: Design benchmark experiment WMSE vs UKL across small_problems
 
 Progress: [##########] 100%
 
@@ -111,11 +111,12 @@ None.
 | 015 | Execute NBE evaluation plan Phases 0a-3, fix set_size/model.X bugs | 2026-03-05 | fb93b9f | [8-execute-the-nbe-evaluation-plan-from-doc](./quick/8-execute-the-nbe-evaluation-plan-from-doc/) |
 | 017 | Log per-bucket hidden sizes to file for grid10x10.f5.wrap with NBE config | 2026-03-05 | c3fe0a3 | [10-log-per-bucket-hidden-sizes-to-file-for-](./quick/10-log-per-bucket-hidden-sizes-to-file-for-/) |
 | 018 | Fix hidden sizes script: capture bucket widths during elimination (induced width 10-21, 33 NN buckets) | 2026-03-05 | 1e1e8b7 | [11-fix-hidden-sizes-script-capture-bucket-w](./quick/11-fix-hidden-sizes-script-capture-bucket-w/) |
+| 019 | Design benchmark experiment: WMSE vs UKL across 24 small_problems (5 configs, 120 experiments) | 2026-03-05 | 539d67a | [13-design-benchmark-experiment-with-wmse-an](./quick/13-design-benchmark-experiment-with-wmse-an/) |
 
 ## Session Continuity
 
-Last session: 2026-03-05 23:40
-Stopped at: Completed quick task 11 - fix hidden sizes script to capture bucket widths during elimination
+Last session: 2026-03-06 00:50
+Stopped at: Completed quick task 13 - design benchmark experiment with WMSE and UKL losses
 Resume file: None
 
 ---
