@@ -82,6 +82,7 @@ Recent decisions affecting current work:
 - grid10x10 induced width is 10-21; 33 NN-eligible buckets with ecl=512, iB=10 (quick-11)
 - FastBucket.epochs_trained stores actual epochs run (t.losses[-1][0]+1); FastBucket.trained_hidden_sizes stores resolved hidden sizes, both available after compute_message_nn() (quick-12)
 - 500-epoch NBE training on nbe_sanity_check problems exceeds 10min/problem even with 18+ CPU cores; single NN bucket training can take 30+ min CPU (quick-12)
+- pyGMs catalog model.file expects files in subdirs (bn/, objdetect/) but cache root has flat files; need symlinks for offline access (quick-15)
 
 ### Pending Todos
 
@@ -116,11 +117,12 @@ None.
 | 019 | Design benchmark experiment: WMSE vs UKL across 24 small_problems (5 configs, 120 experiments) | 2026-03-05 | 539d67a | [13-design-benchmark-experiment-with-wmse-an](./quick/13-design-benchmark-experiment-with-wmse-an/) |
 | 020 | Run full NBE experiment (500 epochs) on all 5 problems, log epochs-to-early-stopping per bucket | 2026-03-06 | cca2941 | [12-run-full-nbe-experiment-on-all-5-problem](./quick/12-run-full-nbe-experiment-on-all-5-problem/) |
 | 021 | Apply assumption-prevention rules to CLAUDE.md, gsd-executor.md, gsd-planner.md | 2026-03-06 | 9ee0d85 | [14-apply-assumption-prevention-rules-to-cla](./quick/14-apply-assumption-prevention-rules-to-cla/) |
+| 022 | Run WMSE vs UKL benchmark: 120 experiments (5 configs x 24 problems x 5000 epochs) across 4 GPUs | 2026-03-06 | 0f2bd32 | [15-run-wmse-vs-ukl-benchmark-experiment-5-c](./quick/15-run-wmse-vs-ukl-benchmark-experiment-5-c/) |
 
 ## Session Continuity
 
-Last session: 2026-03-05 17:51
-Stopped at: Completed quick task 12 - run full NBE experiment on all 5 problems (all timed out at 10min/problem)
+Last session: 2026-03-06 14:34
+Stopped at: Completed quick task 15 - WMSE vs UKL benchmark launched (running in background, ~2-3h)
 Resume file: None
 
 ---
