@@ -80,6 +80,8 @@ Recent decisions affecting current work:
 - grid10x10 pre-elimination bucket width=4 (sparse original factors); actual induced width during elimination is 10-21 (quick-10, corrected quick-11)
 - custom_hidden_sizes callback is called during compute_message_nn() when bucket has full induced-width scope; use this for any per-bucket width inspection (quick-11)
 - grid10x10 induced width is 10-21; 33 NN-eligible buckets with ecl=512, iB=10 (quick-11)
+- FastBucket.epochs_trained stores actual epochs run (t.losses[-1][0]+1); FastBucket.trained_hidden_sizes stores resolved hidden sizes, both available after compute_message_nn() (quick-12)
+- 500-epoch NBE training on nbe_sanity_check problems exceeds 10min/problem even with 18+ CPU cores; single NN bucket training can take 30+ min CPU (quick-12)
 
 ### Pending Todos
 
@@ -112,11 +114,12 @@ None.
 | 017 | Log per-bucket hidden sizes to file for grid10x10.f5.wrap with NBE config | 2026-03-05 | c3fe0a3 | [10-log-per-bucket-hidden-sizes-to-file-for-](./quick/10-log-per-bucket-hidden-sizes-to-file-for-/) |
 | 018 | Fix hidden sizes script: capture bucket widths during elimination (induced width 10-21, 33 NN buckets) | 2026-03-05 | 1e1e8b7 | [11-fix-hidden-sizes-script-capture-bucket-w](./quick/11-fix-hidden-sizes-script-capture-bucket-w/) |
 | 019 | Design benchmark experiment: WMSE vs UKL across 24 small_problems (5 configs, 120 experiments) | 2026-03-05 | 539d67a | [13-design-benchmark-experiment-with-wmse-an](./quick/13-design-benchmark-experiment-with-wmse-an/) |
+| 020 | Run full NBE experiment (500 epochs) on all 5 nbe_sanity_check problems; add epochs_trained/trained_hidden_sizes to FastBucket; all problems timed out at 10min | 2026-03-05 | cca2941 | [12-run-full-nbe-experiment-on-all-5-problem](./quick/12-run-full-nbe-experiment-on-all-5-problem/) |
 
 ## Session Continuity
 
-Last session: 2026-03-06 00:50
-Stopped at: Completed quick task 13 - design benchmark experiment with WMSE and UKL losses
+Last session: 2026-03-05 17:51
+Stopped at: Completed quick task 12 - run full NBE experiment on all 5 problems (all timed out at 10min/problem)
 Resume file: None
 
 ---

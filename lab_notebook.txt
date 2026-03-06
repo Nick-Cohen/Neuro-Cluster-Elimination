@@ -1,4 +1,11 @@
 2026-03-05
+- Quick task 12: Run full NBE experiment on all 5 nbe_sanity_check problems (500 epochs)
+  - Added FastBucket.epochs_trained and FastBucket.trained_hidden_sizes after t.train() in bucket.py
+  - Created nbe_full_experiment.py with subprocess isolation and 10-min/problem timeout
+  - All 5 problems timed out: 500-epoch NN training requires >10min/problem even with 18+ CPU cores
+  - Key finding: pedigree13 was still training its first NN bucket after 25 min wall clock; grid10x10 also timed
+  - epochs_trained attribute works correctly; future experiments need longer timeouts or fewer epochs
+...............
 - Quick task 13: Design benchmark experiment comparing WMSE vs UKL losses
   - 5 configurations: WMSE(no-bw), UKL(no-bw), UKL(bw=8), UKL(bw=ecl), UKL(bw=2^30)
   - 24 problems from small_problems, 120 total experiments
