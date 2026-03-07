@@ -98,6 +98,9 @@ an experiment will take:
 **"Full" experiments mean full.** When the user says "run the full experiment" or "all epochs",
 do not add timeouts, reduce epochs, or truncate in any way unless explicitly told to.
 
+**Default device is CUDA.** Always use `device='cuda'` unless the user explicitly says otherwise.
+Do NOT override configs to `device='cpu'`. The benchmark configs already specify the correct device.
+
 **Before running any experiment that trains neural networks:**
 - Check the config's num_epochs value
 - Count NN-eligible buckets (use get_large_message_buckets or prior run data)
