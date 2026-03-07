@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 Phase: 4 of 4 (Plotting Integration)
 Plan: 2 of 2 in current phase
 Status: Milestone complete
-Last activity: 2026-03-06 - Completed quick task 021: apply assumption-prevention rules to instruction files
+Last activity: 2026-03-07 - Completed quick task 16: Follow fixes in retrospective_nbe_experiment_errors.md to update instructions
 
 Progress: [##########] 100%
 
