@@ -107,6 +107,29 @@ Do NOT override configs to `device='cpu'`. The benchmark configs already specify
 - If total training iterations > 10,000, warn the user about expected runtime
 - Run long experiments in background with no timeout; ping Discord when done
 
+### Config Fidelity
+
+Config values are user intent. Never override `device`, `num_epochs`, `ecl`, `iB`, `hidden_sizes`, `loss_fn`, or any other config parameter unless the user explicitly requests it.
+
+- If you believe a config value is wrong, ASK the user — do not silently change it.
+- Overriding a config value requires explicit user approval AND must be logged in the task summary.
+- Copying parameters from a prior script/task into a new one requires re-evaluating whether they still apply in the new context. A 1-epoch diagnostic script and a 500-epoch training run have different requirements.
+
+### Pre-Flight Checklist
+
+Run this checklist before ANY experiment launch:
+
+- [ ] **Device check:** config says `cuda`? Verify GPUs available with `nvidia-smi`. Never downgrade to CPU without user approval.
+- [ ] **Runtime estimate:** Compute expected runtime from `num_epochs x num_NN_buckets x per-epoch cost`. Check prior run data if available.
+- [ ] **Process cleanup:** Run `ps aux | grep python` and `nvidia-smi` to check for zombie processes from prior runs. Kill stale workers before launching.
+- [ ] **User confirmation:** If estimated runtime > 5 minutes, ping Discord with the estimate before launching.
+
+### Zombie Process Prevention
+
+- Before launching any new experiment subprocess, check for and kill previous instances of the same script.
+- When a subprocess times out or fails, ensure all child processes are also terminated.
+- Before retrying a failed experiment, always verify: no stale Python workers running, GPU memory is free (`nvidia-smi`), no orphaned processes from the previous attempt.
+
 ## Assumption Escalation
 
 When you are about to hardcode a value that the user did not specify (timeout, batch size,
@@ -119,6 +142,16 @@ number of iterations, resource limits, etc.):
 
 **Never** silently invent operational parameters. A missing timeout is better than a wrong one.
 The cost of asking is minutes. The cost of a wrong assumption is hours or days.
+
+**Lower the ask threshold.** ANY operational parameter not directly specified by the user AND not derivable from existing data in the project should trigger a Discord ping. Default to asking, not guessing.
+
+**The cost asymmetry is decisive:** The cost of a Discord ping is 10 seconds. The cost of a wrong timeout is a day. The cost of a wrong device is two days. Always ask.
+
+**Escalation hierarchy:**
+- **Observe** → check existing data, configs, prior runs
+- **Estimate** → compute from known quantities (epochs × buckets × per-epoch time)
+- **Ask** → ping the user if still uncertain
+- **Never** → guess and hope it's right
 
 ## Working with the Codebase
 
@@ -175,6 +208,16 @@ For instructions on creating new benchmark sets, see `docs/creating_benchmark_se
 2. **NN vs Exact**: Buckets decide whether to use exact computation or NN based on `ecl` parameter
 3. **Scope Tracking**: Message scopes are tracked in `FastGM.message_scopes` dictionary
 4. **Elimination Variables**: Each bucket eliminates a subset of variables (`bucket.elim_vars`)
+
+### Algorithm Literacy
+
+Before instrumenting, modifying, or measuring algorithm internals:
+
+- Understand the algorithm's execution lifecycle, not just API signatures.
+- Ask: "When does this data exist? When is it populated? When is it valid to read?"
+- For variable elimination specifically: bucket state changes during elimination as messages arrive. Pre-elimination bucket widths are NOT the same as induced widths.
+- Verify data structure types before writing iteration code (e.g., `fastgm.buckets` is a dict, not a list).
+- If uncertain about algorithm behavior, read the source code and trace the data flow rather than guessing from method names.
 
 ## Git Workflow
 
