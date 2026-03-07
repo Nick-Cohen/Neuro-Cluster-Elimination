@@ -118,11 +118,12 @@ None.
 | 020 | Run full NBE experiment (500 epochs) on all 5 problems, log epochs-to-early-stopping per bucket | 2026-03-06 | cca2941 | [12-run-full-nbe-experiment-on-all-5-problem](./quick/12-run-full-nbe-experiment-on-all-5-problem/) |
 | 021 | Apply assumption-prevention rules to CLAUDE.md, gsd-executor.md, gsd-planner.md | 2026-03-06 | 9ee0d85 | [14-apply-assumption-prevention-rules-to-cla](./quick/14-apply-assumption-prevention-rules-to-cla/) |
 | 022 | Run WMSE vs UKL benchmark: 120 experiments (5 configs x 24 problems x 5000 epochs) across 4 GPUs | 2026-03-06 | 0f2bd32 | [15-run-wmse-vs-ukl-benchmark-experiment-5-c](./quick/15-run-wmse-vs-ukl-benchmark-experiment-5-c/) |
+| 023 | Codify NBE retrospective lessons in CLAUDE.md (Config Fidelity, Pre-Flight, Zombie, Algorithm Literacy) | 2026-03-07 | 310cbf3 | [16-follow-fixes-in-retrospective-nbe-experi](./quick/16-follow-fixes-in-retrospective-nbe-experi/) |
 
 ## Session Continuity
 
-Last session: 2026-03-06 14:34
-Stopped at: Completed quick task 15 - WMSE vs UKL benchmark launched (running in background, ~2-3h)
+Last session: 2026-03-07
+Stopped at: Completed quick task 16 - CLAUDE.md updated with retrospective lessons
 Resume file: None
 
 ---
