@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 Phase: 4 of 4 (Plotting Integration)
 Plan: 2 of 2 in current phase
 Status: Milestone complete
-Last activity: 2026-03-07 - Completed quick task 16: Follow fixes in retrospective_nbe_experiment_errors.md to update instructions
+Last activity: 2026-03-09 - Completed quick task 17: Write experiment execution instructions for Claude Code agents
 
 Progress: [##########] 100%
 
