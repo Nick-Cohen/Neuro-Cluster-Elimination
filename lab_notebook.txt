@@ -1,4 +1,12 @@
 2026-03-09
+- Quick task 18: Create grid10x10.f10 UKL experiment workflow
+  - run_grid10x10_ukl.py: full 42-field config, UKL loss, ecl=1024, 500 epochs, CUDA
+  - analyze_results.py: loads pickle, produces plots and tables, regenerates CSV
+  - Experiment ran successfully: 6 NN buckets, err=13.49 (log10), 85s on CUDA
+  - Fixed per-bucket data collection bug: fastgm.buckets empty after elimination
+    Added per_bucket_training_log to FastGM/bucket.py to persist data during inference
+  - Fixed offline model access: copied grid10x10.f10.uai from UAI dir, generated .ord file
+  - Outputs: CSV (12 cols), pickle, logz_comparison.png, bucket_epochs_histogram.png
 - Quick task 17: Write comprehensive experiment execution guide
   - Created docs/experiment_execution_guide.md (723 lines)
   - Covers full lifecycle: pre-flight, config fidelity, runtime estimation, subprocess architecture, monitoring, error handling, post-experiment reporting

@@ -83,6 +83,8 @@ Recent decisions affecting current work:
 - FastBucket.epochs_trained stores actual epochs run (t.losses[-1][0]+1); FastBucket.trained_hidden_sizes stores resolved hidden sizes, both available after compute_message_nn() (quick-12)
 - 500-epoch NBE training on nbe_sanity_check problems exceeds 10min/problem even with 18+ CPU cores; single NN bucket training can take 30+ min CPU (quick-12)
 - pyGMs catalog model.file expects files in subdirs (bn/, objdetect/) but cache root has flat files; need symlinks for offline access (quick-15)
+- fastgm.buckets is empty after get_log_partition_function() -- buckets deleted post-elimination; use fastgm.per_bucket_training_log (now populated by bucket.py during compute_message_nn) (quick-18)
+- grid10x10.f10.uai available offline at /home/cohenn1/UAI/Submissions/IBIA-PR-V2/test-results/1200/; copy to .model_cache/grids/; generate .ord via pyGMs.eliminationOrder('minfill') (quick-18)
 
 ### Pending Todos
 
@@ -120,11 +122,12 @@ None.
 | 022 | Run WMSE vs UKL benchmark: 120 experiments (5 configs x 24 problems x 5000 epochs) across 4 GPUs | 2026-03-06 | 0f2bd32 | [15-run-wmse-vs-ukl-benchmark-experiment-5-c](./quick/15-run-wmse-vs-ukl-benchmark-experiment-5-c/) |
 | 023 | Codify NBE retrospective lessons in CLAUDE.md (Config Fidelity, Pre-Flight, Zombie, Algorithm Literacy) | 2026-03-07 | 310cbf3 | [16-follow-fixes-in-retrospective-nbe-experi](./quick/16-follow-fixes-in-retrospective-nbe-experi/) |
 | 024 | Write comprehensive experiment execution guide (docs/experiment_execution_guide.md) | 2026-03-09 | 93dde3a | [17-write-experiment-execution-instructions-](./quick/17-write-experiment-execution-instructions-/) |
+| 025 | Create grid10x10.f10 UKL experiment workflow: runner, analysis, CSV/pickle outputs; fix per-bucket data collection bug | 2026-03-09 | 8cc2401 | [18-create-experiment-workflow-run-grid10x10](./quick/18-create-experiment-workflow-run-grid10x10/) |
 
 ## Session Continuity
 
 Last session: 2026-03-09
-Stopped at: Completed quick task 17 - docs/experiment_execution_guide.md created (723 lines)
+Stopped at: Completed quick task 18 - grid10x10.f10 UKL experiment workflow (run_grid10x10_ukl.py, analyze_results.py, 6 NN buckets, err=13.49, 85s on CUDA)
 Resume file: None
 
 ---
