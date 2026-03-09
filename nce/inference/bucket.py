@@ -324,6 +324,14 @@ class FastBucket:
             if self.config.get('loss_fn2') is not None and self.config.get('num_epochs2') is not None:
                 t.train(new_loss_fn=self.config['loss_fn2'], override_epochs=self.config['num_epochs2'])
 
+            # Store per-bucket training info on the FastGM (bucket is deleted after elimination)
+            if hasattr(self.gm, 'per_bucket_training_log'):
+                self.gm.per_bucket_training_log.append({
+                    'label': self.label,
+                    'epochs_trained': self.epochs_trained,
+                    'hidden_sizes': self.trained_hidden_sizes,
+                })
+
             # Synchronize CUDA operations to prevent race conditions
             if torch.cuda.is_available():
                 torch.cuda.synchronize()

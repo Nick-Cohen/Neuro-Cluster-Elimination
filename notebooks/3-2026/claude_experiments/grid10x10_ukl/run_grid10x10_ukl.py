@@ -216,16 +216,11 @@ def main():
     print()
 
     # -----------------------------------------------------------------------
-    # Collect per-bucket data (available after inference)
+    # Collect per-bucket data (stored on fastgm during inference via per_bucket_training_log)
+    # NOTE: fastgm.buckets is empty after elimination (buckets are deleted as they are processed).
+    # Per-bucket data is stored on fastgm.per_bucket_training_log by bucket.py during compute_message_nn.
     # -----------------------------------------------------------------------
-    per_bucket_data = []
-    for var, bucket in fastgm.buckets.items():
-        if hasattr(bucket, 'epochs_trained'):
-            per_bucket_data.append({
-                'label': getattr(bucket, 'label', var),
-                'epochs_trained': bucket.epochs_trained,
-                'hidden_sizes': bucket.trained_hidden_sizes,
-            })
+    per_bucket_data = getattr(fastgm, 'per_bucket_training_log', [])
 
     print(f"Per-bucket training data ({len(per_bucket_data)} NN buckets):")
     for bd in per_bucket_data:
