@@ -1,3 +1,12 @@
+2026-03-09
+- Quick task 17: Write comprehensive experiment execution guide
+  - Created docs/experiment_execution_guide.md (723 lines)
+  - Covers full lifecycle: pre-flight, config fidelity, runtime estimation, subprocess architecture, monitoring, error handling, post-experiment reporting
+  - Addresses all 7 errors from retrospective_nbe_experiment_errors.md as numbered pitfalls with detection steps
+  - References WMSE vs UKL benchmark and NBE full experiment as reference implementations
+  - Includes quick reference card for runtime use and timing table with real measured data
+  - References CLAUDE.md rules without duplicating (DRY)
+...............
 2026-03-06
 - Created run_benchmark.py for WMSE vs UKL benchmark (5 configs x 24 problems x 5000 epochs = 120 experiments)
 - Fixed model cache symlinks: pyGMs catalog expected files in subdirs (bn/, objdetect/, etc.) but they were in cache root

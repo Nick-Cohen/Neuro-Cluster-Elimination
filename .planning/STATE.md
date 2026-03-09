@@ -119,11 +119,12 @@ None.
 | 021 | Apply assumption-prevention rules to CLAUDE.md, gsd-executor.md, gsd-planner.md | 2026-03-06 | 9ee0d85 | [14-apply-assumption-prevention-rules-to-cla](./quick/14-apply-assumption-prevention-rules-to-cla/) |
 | 022 | Run WMSE vs UKL benchmark: 120 experiments (5 configs x 24 problems x 5000 epochs) across 4 GPUs | 2026-03-06 | 0f2bd32 | [15-run-wmse-vs-ukl-benchmark-experiment-5-c](./quick/15-run-wmse-vs-ukl-benchmark-experiment-5-c/) |
 | 023 | Codify NBE retrospective lessons in CLAUDE.md (Config Fidelity, Pre-Flight, Zombie, Algorithm Literacy) | 2026-03-07 | 310cbf3 | [16-follow-fixes-in-retrospective-nbe-experi](./quick/16-follow-fixes-in-retrospective-nbe-experi/) |
+| 024 | Write comprehensive experiment execution guide (docs/experiment_execution_guide.md) | 2026-03-09 | 93dde3a | [17-write-experiment-execution-instructions-](./quick/17-write-experiment-execution-instructions-/) |
 
 ## Session Continuity
 
-Last session: 2026-03-07
-Stopped at: Completed quick task 16 - CLAUDE.md updated with retrospective lessons
+Last session: 2026-03-09
+Stopped at: Completed quick task 17 - docs/experiment_execution_guide.md created (723 lines)
 Resume file: None
 
 ---
