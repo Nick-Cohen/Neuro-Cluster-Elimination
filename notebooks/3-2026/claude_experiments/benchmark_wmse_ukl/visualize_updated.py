@@ -171,6 +171,102 @@ png_count = len(list(OUTPUT_DIR.glob('*.png')))
 print(f"  {png_count} PNG files in {OUTPUT_DIR}")
 
 # ---------------------------------------------------------------------------
+# Pattern-1 problems: only ukl_bw30 failed, 4 other configs completed
+# Generate per-problem plots in no_exact_bw/ subfolder
+# ---------------------------------------------------------------------------
+NO_BW_DIR = OUTPUT_DIR / 'no_exact_bw'
+NO_BW_DIR.mkdir(parents=True, exist_ok=True)
+
+CONFIGS_NO_BW30 = ['wmse_bw0', 'ukl_bw0', 'ukl_bw8', 'ukl_bw_ecl']
+all_modelfiles = [m.modelfile for m in small_problems.problems]
+
+# Find problems with exactly the 4 non-bw30 configs completed but bw30 missing/failed
+pattern1_problems = []
+for mf in sorted(all_modelfiles):
+    if mf in clean_problems:
+        continue  # already graphed
+    completed_cfgs = set(
+        df_all[(df_all['modelfile'] == mf)]['config_name'].values
+    )
+    has_all_4 = all(c in completed_cfgs for c in CONFIGS_NO_BW30)
+    if has_all_4:
+        pattern1_problems.append(mf)
+
+print(f"\n{len(pattern1_problems)} pattern-1 problems (4 configs, no exact bw):")
+for p in pattern1_problems:
+    print(f"  {p}")
+
+df_p1 = df_all[df_all['modelfile'].isin(pattern1_problems)].copy()
+pivot_p1 = df_p1.pivot(index='modelfile', columns='config_name', values='log_z_estimate')
+
+for problem in pattern1_problems:
+    problem_name = problem.replace('.uai', '')
+    ecl = _AUTO_ECL.get(problem, 0)
+    iB_2 = round(math.log2(ecl)) if ecl > 0 else 0
+
+    wmse_row = df_p1[(df_p1['modelfile'] == problem) & (df_p1['config_name'] == 'wmse_bw0')]
+    N = int(wmse_row['num_buckets_trained'].iloc[0]) if len(wmse_row) > 0 else '?'
+
+    gt = GROUND_TRUTH.get(problem, None)
+    if gt is None:
+        continue
+
+    abs_errors = []
+    bar_labels = []
+    bar_colors = []
+    for cfg in CONFIGS_NO_BW30:
+        if problem in pivot_p1.index and cfg in pivot_p1.columns:
+            logz_hat = pivot_p1.loc[problem, cfg]
+            abs_err = abs(logz_hat - gt)
+        else:
+            abs_err = 0.0
+        abs_errors.append(abs_err)
+        bar_labels.append(CONFIG_LABELS[cfg])
+        bar_colors.append(CONFIG_COLORS[cfg])
+
+    x = np.arange(len(CONFIGS_NO_BW30))
+    title = (
+        f"{problem_name}, iB_2 = {iB_2}, num_trained={N}, num_epochs=5000\n"
+        f"NeuroBE loss and varied bw iB UKL Comparison (no exact bw)"
+    )
+
+    # --- Linear scale plot ---
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.bar(x, abs_errors, color=bar_colors, alpha=0.85)
+    ax.axhline(y=0, color='black', linestyle='--', linewidth=1.2, label='Ground Truth')
+    ax.set_xticks(x)
+    ax.set_xticklabels(bar_labels, fontsize=10)
+    ax.set_ylabel('Absolute Error |log Z estimate - log Z true|')
+    ax.set_xlabel('Configuration')
+    ax.set_title(title, fontsize=10)
+    ax.legend(fontsize=9)
+    ax.grid(axis='y', alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(str(NO_BW_DIR / f"{problem_name}_abs_error_linear.png"), dpi=150)
+    plt.close('all')
+
+    # --- Log (symlog) scale plot ---
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.bar(x, abs_errors, color=bar_colors, alpha=0.85)
+    ax.axhline(y=0, color='black', linestyle='--', linewidth=1.2, label='Ground Truth')
+    ax.set_yscale('symlog', linthresh=1e-3)
+    ax.set_xticks(x)
+    ax.set_xticklabels(bar_labels, fontsize=10)
+    ax.set_ylabel('Absolute Error |log Z estimate - log Z true| (symlog scale)')
+    ax.set_xlabel('Configuration')
+    ax.set_title(title, fontsize=10)
+    ax.legend(fontsize=9)
+    ax.grid(axis='y', alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(str(NO_BW_DIR / f"{problem_name}_abs_error_log.png"), dpi=150)
+    plt.close('all')
+
+    print(f"  Saved plots for {problem_name}")
+
+p1_png_count = len(list(NO_BW_DIR.glob('*.png')))
+print(f"\n  {p1_png_count} PNG files in {NO_BW_DIR}")
+
+# ---------------------------------------------------------------------------
 # Summary CSV (all completed experiments, not just clean 12)
 # ---------------------------------------------------------------------------
 print("\nBuilding summary CSV ...")

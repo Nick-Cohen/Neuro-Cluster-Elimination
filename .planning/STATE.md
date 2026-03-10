@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 Phase: 4 of 4 (Plotting Integration)
 Plan: 2 of 2 in current phase
 Status: Milestone complete
-Last activity: 2026-03-10 - Completed quick task 20: Update benchmark_wmse_ukl graphs with per-problem absolute error plots, custom colors/labels, summary CSV, and config analysis
+Last activity: 2026-03-10 - Completed quick task 21: Add no_exact_bw graphs for 9 pattern-1 problems
 
 Progress: [##########] 100%
 
@@ -125,11 +125,12 @@ None.
 | 025 | Create grid10x10.f10 UKL experiment workflow: runner, analysis, CSV/pickle outputs; fix per-bucket data collection bug | 2026-03-09 | 8cc2401 | [18-create-experiment-workflow-run-grid10x10](./quick/18-create-experiment-workflow-run-grid10x10/) |
 | 026 | Document pyGMs catalog hang root cause and model cache setup guide (docs/model_cache_setup.md) | 2026-03-09 | e736006 | [19-fix-playground-py-hanging-on-fastgm-crea](./quick/19-fix-playground-py-hanging-on-fastgm-crea/) |
 | 027 | Create visualize_updated.py: per-problem abs error bar charts (linear+symlog) and 96-row summary CSV for WMSE vs UKL benchmark | 2026-03-10 | 47754d9 | [20-update-benchmark-wmse-ukl-graphs-with-pe](./quick/20-update-benchmark-wmse-ukl-graphs-with-pe/) |
+| 028 | Add no_exact_bw graphs for 9 pattern-1 problems (4 configs, ukl_bw30 OOM) | 2026-03-10 | pending | [21-add-per-problem-absolute-error-graphs-fo](./quick/21-add-per-problem-absolute-error-graphs-fo/) |
 
 ## Session Continuity
 
 Last session: 2026-03-10
-Stopped at: Completed quick task 20 - visualize_updated.py created (220 lines), 24 PNGs + summary.csv in results/updated_graphs_and_table/
+Stopped at: Completed quick task 21 - Added 18 PNGs for 9 pattern-1 problems in no_exact_bw/ subfolder
 Resume file: None
 
 ---
