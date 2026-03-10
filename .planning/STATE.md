@@ -125,7 +125,7 @@ None.
 | 025 | Create grid10x10.f10 UKL experiment workflow: runner, analysis, CSV/pickle outputs; fix per-bucket data collection bug | 2026-03-09 | 8cc2401 | [18-create-experiment-workflow-run-grid10x10](./quick/18-create-experiment-workflow-run-grid10x10/) |
 | 026 | Document pyGMs catalog hang root cause and model cache setup guide (docs/model_cache_setup.md) | 2026-03-09 | e736006 | [19-fix-playground-py-hanging-on-fastgm-crea](./quick/19-fix-playground-py-hanging-on-fastgm-crea/) |
 | 027 | Create visualize_updated.py: per-problem abs error bar charts (linear+symlog) and 96-row summary CSV for WMSE vs UKL benchmark | 2026-03-10 | 47754d9 | [20-update-benchmark-wmse-ukl-graphs-with-pe](./quick/20-update-benchmark-wmse-ukl-graphs-with-pe/) |
-| 028 | Add no_exact_bw graphs for 9 pattern-1 problems (4 configs, ukl_bw30 OOM) | 2026-03-10 | pending | [21-add-per-problem-absolute-error-graphs-fo](./quick/21-add-per-problem-absolute-error-graphs-fo/) |
+| 028 | Add no_exact_bw graphs for 9 pattern-1 problems (4 configs, ukl_bw30 OOM) | 2026-03-10 | bcee5a1 | [21-add-per-problem-absolute-error-graphs-fo](./quick/21-add-per-problem-absolute-error-graphs-fo/) |
 
 ## Session Continuity
 
