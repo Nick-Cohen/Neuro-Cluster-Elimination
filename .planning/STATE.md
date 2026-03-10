@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 Phase: 4 of 4 (Plotting Integration)
 Plan: 2 of 2 in current phase
 Status: Milestone complete
-Last activity: 2026-03-10 - Completed quick task 21: Add no_exact_bw graphs for 9 pattern-1 problems
+Last activity: 2026-03-10 - Completed quick task 23: Create .uai.vo and .uai.evid cache files for 24 small_problems models
 
 Progress: [##########] 100%
 
@@ -127,11 +127,12 @@ None.
 | 027 | Create visualize_updated.py: per-problem abs error bar charts (linear+symlog) and 96-row summary CSV for WMSE vs UKL benchmark | 2026-03-10 | 47754d9 | [20-update-benchmark-wmse-ukl-graphs-with-pe](./quick/20-update-benchmark-wmse-ukl-graphs-with-pe/) |
 | 028 | Add no_exact_bw graphs for 9 pattern-1 problems (4 configs, ukl_bw30 OOM) | 2026-03-10 | bcee5a1 | [21-add-per-problem-absolute-error-graphs-fo](./quick/21-add-per-problem-absolute-error-graphs-fo/) |
 | 029 | Create grouped bar chart comparing paper WMB/NeuroBE errors vs our WMB for 4 overlapping problems | 2026-03-10 | 5453c6f | [22-create-chart-comparing-sanity-check-neur](./quick/22-create-chart-comparing-sanity-check-neur/) |
+| 030 | Create .uai.vo (SDBE format) and .uai.evid files for all 24 small_problems benchmark models | 2026-03-10 | 133a16b | [23-create-uai-uai-vo-and-uai-evid-files-for](./quick/23-create-uai-uai-vo-and-uai-evid-files-for/) |
 
 ## Session Continuity
 
 Last session: 2026-03-10
-Stopped at: Completed quick task 22 - Created compare_paper_vs_sanity_check.py and PNG chart comparing paper vs our WMB results
+Stopped at: Completed quick task 23 - Generated .uai.vo (SDBE format) and .uai.evid files for all 24 small_problems models
 Resume file: None
 
 ---
