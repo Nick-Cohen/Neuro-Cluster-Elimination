@@ -126,11 +126,12 @@ None.
 | 026 | Document pyGMs catalog hang root cause and model cache setup guide (docs/model_cache_setup.md) | 2026-03-09 | e736006 | [19-fix-playground-py-hanging-on-fastgm-crea](./quick/19-fix-playground-py-hanging-on-fastgm-crea/) |
 | 027 | Create visualize_updated.py: per-problem abs error bar charts (linear+symlog) and 96-row summary CSV for WMSE vs UKL benchmark | 2026-03-10 | 47754d9 | [20-update-benchmark-wmse-ukl-graphs-with-pe](./quick/20-update-benchmark-wmse-ukl-graphs-with-pe/) |
 | 028 | Add no_exact_bw graphs for 9 pattern-1 problems (4 configs, ukl_bw30 OOM) | 2026-03-10 | bcee5a1 | [21-add-per-problem-absolute-error-graphs-fo](./quick/21-add-per-problem-absolute-error-graphs-fo/) |
+| 029 | Create grouped bar chart comparing paper WMB/NeuroBE errors vs our WMB for 4 overlapping problems | 2026-03-10 | 5453c6f | [22-create-chart-comparing-sanity-check-neur](./quick/22-create-chart-comparing-sanity-check-neur/) |
 
 ## Session Continuity
 
 Last session: 2026-03-10
-Stopped at: Completed quick task 21 - Added 18 PNGs for 9 pattern-1 problems in no_exact_bw/ subfolder
+Stopped at: Completed quick task 22 - Created compare_paper_vs_sanity_check.py and PNG chart comparing paper vs our WMB results
 Resume file: None
 
 ---
