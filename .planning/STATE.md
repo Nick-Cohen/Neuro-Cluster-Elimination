@@ -124,11 +124,12 @@ None.
 | 024 | Write comprehensive experiment execution guide (docs/experiment_execution_guide.md) | 2026-03-09 | 93dde3a | [17-write-experiment-execution-instructions-](./quick/17-write-experiment-execution-instructions-/) |
 | 025 | Create grid10x10.f10 UKL experiment workflow: runner, analysis, CSV/pickle outputs; fix per-bucket data collection bug | 2026-03-09 | 8cc2401 | [18-create-experiment-workflow-run-grid10x10](./quick/18-create-experiment-workflow-run-grid10x10/) |
 | 026 | Document pyGMs catalog hang root cause and model cache setup guide (docs/model_cache_setup.md) | 2026-03-09 | e736006 | [19-fix-playground-py-hanging-on-fastgm-crea](./quick/19-fix-playground-py-hanging-on-fastgm-crea/) |
+| 027 | Create visualize_updated.py: per-problem abs error bar charts (linear+symlog) and 96-row summary CSV for WMSE vs UKL benchmark | 2026-03-10 | 47754d9 | [20-update-benchmark-wmse-ukl-graphs-with-pe](./quick/20-update-benchmark-wmse-ukl-graphs-with-pe/) |
 
 ## Session Continuity
 
-Last session: 2026-03-09
-Stopped at: Completed quick task 19 - docs/model_cache_setup.md created (145 lines), documents pyGMs catalog hang fix
+Last session: 2026-03-10
+Stopped at: Completed quick task 20 - visualize_updated.py created (220 lines), 24 PNGs + summary.csv in results/updated_graphs_and_table/
 Resume file: None
 
 ---

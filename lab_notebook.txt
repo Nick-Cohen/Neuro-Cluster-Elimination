@@ -1,3 +1,12 @@
+2026-03-10
+- Quick task 20: Update benchmark WMSE/UKL graphs with per-problem error plots
+  - Created visualize_updated.py (220 lines) for WMSE vs UKL benchmark result analysis
+  - Produces 24 PNG bar charts (12 clean problems x 2 scale types: linear + symlog)
+  - Per-problem title: iB_2, num_trained, num_epochs; exact color spec: Red/Orange/Gold/Green/Blue
+  - 96-row summary CSV (all completed experiments) with 13 columns including abs_err, err, width, etc.
+  - Confirmed track_errors=False in all experiments (default config, not overridden by benchmark runner)
+  - Output: results/updated_graphs_and_table/; 24 failed experiments (deer_rescaled models) excluded
+...............
 2026-03-09
 - Quick task 18: Create grid10x10.f10 UKL experiment workflow
   - run_grid10x10_ukl.py: full 42-field config, UKL loss, ecl=1024, 500 epochs, CUDA
