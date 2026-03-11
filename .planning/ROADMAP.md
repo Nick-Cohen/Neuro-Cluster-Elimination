@@ -96,7 +96,11 @@ Plans:
   2. All dead config fields (from removed/unused code paths) are absent from new configs and the codebase raises an error if they appear
   3. Field names are consistent and self-describing (no abbreviations that require looking up)
   4. Config validation catches missing required fields and unexpected keys with messages that name the offending field and its section
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 05-01-PLAN.md -- Config schema module with nested structure, validation, and flatten functions; FastGM integration
+- [ ] 05-02-PLAN.md -- Nested config builders for benchmark sets; experiment_config.py integration
 
 ### Phase 6: Config Documentation
 **Goal**: Every config field is documented in a written guide and enforced at the definition site in code
@@ -151,7 +155,7 @@ v1.1: 5 -> 6 (config track), 7 -> 8 (viz track), then 9 (both tracks must comple
 | 2. Execution Core | 2/2 | Complete | 2026-02-21 |
 | 3. Output Organization | 1/1 | Complete | 2026-02-21 |
 | 4. Plotting Integration | 2/2 | Complete | 2026-02-22 |
-| 5. Config Restructure | 0/? | Not started | - |
+| 5. Config Restructure | 0/2 | Planned | - |
 | 6. Config Documentation | 0/? | Not started | - |
 | 7. FastGM State & Logging | 0/? | Not started | - |
 | 8. Plotting Functions | 0/? | Not started | - |
