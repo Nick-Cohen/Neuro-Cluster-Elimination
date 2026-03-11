@@ -51,6 +51,7 @@ Requirements for Config & Visualization milestone. Each maps to roadmap phases.
 - [ ] **VIZ-02**: Comprehensive logging system writes all training details to a configurable log file path
 - [ ] **VIZ-03**: Standalone plotting functions accept FastGM objects (e.g. `plot_learning_curves(fastgm)`)
 - [ ] **VIZ-04**: Per-NN learning curve visualization (loss over epochs for individual bucket NNs)
+- [ ] **VIZ-05**: Comparison plotting functions accept multiple FastGM objects/logs and plot side-by-side comparisons
 
 ### Verification
 
@@ -101,24 +102,25 @@ Requirements for Config & Visualization milestone. Each maps to roadmap phases.
 | PLT-03 | Phase 4 (v1.0) | Complete |
 | PLT-04 | Phase 4 (v1.0) | Complete |
 | PLT-05 | Phase 4 (v1.0) | Complete |
-| CFG2-01 | — | Pending |
-| CFG2-02 | — | Pending |
-| CFG2-03 | — | Pending |
-| CFG2-04 | — | Pending |
-| CFG2-05 | — | Pending |
-| CFG2-06 | — | Pending |
-| VIZ-01 | — | Pending |
-| VIZ-02 | — | Pending |
-| VIZ-03 | — | Pending |
-| VIZ-04 | — | Pending |
-| VER-01 | — | Pending |
+| CFG2-01 | Phase 5 (v1.1) | Pending |
+| CFG2-02 | Phase 5 (v1.1) | Pending |
+| CFG2-03 | Phase 5 (v1.1) | Pending |
+| CFG2-04 | Phase 6 (v1.1) | Pending |
+| CFG2-05 | Phase 6 (v1.1) | Pending |
+| CFG2-06 | Phase 5 (v1.1) | Pending |
+| VIZ-01 | Phase 7 (v1.1) | Pending |
+| VIZ-02 | Phase 7 (v1.1) | Pending |
+| VIZ-03 | Phase 8 (v1.1) | Pending |
+| VIZ-04 | Phase 8 (v1.1) | Pending |
+| VIZ-05 | Phase 8 (v1.1) | Pending |
+| VER-01 | Phase 9 (v1.1) | Pending |
 
 **Coverage:**
 - v1.0 requirements: 15 total (all complete)
-- v1.1 requirements: 11 total
-- Mapped to phases: 0 (pending roadmap creation)
-- Unmapped: 11
+- v1.1 requirements: 12 total
+- Mapped to phases: 12 (100%)
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-21*
-*Last updated: 2026-03-10 after milestone v1.1 requirements definition*
+*Last updated: 2026-03-10 after v1.1 roadmap creation (phases 5-9)*
