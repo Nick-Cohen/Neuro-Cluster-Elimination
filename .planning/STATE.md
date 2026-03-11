@@ -2,19 +2,19 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-21)
+See: .planning/PROJECT.md (updated 2026-03-10)
 
 **Core value:** Running a tweaked experiment should be as simple as editing a config file and executing one command
-**Current focus:** Phase 4 - Plotting Integration
+**Current focus:** Milestone v1.1 — Config & Visualization
 
 ## Current Position
 
-Phase: 4 of 4 (Plotting Integration)
-Plan: 2 of 2 in current phase
-Status: Milestone complete
-Last activity: 2026-03-10 - Completed quick task 23: Create .uai.vo and .uai.evid cache files for 24 small_problems models
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-10 — Milestone v1.1 started
 
-Progress: [##########] 100%
+Progress: [          ] 0%
 
 ## Performance Metrics
 
