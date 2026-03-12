@@ -1,7 +1,7 @@
 # GSD State
 
 **Active Milestone:** M001 — Config & Visualization
-**Active Slice:** S02 — Benchmark Config Migration
+**Active Slice:** S03 — Config Documentation
 **Phase:** planning
 **Requirements Status:** 24 active · 0 validated · 4 deferred · 4 out of scope
 
@@ -16,4 +16,4 @@
 - None
 
 ## Next Action
-Plan slice S02 (Benchmark Config Migration).
+Plan slice S03 (Config Documentation).

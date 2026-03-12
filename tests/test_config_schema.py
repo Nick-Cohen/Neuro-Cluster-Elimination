@@ -463,9 +463,8 @@ class TestBenchmarkPassthrough:
         """Import actual nbe_sanity_check config, run through prepare_config,
         verify all expected live fields present with correct values.
 
-        Note: benchmark configs contain dead fields (backward_ecl,
-        num_batches_per_set). Per D011, flat configs with dead fields
-        get a warning + strip (not error), preserving backward compat.
+        After S02-T01, benchmark configs no longer contain dead fields —
+        they pass through cleanly with no warnings or stripping needed.
         """
         # Import the benchmark config builder to get a real config dict.
         # Module-level import triggers model loading which may fail if
@@ -478,7 +477,7 @@ class TestBenchmarkPassthrough:
         configs = _build_nbe_configs()
         config = configs[0]  # pedigree13
 
-        # This should NOT raise — flat configs with dead fields warn+strip
+        # Clean config — should pass through without warnings
         result = prepare_config(config)
 
         # Core fields should be preserved exactly
@@ -494,7 +493,7 @@ class TestBenchmarkPassthrough:
         assert result['batch_size'] == 256
         assert result['seed'] == 42
 
-        # Dead fields should be stripped
+        # Dead fields should not be present (removed from builder in S02-T01)
         assert 'backward_ecl' not in result
         assert 'num_batches_per_set' not in result
 
@@ -600,8 +599,8 @@ class TestFastGMIntegration:
     def test_benchmark_config_survives_prepare(self):
         """Actual nbe_sanity_check config passes through prepare_config.
 
-        All expected internal keys present, dead fields stripped.
-        Tests the full _build_nbe_configs() output without needing model files.
+        After S02-T01, benchmark configs are clean — no dead fields to strip,
+        no warnings expected. All internal keys should be present.
         """
         try:
             from nce.benchmark_problems.nbe_sanity_check import _build_nbe_configs
@@ -616,9 +615,19 @@ class TestFastGMIntegration:
 
             # No errors raised — that's the main check
 
-            # Dead fields stripped
-            assert 'backward_ecl' not in result, f"Config {i}: backward_ecl not stripped"
-            assert 'num_batches_per_set' not in result, f"Config {i}: num_batches_per_set not stripped"
+            # No dead-field warnings expected (fields removed from builder)
+            dead_field_warnings = [
+                x for x in w if 'backward_ecl' in str(x.message)
+                or 'num_batches_per_set' in str(x.message)
+            ]
+            assert len(dead_field_warnings) == 0, (
+                f"Config {i}: unexpected dead-field warnings: "
+                f"{[str(x.message) for x in dead_field_warnings]}"
+            )
+
+            # Dead fields absent (never in builder output)
+            assert 'backward_ecl' not in result, f"Config {i}: backward_ecl present"
+            assert 'num_batches_per_set' not in result, f"Config {i}: num_batches_per_set present"
 
             # Core fields present
             assert 'ecl' in result, f"Config {i}: ecl missing"
