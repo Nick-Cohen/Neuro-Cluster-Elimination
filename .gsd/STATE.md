@@ -1,8 +1,8 @@
 # GSD State
 
 **Active Milestone:** M001 — Config & Visualization
-**Active Slice:** S03 — Config Documentation
-**Phase:** executing (all tasks complete — ready for slice completion)
+**Active Slice:** S04 — FastGM State Preservation
+**Phase:** planning
 **Requirements Status:** 24 active · 0 validated · 4 deferred · 4 out of scope
 
 ## Milestone Registry
@@ -10,10 +10,10 @@
 - ⬜ **M002:** M002
 
 ## Recent Decisions
-- Doc-sync test regex scopes to 5-column tables (3rd column backticked) to distinguish section field tables from 3-column Dead/Runtime/Legacy tables
+- None recorded
 
 ## Blockers
 - None
 
 ## Next Action
-Complete slice S03 — both tasks done, all verification passes.
+Plan slice S04 (FastGM State Preservation).
