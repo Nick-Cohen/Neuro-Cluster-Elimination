@@ -53,7 +53,7 @@
 
 ## Tasks
 
-- [ ] **T01: Set up pytest and write failing acceptance tests** `est:30m`
+- [x] **T01: Set up pytest and write failing acceptance tests** `est:30m`
   - Why: Define the objective stopping condition before writing implementation. Tests encode every requirement (R001–R006) as executable assertions.
   - Files: `tests/__init__.py`, `tests/test_config_schema.py`, `tests/conftest.py`
   - Do: Install pytest in venv. Create `tests/` directory with test file covering: nested→flat translation, flat passthrough, auto-detection, dead field errors, alias resolution, unknown field errors, required field validation, polymorphic types, mutability, benchmark config passthrough. Use fixtures for reference configs. All tests import from `nce.config_schema` (which doesn't exist yet — tests will fail).
