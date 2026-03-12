@@ -128,11 +128,12 @@ None.
 | 028 | Add no_exact_bw graphs for 9 pattern-1 problems (4 configs, ukl_bw30 OOM) | 2026-03-10 | bcee5a1 | [21-add-per-problem-absolute-error-graphs-fo](./quick/21-add-per-problem-absolute-error-graphs-fo/) |
 | 029 | Create grouped bar chart comparing paper WMB/NeuroBE errors vs our WMB for 4 overlapping problems | 2026-03-10 | 5453c6f | [22-create-chart-comparing-sanity-check-neur](./quick/22-create-chart-comparing-sanity-check-neur/) |
 | 030 | Create .uai.vo (SDBE format) and .uai.evid files for all 24 small_problems benchmark models | 2026-03-10 | 133a16b | [23-create-uai-uai-vo-and-uai-evid-files-for](./quick/23-create-uai-uai-vo-and-uai-evid-files-for/) |
+| 031 | Export all GSD 1.0 planning artifacts to single file for GSD 2.0 migration | 2026-03-12 | 7366504 | [24-export-gsd-planning-artifacts-for-gsd-2-](./quick/24-export-gsd-planning-artifacts-for-gsd-2-/) |
 
 ## Session Continuity
 
-Last session: 2026-03-10
-Stopped at: v1.1 roadmap created — phases 5-9 defined, ready to plan Phase 5
+Last session: 2026-03-12
+Stopped at: Quick task 24 complete — GSD export created at .planning/GSD_EXPORT.md, ready for GSD 2.0 migration
 Resume file: None
 
 ---
