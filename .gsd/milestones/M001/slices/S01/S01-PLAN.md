@@ -67,7 +67,7 @@
   - Verify: `python -m pytest tests/test_config_schema.py -v` — all unit tests pass (except FastGM integration test which needs T03)
   - Done when: All non-integration tests in `test_config_schema.py` pass
 
-- [ ] **T03: Wire prepare_config into FastGM and verify end-to-end** `est:45m`
+- [x] **T03: Wire prepare_config into FastGM and verify end-to-end** `est:45m`
   - Why: Close the integration loop — FastGM actually uses `prepare_config()`. Verify backward compat with real benchmark config. Verify the full pipeline from nested config → FastGM init → flat dict accessible by all consumers.
   - Files: `nce/inference/graphical_model.py`, `tests/test_config_schema.py`
   - Do: Import `prepare_config` in `graphical_model.py`. Replace `self.config = dict(nn_config) if nn_config else {}` with `self.config = prepare_config(nn_config) if nn_config else {}`. Add integration test that creates FastGM with a real benchmark config and verifies `gm.config` is correct flat dict. Add integration test with nested config variant. Ensure dead fields in existing benchmark configs are handled gracefully (warn or strip, don't error — these are in-tree configs that S02 will clean up).

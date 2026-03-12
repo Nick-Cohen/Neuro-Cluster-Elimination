@@ -1,6 +1,7 @@
 from .factor import FastFactor
 from .bucket import FastBucket
 from .elimination_order import wtminfill_order
+from nce.config_schema import prepare_config
 from nce.utils.stats import get_message_stats
 import pyGMs as gm
 from pyGMs import wmb
@@ -31,9 +32,9 @@ class FastGM:
             self.logSS = getattr(model, 'logSS', None)
         else:
             self.logSS = None
-        # CRITICAL: Create a NEW copy of config dict to avoid sharing with other GMs
-        # Using dict() ensures each GM has its own independent config
-        self.config = dict(nn_config) if nn_config else {}
+        # Validate, normalize, and flatten the config through the schema layer.
+        # prepare_config returns a new plain dict — safe from shared-reference bugs.
+        self.config = prepare_config(nn_config) if nn_config else {}
 
         self.iB = self.config.get('iB', 0)
         self.ecl = self.config.get('ecl', 0)
