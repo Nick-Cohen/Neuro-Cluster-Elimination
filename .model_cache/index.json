@@ -1,0 +1,10 @@
+{
+    "pedigree": {
+        "name": "pedigree",
+        "description": "Pedigree genetic network models from UAI competitions",
+        "modelset": "https://ics.uci.edu/~ihler/uai-data/models/pedigree/statistics.csv",
+        "types": [
+            "uai"
+        ]
+    }
+}

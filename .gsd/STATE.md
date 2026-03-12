@@ -10,10 +10,10 @@
 - ⬜ **M002:** M002
 
 ## Recent Decisions
-- None recorded
+- D014: `prepare_config` defaults to `strict=False` (warn+strip for dead fields in flat configs)
 
 ## Blockers
 - None
 
 ## Next Action
-Execute T02: Build config_schema.py — schema, validation, and translation in slice S01.
+Execute T03: Wire prepare_config into FastGM and verify end-to-end in slice S01.

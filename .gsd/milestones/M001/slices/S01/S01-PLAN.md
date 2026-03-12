@@ -60,7 +60,7 @@
   - Verify: `python -m pytest tests/test_config_schema.py --co` lists all test cases (collection succeeds but tests fail on import)
   - Done when: Test file exists with 12+ test functions covering all 6 requirements, pytest collects them all
 
-- [ ] **T02: Build config_schema.py — schema, validation, and translation** `est:1h30m`
+- [x] **T02: Build config_schema.py — schema, validation, and translation** `est:1h30m`
   - Why: Core implementation — the schema definition, detection heuristic, validation, alias resolution, nested→flat flattening, and `prepare_config()` entry point.
   - Files: `nce/config_schema.py`
   - Do: Define `NESTED_SECTIONS` schema dict with all 55+ fields (types, defaults, required flags, internal names). Define `DEAD_FIELDS`, `FIELD_ALIASES`. Implement `_is_nested()`, `_resolve_aliases()`, `validate_nested_config()`, `flatten_config()`, `_validate_flat_config()`, `prepare_config()`. All pure Python — no torch/pyGMs. Return plain dict from `prepare_config()`. Follow field inventory from S01-RESEARCH exactly.
