@@ -59,7 +59,7 @@
   - Verify: `python -m pytest tests/test_benchmark_configs.py -v -k nested`
   - Done when: `configs['nbe_nested']` and `configs['default_nested']` exist on both benchmark sets; round-trip equality tests pass for all models in both sets.
 
-- [ ] **T03: Wire experiment_config worker to validate through config_schema** `est:30m`
+- [x] **T03: Wire experiment_config worker to validate through config_schema** `est:30m`
   - Why: Integration closure — worker.py assembles nn_config dicts with dead fields. Cleaning and adding a `prepare_config()` validation step catches problems at config-build time rather than at FastGM init.
   - Files: `notebooks/_1-2026/worker.py`, `notebooks/_1-2026/experiment_config.py`, `tests/test_benchmark_configs.py`
   - Do: (1) Remove `backward_ecl` and `num_batches_per_set` from `build_nn_config()` in worker.py. (2) Add `from nce.config_schema import prepare_config` to worker.py. (3) Add a validation call at the end of `build_nn_config()`: `prepare_config(nn_config, strict=True)` — if the assembled config has dead fields or unknown fields, it fails fast with a clear error. Return the original `nn_config` dict (not the prepared one, since FastGM will call `prepare_config` again at init — double-preparation is idempotent but the worker config has fields like `error_tracking` that aren't in the schema and are consumed separately). Actually: the flat config may have fields unknown to the schema — validate with `strict=False` to catch only dead fields. (4) Remove `num_batches_per_set` from `validate_config()` defaults in experiment_config.py. (5) Add test in `tests/test_benchmark_configs.py`: build a sample nn_config via `build_nn_config()` with test inputs, pass through `prepare_config()`, assert no warnings emitted.

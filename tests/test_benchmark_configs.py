@@ -10,8 +10,10 @@ Test classes:
   TestBenchmarkConfigValidation — all flat configs pass prepare_config() cleanly
   TestNestedBuilderRoundTrip — prepare_config(nested) == prepare_config(flat) per model
   TestNestedBuilderValidation — nested configs pass prepare_config(strict=True)
+  TestWorkerConfigClean — worker build_nn_config() output has no dead fields
 """
 import warnings
+from pathlib import Path
 
 import pytest
 
@@ -314,6 +316,90 @@ class TestNestedBuilderValidation:
         result = prepare_config(configs[model_idx], strict=True)
         assert isinstance(result, dict)
         assert 'ecl' in result
+
+
+# ===================================================================
+# Worker's build_nn_config() output is clean (no dead fields)
+# ===================================================================
+
+
+class TestWorkerConfigClean:
+    """build_nn_config() must not emit dead fields or trigger warnings."""
+
+    @staticmethod
+    def _import_build_nn_config():
+        """Import build_nn_config from the notebooks worker module."""
+        import importlib
+        import sys as _sys
+        worker_dir = str(Path(__file__).resolve().parent.parent / 'notebooks' / '_1-2026')
+        if worker_dir not in _sys.path:
+            _sys.path.insert(0, worker_dir)
+        # Force reimport in case it was cached from a prior test session
+        if 'worker' in _sys.modules:
+            del _sys.modules['worker']
+        mod = importlib.import_module('worker')
+        return mod.build_nn_config
+
+    @staticmethod
+    def _sample_config():
+        """Return a minimal experiment config dict for build_nn_config()."""
+        return {
+            'epochs': 100,
+            'sampling_scheme': 'all',
+            'batch_size': 1000,
+            'num_samples': 1000,
+            'set_size': 1000,
+            'loss': 'unnormalized_kl',
+            'val_set': 'all',
+            'ecl': 1024,
+        }
+
+    def test_no_backward_ecl(self):
+        """backward_ecl must not appear in build_nn_config() output."""
+        build_nn_config = self._import_build_nn_config()
+        nn_config = build_nn_config(self._sample_config(), [128, 128], bw_ecl=64, seed=42)
+        assert 'backward_ecl' not in nn_config
+
+    def test_no_num_batches_per_set(self):
+        """num_batches_per_set must not appear in build_nn_config() output."""
+        build_nn_config = self._import_build_nn_config()
+        nn_config = build_nn_config(self._sample_config(), [128, 128], bw_ecl=64, seed=42)
+        assert 'num_batches_per_set' not in nn_config
+
+    def test_prepare_config_no_warnings(self):
+        """build_nn_config() output passes prepare_config() without dead-field warnings."""
+        build_nn_config = self._import_build_nn_config()
+        nn_config = build_nn_config(self._sample_config(), [], bw_ecl=0, seed=1)
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            prepare_config(nn_config)
+
+        dead_field_warnings = [
+            x for x in w if 'dead' in str(x.message).lower()
+            or 'backward_ecl' in str(x.message)
+            or 'num_batches_per_set' in str(x.message)
+        ]
+        assert len(dead_field_warnings) == 0, (
+            f"build_nn_config() triggered dead-field warnings: "
+            f"{[str(x.message) for x in dead_field_warnings]}"
+        )
+
+    def test_bw_ecl_zero_config(self):
+        """build_nn_config() with bw_ecl=0 produces valid config."""
+        build_nn_config = self._import_build_nn_config()
+        nn_config = build_nn_config(self._sample_config(), [64], bw_ecl=0, seed=7)
+        assert nn_config['use_bw_approx'] is False
+        assert nn_config['populate_bw_factors'] is False
+        assert nn_config['bw_ecl'] is None
+
+    def test_bw_ecl_positive_config(self):
+        """build_nn_config() with bw_ecl>0 sets backward fields correctly."""
+        build_nn_config = self._import_build_nn_config()
+        nn_config = build_nn_config(self._sample_config(), [64], bw_ecl=256, seed=7)
+        assert nn_config['use_bw_approx'] is True
+        assert nn_config['populate_bw_factors'] is True
+        assert nn_config['bw_ecl'] == 256
 
 
 def _diff_dicts(d1, d2):
