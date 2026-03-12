@@ -125,8 +125,80 @@ def _build_nbe_configs():
     return configs
 
 
+def _build_nbe_nested_configs():
+    """Build nested-format neuroBE config dicts for each model.
+
+    Returns a list of 5 nested config dicts (one per model, same order as
+    _MODEL_KEYS). Uses the 6-section schema from config_schema.NESTED_SECTIONS
+    with readable alias names where available.
+
+    These configs produce identical output to _build_nbe_configs() when passed
+    through prepare_config().
+    """
+    configs = []
+    for key in _MODEL_KEYS:
+        configs.append({
+            'inference': {
+                'device': 'cuda',
+                'exact_computation_limit': 2**(_IB_MAP[key] - 1),
+                'i_bound': _IB_MAP[key],
+                'approximation_method': 'nn',
+                'dope_factors': True,
+            },
+            'nn': {
+                'hidden_sizes': _HIDDEN_SIZES_MAP[key],
+                'use_linspace_bias': False,
+                'use_memorizer': False,
+            },
+            'training': {
+                'num_epochs': 500,
+                'num_epochs_phase2': 0,
+                'loss_fn': 'weighted_logspace_mse',
+                'optimizer': 'adam',
+                'learning_rate': 0.001,
+                'learning_rate_decay': 1.0,
+                'momentum': 0.9,
+                'batch_size': 256,
+                'patience': 20,
+                'min_learning_rate': 1e-8,
+                'seed': 42,
+                'skip_early_stopping': False,
+                'nbe_early_stopping': False,
+                'nbe_warmup_epochs': 0,
+                'inverse_time_decay_constant': 100,
+            },
+            'sampling': {
+                'sampling_scheme': 'uniform',
+                'num_samples': _NUM_SAMPLES_MAP[key],
+                'set_size': None,
+                'val_set': True,
+                'stratify_samples': False,
+                'lower_dim': False,
+            },
+            'backward': {
+                'use_backward_approximation': False,
+                'populate_backward_factors': False,
+                'backward_ecl': None,
+                'backward_i_bound': _IB_MAP[key],
+                'forward_diff_barrier': False,
+            },
+            'output': {
+                'display_intermediate': False,
+                'track_errors': False,
+                'plot_messages': False,
+                'debug': False,
+                'gather_message_stats': False,
+                'traced_losses': [],
+            },
+        })
+    return configs
+
+
 # Module-level instance: single import gives access to both problems and configs.
 nbe_sanity_check = BenchmarkSet(
     problems=_load_benchmark_set(),
-    configs={'nbe': _build_nbe_configs()},
+    configs={
+        'nbe': _build_nbe_configs(),
+        'nbe_nested': _build_nbe_nested_configs(),
+    },
 )

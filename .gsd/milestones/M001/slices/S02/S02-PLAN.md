@@ -52,7 +52,7 @@
   - Verify: `python -m pytest tests/test_benchmark_configs.py tests/test_config_schema.py -v`
   - Done when: Both benchmark builders produce configs without dead fields; `set_bw_ecl()` only writes `bw_ecl` and `populate_bw_factors`; all tests pass.
 
-- [ ] **T02: Add nested config builders with round-trip equality tests** `est:45m`
+- [x] **T02: Add nested config builders with round-trip equality tests** `est:45m`
   - Why: Core deliverable — nested builders provide the new config format for benchmark sets, proving the S01 schema works with real configs. Round-trip equality is the primary correctness check.
   - Files: `nce/benchmark_problems/nbe_sanity_check.py`, `nce/benchmark_problems/small_problems.py`, `tests/test_benchmark_configs.py`
   - Do: (1) Add `_build_nbe_nested_configs()` to `nbe_sanity_check.py` — returns list of 5 nested config dicts using NESTED_SECTIONS format with readable names. Use `equivalent_nested_config` fixture from conftest.py as structural template. Per-model maps (`_HIDDEN_SIZES_MAP`, etc.) parameterize values just like the flat builder. (2) Register under `configs['nbe_nested']` in the module-level `BenchmarkSet`. (3) Add `_build_default_nested_configs()` to `small_problems.py` — same pattern, 24 configs. Register under `configs['default_nested']`. (4) Add round-trip equality tests in `tests/test_benchmark_configs.py`: for each model index, `prepare_config(nested_config) == prepare_config(flat_config)`. Test both benchmark sets. (5) Keep nested builders lightweight — no torch imports, no `prepare_config()` calls at module level (research constraint: module-level BenchmarkSet triggers at import time).

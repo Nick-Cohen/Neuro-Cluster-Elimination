@@ -152,6 +152,77 @@ def _build_default_configs():
     return configs
 
 
+def _build_default_nested_configs():
+    """Build nested-format config dicts for each model.
+
+    Returns a list of 24 nested config dicts (one per model, same order as
+    _MODEL_KEYS). Uses the 6-section schema from config_schema.NESTED_SECTIONS
+    with readable alias names where available.
+
+    These configs produce identical output to _build_default_configs() when
+    passed through prepare_config().
+    """
+    catalog = get_catalog()
+    configs = []
+    for key in _MODEL_KEYS:
+        model = catalog[key]
+        auto_ecl = _get_auto_ecl(model.modelfile)
+        configs.append({
+            'inference': {
+                'device': 'cuda',
+                'exact_computation_limit': auto_ecl,
+                'i_bound': 100,
+                'approximation_method': 'nn',
+                'dope_factors': False,
+            },
+            'nn': {
+                'hidden_sizes': [3, 3],
+                'use_linspace_bias': False,
+                'use_memorizer': False,
+            },
+            'training': {
+                'num_epochs': 10000,
+                'num_epochs_phase2': 0,
+                'loss_fn': 'unnormalized_kl',
+                'optimizer': 'adam',
+                'learning_rate': 0.01,
+                'learning_rate_decay': 1,
+                'momentum': 0.9,
+                'batch_size': 100000,
+                'patience': 1,
+                'min_learning_rate': 1e-8,
+                'seed': 42,
+                'skip_early_stopping': True,
+                'nbe_early_stopping': False,
+                'inverse_time_decay_constant': 10,
+            },
+            'sampling': {
+                'sampling_scheme': 'all',
+                'num_samples': 100000,
+                'set_size': 100000,
+                'val_set': 'all',
+                'stratify_samples': False,
+                'lower_dim': False,
+            },
+            'backward': {
+                'use_backward_approximation': True,
+                'populate_backward_factors': False,
+                'backward_ecl': 0,
+                'backward_i_bound': 100,
+                'forward_diff_barrier': False,
+            },
+            'output': {
+                'display_intermediate': False,
+                'track_errors': False,
+                'plot_messages': False,
+                'debug': False,
+                'gather_message_stats': False,
+                'traced_losses': [],
+            },
+        })
+    return configs
+
+
 def set_bw_ecl(benchmark_set, config_name, value):
     """Set bw_ecl for all problems in a config set.
 
@@ -171,5 +242,8 @@ def set_bw_ecl(benchmark_set, config_name, value):
 # Module-level instance
 small_problems = BenchmarkSet(
     problems=_load_benchmark_set(),
-    configs={'default': _build_default_configs()},
+    configs={
+        'default': _build_default_configs(),
+        'default_nested': _build_default_nested_configs(),
+    },
 )

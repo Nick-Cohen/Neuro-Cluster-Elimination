@@ -16,4 +16,4 @@
 - None
 
 ## Next Action
-Execute T02: Add nested config builders with round-trip equality tests in slice S02.
+Execute T03: Wire experiment_config worker to validate through config_schema in slice S02.

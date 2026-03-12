@@ -1,12 +1,15 @@
-"""Tests for benchmark config cleanliness and helper functions (S02-T01).
+"""Tests for benchmark config cleanliness and helper functions (S02).
 
 Verifies that benchmark config builders produce clean configs without dead
-fields, and that helper functions like set_bw_ecl() write only live fields.
+fields, that helper functions like set_bw_ecl() write only live fields,
+and that nested config builders round-trip to identical flat output.
 
 Test classes:
   TestCleanBenchmarkConfigs — dead fields absent from builder output
   TestSetBwEcl — set_bw_ecl() writes bw_ecl + populate_bw_factors, NOT backward_ecl
   TestBenchmarkConfigValidation — all flat configs pass prepare_config() cleanly
+  TestNestedBuilderRoundTrip — prepare_config(nested) == prepare_config(flat) per model
+  TestNestedBuilderValidation — nested configs pass prepare_config(strict=True)
 """
 import warnings
 
@@ -218,3 +221,108 @@ class TestBenchmarkConfigValidation:
         for i, cfg in enumerate(configs):
             result = prepare_config(cfg, strict=True)
             assert isinstance(result, dict), f"Config {i}: expected dict"
+
+
+# ===================================================================
+# Nested builder round-trip equality: prepare_config(nested) == prepare_config(flat)
+# ===================================================================
+
+
+class TestNestedBuilderRoundTrip:
+    """prepare_config(nested[i]) == prepare_config(flat[i]) for every model."""
+
+    @pytest.mark.parametrize("model_idx", range(5), ids=[f"nbe-{i}" for i in range(5)])
+    def test_nbe_round_trip(self, model_idx):
+        """Nested nbe config round-trips to same flat output as flat nbe config."""
+        try:
+            from nce.benchmark_problems.nbe_sanity_check import (
+                _build_nbe_configs,
+                _build_nbe_nested_configs,
+            )
+        except (ValueError, TypeError, OSError) as exc:
+            pytest.skip(f"Benchmark config builder not available: {exc}")
+
+        flat_configs = _build_nbe_configs()
+        nested_configs = _build_nbe_nested_configs()
+
+        flat_result = prepare_config(flat_configs[model_idx])
+        nested_result = prepare_config(nested_configs[model_idx])
+
+        assert flat_result == nested_result, (
+            f"nbe model {model_idx}: nested config round-trip mismatch.\n"
+            f"  Keys only in flat:   {set(flat_result) - set(nested_result)}\n"
+            f"  Keys only in nested: {set(nested_result) - set(flat_result)}\n"
+            f"  Value diffs: {_diff_dicts(flat_result, nested_result)}"
+        )
+
+    @pytest.mark.parametrize("model_idx", range(24), ids=[f"default-{i}" for i in range(24)])
+    def test_default_round_trip(self, model_idx):
+        """Nested default config round-trips to same flat output as flat default config."""
+        try:
+            from nce.benchmark_problems.small_problems import (
+                _build_default_configs,
+                _build_default_nested_configs,
+            )
+        except (ValueError, TypeError, OSError) as exc:
+            pytest.skip(f"Benchmark config builder not available: {exc}")
+
+        flat_configs = _build_default_configs()
+        nested_configs = _build_default_nested_configs()
+
+        flat_result = prepare_config(flat_configs[model_idx])
+        nested_result = prepare_config(nested_configs[model_idx])
+
+        assert flat_result == nested_result, (
+            f"default model {model_idx}: nested config round-trip mismatch.\n"
+            f"  Keys only in flat:   {set(flat_result) - set(nested_result)}\n"
+            f"  Keys only in nested: {set(nested_result) - set(flat_result)}\n"
+            f"  Value diffs: {_diff_dicts(flat_result, nested_result)}"
+        )
+
+
+# ===================================================================
+# Nested builder validation: strict mode passes for all nested configs
+# ===================================================================
+
+
+class TestNestedBuilderValidation:
+    """Each nested config passes prepare_config(strict=True) without error."""
+
+    @pytest.mark.parametrize("model_idx", range(5), ids=[f"nbe-{i}" for i in range(5)])
+    def test_nbe_nested_strict(self, model_idx):
+        """Nested nbe config passes strict validation."""
+        try:
+            from nce.benchmark_problems.nbe_sanity_check import _build_nbe_nested_configs
+        except (ValueError, TypeError, OSError) as exc:
+            pytest.skip(f"Benchmark config builder not available: {exc}")
+
+        configs = _build_nbe_nested_configs()
+        result = prepare_config(configs[model_idx], strict=True)
+        assert isinstance(result, dict)
+        assert 'ecl' in result
+        assert 'iB' in result
+
+    @pytest.mark.parametrize("model_idx", range(24), ids=[f"default-{i}" for i in range(24)])
+    def test_default_nested_strict(self, model_idx):
+        """Nested default config passes strict validation."""
+        try:
+            from nce.benchmark_problems.small_problems import _build_default_nested_configs
+        except (ValueError, TypeError, OSError) as exc:
+            pytest.skip(f"Benchmark config builder not available: {exc}")
+
+        configs = _build_default_nested_configs()
+        result = prepare_config(configs[model_idx], strict=True)
+        assert isinstance(result, dict)
+        assert 'ecl' in result
+
+
+def _diff_dicts(d1, d2):
+    """Return a dict of keys where values differ between d1 and d2."""
+    diffs = {}
+    all_keys = set(d1) | set(d2)
+    for k in sorted(all_keys):
+        v1 = d1.get(k, '<missing>')
+        v2 = d2.get(k, '<missing>')
+        if v1 != v2:
+            diffs[k] = (v1, v2)
+    return diffs
