@@ -54,7 +54,7 @@ This milestone is complete only when all are true:
 - [x] **S01: Config Schema & Flat Translation** `risk:medium` `depends:[]`
   > After this: Pass a nested config dict to FastGM, it validates, flattens, and runs inference identically to the old flat config. Old flat configs auto-detected and still work.
 
-- [ ] **S02: Benchmark Config Migration** `risk:low` `depends:[S01]`
+- [x] **S02: Benchmark Config Migration** `risk:low` `depends:[S01]`
   > After this: All benchmark sets (nbe_sanity_check, small_problems) offer nested config builders alongside flat; experiment_config.py validates nested configs via config_schema.
 
 - [ ] **S03: Config Documentation** `risk:low` `depends:[S01]`
