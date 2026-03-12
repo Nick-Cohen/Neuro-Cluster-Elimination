@@ -48,7 +48,7 @@
   - Verify: `python -c "open('docs/config_reference.md').read()"` confirms file exists and is non-empty; manual review of completeness against `NESTED_SECTIONS`
   - Done when: every field in `NESTED_SECTIONS` has an entry in the guide with type, default, and purpose
 
-- [ ] **T02: Add doc-sync test, schema pointer, and update example config** `est:45m`
+- [x] **T02: Add doc-sync test, schema pointer, and update example config** `est:45m`
   - Why: R008 — documentation drifts without enforcement. The test catches additions to schema or docs that aren't mirrored. Also updates the stale example config.
   - Files: `tests/test_config_docs.py`, `nce/config_schema.py`, `configs/example_nn_config.py`
   - Do: Write pytest test that imports `NESTED_SECTIONS` and parses field tables from `docs/config_reference.md`. Test both directions: schema→docs and docs→schema. Add module-level docstring/comment in `config_schema.py` pointing to `docs/config_reference.md`. Update `configs/example_nn_config.py` with both flat and nested examples.

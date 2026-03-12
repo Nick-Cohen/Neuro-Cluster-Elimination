@@ -2,7 +2,7 @@
 
 **Active Milestone:** M001 — Config & Visualization
 **Active Slice:** S03 — Config Documentation
-**Phase:** executing
+**Phase:** executing (all tasks complete — ready for slice completion)
 **Requirements Status:** 24 active · 0 validated · 4 deferred · 4 out of scope
 
 ## Milestone Registry
@@ -10,10 +10,10 @@
 - ⬜ **M002:** M002
 
 ## Recent Decisions
-- None recorded
+- Doc-sync test regex scopes to 5-column tables (3rd column backticked) to distinguish section field tables from 3-column Dead/Runtime/Legacy tables
 
 ## Blockers
 - None
 
 ## Next Action
-Execute T02: Add doc-sync test, schema pointer, and update example config in slice S03.
+Complete slice S03 — both tasks done, all verification passes.

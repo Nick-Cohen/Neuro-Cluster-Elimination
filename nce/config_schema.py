@@ -6,6 +6,8 @@ testing and documentation generation.
 Public API:
     prepare_config(config_dict, strict=True) -> dict
 """
+# Field documentation: docs/config_reference.md
+
 import warnings
 from collections import OrderedDict
 
