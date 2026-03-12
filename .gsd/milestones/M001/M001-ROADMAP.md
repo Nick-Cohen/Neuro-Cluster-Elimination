@@ -57,7 +57,7 @@ This milestone is complete only when all are true:
 - [x] **S02: Benchmark Config Migration** `risk:low` `depends:[S01]`
   > After this: All benchmark sets (nbe_sanity_check, small_problems) offer nested config builders alongside flat; experiment_config.py validates nested configs via config_schema.
 
-- [ ] **S03: Config Documentation** `risk:low` `depends:[S01]`
+- [x] **S03: Config Documentation** `risk:low` `depends:[S01]`
   > After this: A markdown guide documents every config field (type, default, purpose). Code comments at config definition sites enforce doc-sync.
 
 - [ ] **S04: FastGM State Preservation** `risk:medium` `depends:[]`
