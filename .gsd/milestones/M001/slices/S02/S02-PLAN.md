@@ -45,7 +45,7 @@
 
 ## Tasks
 
-- [ ] **T01: Remove dead fields from benchmark configs and fix set_bw_ecl** `est:30m`
+- [x] **T01: Remove dead fields from benchmark configs and fix set_bw_ecl** `est:30m`
   - Why: Benchmark flat configs currently carry `backward_ecl` and `num_batches_per_set` (dead fields per D010). Cleaning them is prerequisite to T02's round-trip equality test and moves toward D014's eventual strict-by-default.
   - Files: `nce/benchmark_problems/nbe_sanity_check.py`, `nce/benchmark_problems/small_problems.py`, `tests/test_benchmark_configs.py`, `tests/test_config_schema.py`
   - Do: (1) Remove `backward_ecl` and `num_batches_per_set` lines from `_build_nbe_configs()`. (2) Same for `_build_default_configs()`. (3) Remove `cfg['backward_ecl'] = value` line from `set_bw_ecl()`, keep `bw_ecl` and `populate_bw_factors` assignments. (4) Create `tests/test_benchmark_configs.py` with tests asserting: dead fields absent from both builders' output, `set_bw_ecl()` does not write `backward_ecl`, all benchmark flat configs pass `prepare_config()` with no warnings. (5) Verify existing `tests/test_config_schema.py` tests still pass — the `TestBenchmarkPassthrough` tests import `_build_nbe_configs()` which will now produce clean configs; update assertions if they explicitly check for dead field stripping behavior on benchmark configs.

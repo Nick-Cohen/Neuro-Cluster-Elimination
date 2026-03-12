@@ -16,4 +16,4 @@
 - None
 
 ## Next Action
-Execute T01: Remove dead fields from benchmark configs and fix set_bw_ecl in slice S02.
+Execute T02: Add nested config builders with round-trip equality tests in slice S02.

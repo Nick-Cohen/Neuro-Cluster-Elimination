@@ -126,7 +126,6 @@ def _build_default_configs():
             'batch_size': 100000,
             'set_size': 100000,
             'num_samples': 100000,
-            'num_batches_per_set': 1,
             'loss_fn': 'unnormalized_kl',
             'traced_losses': [],
             'val_set': 'all',
@@ -137,7 +136,6 @@ def _build_default_configs():
             'iB': 100,
             'approximation_method': 'nn',
             'bw_ecl': 0,
-            'backward_ecl': 0,
             'backward_iB': 100,
             'use_linspace_bias': False,
             'use_memorizer': False,
@@ -157,7 +155,7 @@ def _build_default_configs():
 def set_bw_ecl(benchmark_set, config_name, value):
     """Set bw_ecl for all problems in a config set.
 
-    Also updates populate_bw_factors and backward_ecl to stay consistent.
+    Also updates populate_bw_factors to stay consistent.
 
     Args:
         benchmark_set: BenchmarkSet instance (e.g. small_problems)
@@ -167,7 +165,6 @@ def set_bw_ecl(benchmark_set, config_name, value):
     """
     for cfg in benchmark_set.configs[config_name]:
         cfg['bw_ecl'] = value
-        cfg['backward_ecl'] = value
         cfg['populate_bw_factors'] = value > 0
 
 
