@@ -2,7 +2,7 @@
 
 **Active Milestone:** M001 — Config & Visualization
 **Active Slice:** S03 — Config Documentation
-**Phase:** planning
+**Phase:** execution
 **Requirements Status:** 24 active · 0 validated · 4 deferred · 4 out of scope
 
 ## Milestone Registry
@@ -16,4 +16,4 @@
 - None
 
 ## Next Action
-Plan slice S03 (Config Documentation).
+Execute T01: Write comprehensive config reference guide.
