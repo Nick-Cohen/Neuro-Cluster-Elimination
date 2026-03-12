@@ -16,4 +16,4 @@
 - None
 
 ## Next Action
-Execute T01: Write comprehensive config reference guide in slice S03.
+Execute T02: Add doc-sync test, schema pointer, and update example config in slice S03.

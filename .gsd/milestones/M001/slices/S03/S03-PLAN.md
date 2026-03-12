@@ -41,7 +41,7 @@
 
 ## Tasks
 
-- [ ] **T01: Write comprehensive config reference guide** `est:1h`
+- [x] **T01: Write comprehensive config reference guide** `est:1h`
   - Why: R007 — the config is the primary user interface; every field needs type, default, and purpose documented. This is the core deliverable of S03.
   - Files: `docs/config_reference.md`
   - Do: Write full markdown guide organized by nested section. For each field: readable name, internal alias, type (with polymorphic variants), default, purpose. Include sections for dead fields, runtime-injected fields, legacy flat-only fields. Add quick-start examples (flat and nested). Document all valid values for enum-like fields. Generate structural parts from schema; write purpose descriptions from codebase knowledge.
