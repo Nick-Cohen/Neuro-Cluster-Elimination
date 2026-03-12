@@ -1,0 +1,16 @@
+======================================================================
+MEMORIZER TEST: scaled_mse conversion
+======================================================================
+
+Problem: grid10x10.f10.wrap
+Loss function: scaled_mse
+
+======================================================================
+CREATING TEST BUCKET
+======================================================================
+Test bucket: 10
+Traceback (most recent call last):
+  File "/home/cohenn1/NCE/test_scaled_mse_memorizer.py", line 82, in <module>
+    print(f"Message scope: {test_bucket.get_message_scope()}")
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'Var' object has no attribute 'get_message_scope'

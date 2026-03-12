@@ -1,0 +1,2728 @@
+Testing scaled_mse on 6 benchmark problems...
+
+============================================================
+Testing grid10x10.f10.wrap with scaled_mse
+============================================================
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  26
+Processing bucket:  24
+Processing bucket:  17
+Processing bucket:  15
+Processing bucket:  8
+Processing bucket:  6
+Processing bucket:  37
+Processing bucket:  13
+Processing bucket:  19
+Processing bucket:  4
+Processing bucket:  35
+Processing bucket:  46
+Processing bucket:  95
+Processing bucket:  97
+Processing bucket:  0
+Processing bucket:  86
+Processing bucket:  2
+Processing bucket:  11
+Processing bucket:  93
+Processing bucket:  20
+Processing bucket:  84
+Processing bucket:  91
+Processing bucket:  82
+Processing bucket:  22
+Processing bucket:  99
+Processing bucket:  73
+Processing bucket:  31
+Processing bucket:  75
+Processing bucket:  88
+Processing bucket:  64
+Processing bucket:  33
+Processing bucket:  77
+Processing bucket:  55
+Processing bucket:  42
+Processing bucket:  39
+Processing bucket:  53
+Processing bucket:  40
+Processing bucket:  80
+Processing bucket:  62
+Processing bucket:  66
+Processing bucket:  51
+Processing bucket:  71
+Processing bucket:  48
+Processing bucket:  79
+Processing bucket:  57
+Processing bucket:  28
+Processing bucket:  60
+Processing bucket:  5
+Processing bucket:  23
+Processing bucket:  87
+Processing bucket:  59
+Processing bucket:  1
+Processing bucket:  83
+Processing bucket:  29
+Processing bucket:  41
+Processing bucket:  56
+Processing bucket:  65
+Processing bucket:  38
+Processing bucket:  16
+Processing bucket:  50
+Processing bucket:  72
+Processing bucket:  12
+Processing bucket:  78
+Processing bucket:  89
+Processing bucket:  98
+Processing bucket:  30
+Processing bucket:  68
+Processing bucket:  7
+Processing bucket:  74
+Processing bucket:  49
+Processing bucket:  10
+Training NN for bucket: 10
+Overwriting batch size and num sets for full data batches...
+Bucket 10 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 9000 epochs
+Num NNs to train:   0%|          | 0/1 [00:00<?, ?it/s]
+Upstream width is  21
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  96
+Processing bucket:  44
+Processing bucket:  63
+Processing bucket:  54
+Processing bucket:  45
+Processing bucket:  67
+Processing bucket:  76
+Processing bucket:  85
+Processing bucket:  94
+Overwriting batch size and num sets for full data batches...
+Bucket 10 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  21
+Processing bucket:  32
+Processing bucket:  96
+Processing bucket:  63
+Processing bucket:  18
+Training NN for bucket: 18
+Num NNs to train:   0%|          | 0/2 [00:00<?, ?it/s]
+Upstream width is  16
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  44
+Processing bucket:  54
+Processing bucket:  45
+Overwriting batch size and num sets for full data batches...
+Bucket 18 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 18 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  14
+Training NN for bucket: 14
+Num NNs to train:   0%|          | 0/3 [00:00<?, ?it/s]
+Upstream width is  16
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  44
+Processing bucket:  54
+Processing bucket:  45
+Overwriting batch size and num sets for full data batches...
+Bucket 14 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 14 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  27
+Processing bucket:  69
+Processing bucket:  9
+Processing bucket:  90
+Processing bucket:  36
+Processing bucket:  25
+Processing bucket:  47
+Processing bucket:  58
+Processing bucket:  61
+Processing bucket:  3
+Processing bucket:  67
+Processing bucket:  76
+Processing bucket:  81
+Processing bucket:  70
+Processing bucket:  52
+Processing bucket:  92
+Processing bucket:  34
+Processing bucket:  85
+Processing bucket:  44
+Processing bucket:  54
+Processing bucket:  45
+Processing bucket:  94
+Processing bucket:  43
+Z_hat: 326.976593
+Z_true: 333.321335
+Abs Error: 6.344742
+Num trained buckets: 3
+Time: 98.74s
+
+============================================================
+Testing grid10x10_f15_wrap with scaled_mse
+============================================================
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  26
+Processing bucket:  24
+Processing bucket:  17
+Processing bucket:  15
+Processing bucket:  8
+Processing bucket:  6
+Processing bucket:  37
+Processing bucket:  13
+Processing bucket:  19
+Processing bucket:  4
+Processing bucket:  35
+Processing bucket:  46
+Processing bucket:  95
+Processing bucket:  97
+Processing bucket:  0
+Processing bucket:  86
+Processing bucket:  2
+Processing bucket:  11
+Processing bucket:  93
+Processing bucket:  20
+Processing bucket:  84
+Processing bucket:  91
+Processing bucket:  82
+Processing bucket:  22
+Processing bucket:  99
+Processing bucket:  73
+Processing bucket:  31
+Processing bucket:  75
+Processing bucket:  88
+Processing bucket:  64
+Processing bucket:  33
+Processing bucket:  77
+Processing bucket:  55
+Processing bucket:  42
+Processing bucket:  39
+Processing bucket:  53
+Processing bucket:  40
+Processing bucket:  80
+Processing bucket:  62
+Processing bucket:  66
+Processing bucket:  51
+Processing bucket:  71
+Processing bucket:  48
+Processing bucket:  79
+Processing bucket:  57
+Processing bucket:  28
+Processing bucket:  60
+Processing bucket:  5
+Processing bucket:  23
+Processing bucket:  87
+Processing bucket:  59
+Processing bucket:  1
+Processing bucket:  83
+Processing bucket:  29
+Processing bucket:  41
+Processing bucket:  56
+Processing bucket:  65
+Processing bucket:  38
+Processing bucket:  16
+Processing bucket:  50
+Processing bucket:  72
+Processing bucket:  12
+Processing bucket:  78
+Processing bucket:  89
+Processing bucket:  98
+Processing bucket:  30
+Processing bucket:  68
+Processing bucket:  7
+Processing bucket:  74
+Processing bucket:  49
+Processing bucket:  10
+Training NN for bucket: 10
+Num NNs to train:   0%|          | 0/1 [00:00<?, ?it/s]
+Upstream width is  21
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  96
+Processing bucket:  44
+Processing bucket:  63
+Processing bucket:  54
+Processing bucket:  45
+Processing bucket:  67
+Processing bucket:  76
+Processing bucket:  85
+Processing bucket:  94
+Overwriting batch size and num sets for full data batches...
+Bucket 10 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 10 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  21
+Processing bucket:  32
+Processing bucket:  96
+Processing bucket:  63
+Processing bucket:  18
+Training NN for bucket: 18
+Num NNs to train:   0%|          | 0/2 [00:00<?, ?it/s]
+Upstream width is  16
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  44
+Processing bucket:  54
+Processing bucket:  45
+Overwriting batch size and num sets for full data batches...
+Bucket 18 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 18 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  14
+Training NN for bucket: 14
+Num NNs to train:   0%|          | 0/3 [00:00<?, ?it/s]
+Upstream width is  16
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  44
+Processing bucket:  54
+Processing bucket:  45
+Overwriting batch size and num sets for full data batches...
+Bucket 14 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 14 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  27
+Processing bucket:  69
+Processing bucket:  9
+Processing bucket:  90
+Processing bucket:  36
+Processing bucket:  25
+Processing bucket:  47
+Processing bucket:  58
+Processing bucket:  61
+Processing bucket:  3
+Processing bucket:  67
+Processing bucket:  76
+Processing bucket:  81
+Processing bucket:  70
+Processing bucket:  52
+Processing bucket:  92
+Processing bucket:  34
+Processing bucket:  85
+Processing bucket:  44
+Processing bucket:  54
+Processing bucket:  45
+Processing bucket:  94
+Processing bucket:  43
+Z_hat: 454.472198
+Z_true: 497.763483
+Abs Error: 43.291285
+Num trained buckets: 3
+Time: 65.90s
+
+============================================================
+Testing pedigree18 with scaled_mse
+============================================================
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  26
+Processing bucket:  22
+Processing bucket:  38
+Processing bucket:  46
+Processing bucket:  14
+Processing bucket:  42
+Processing bucket:  101
+Processing bucket:  105
+Processing bucket:  107
+Processing bucket:  54
+Processing bucket:  108
+Processing bucket:  124
+Processing bucket:  67
+Processing bucket:  138
+Processing bucket:  118
+Processing bucket:  139
+Processing bucket:  170
+Processing bucket:  174
+Processing bucket:  176
+Processing bucket:  180
+Processing bucket:  178
+Processing bucket:  165
+Processing bucket:  183
+Processing bucket:  199
+Processing bucket:  189
+Processing bucket:  163
+Processing bucket:  207
+Processing bucket:  222
+Processing bucket:  202
+Processing bucket:  203
+Processing bucket:  225
+Processing bucket:  208
+Processing bucket:  230
+Processing bucket:  223
+Processing bucket:  234
+Processing bucket:  246
+Processing bucket:  236
+Processing bucket:  249
+Processing bucket:  247
+Processing bucket:  252
+Processing bucket:  266
+Processing bucket:  253
+Processing bucket:  237
+Processing bucket:  272
+Processing bucket:  269
+Processing bucket:  256
+Processing bucket:  273
+Processing bucket:  326
+Processing bucket:  271
+Processing bucket:  318
+Processing bucket:  342
+Processing bucket:  346
+Processing bucket:  350
+Processing bucket:  330
+Processing bucket:  370
+Processing bucket:  358
+Processing bucket:  384
+Processing bucket:  392
+Processing bucket:  408
+Processing bucket:  400
+Processing bucket:  396
+Processing bucket:  421
+Processing bucket:  446
+Processing bucket:  457
+Processing bucket:  433
+Processing bucket:  468
+Processing bucket:  425
+Processing bucket:  472
+Processing bucket:  479
+Processing bucket:  418
+Processing bucket:  489
+Processing bucket:  464
+Processing bucket:  486
+Processing bucket:  496
+Processing bucket:  493
+Processing bucket:  517
+Processing bucket:  476
+Processing bucket:  500
+Processing bucket:  474
+Processing bucket:  490
+Processing bucket:  528
+Processing bucket:  542
+Processing bucket:  536
+Processing bucket:  554
+Processing bucket:  504
+Processing bucket:  550
+Processing bucket:  561
+Processing bucket:  566
+Processing bucket:  569
+Processing bucket:  587
+Processing bucket:  651
+Processing bucket:  573
+Processing bucket:  659
+Processing bucket:  675
+Processing bucket:  570
+Processing bucket:  576
+Processing bucket:  679
+Processing bucket:  683
+Processing bucket:  704
+Processing bucket:  663
+Processing bucket:  1066
+Processing bucket:  1065
+Processing bucket:  469
+Processing bucket:  497
+Processing bucket:  691
+Processing bucket:  422
+Processing bucket:  127
+Processing bucket:  501
+Processing bucket:  259
+Processing bucket:  465
+Processing bucket:  204
+Processing bucket:  192
+Processing bucket:  270
+Processing bucket:  385
+Processing bucket:  529
+Processing bucket:  551
+Processing bucket:  577
+Processing bucket:  426
+Processing bucket:  579
+Processing bucket:  428
+Processing bucket:  430
+Processing bucket:  505
+Processing bucket:  172
+Processing bucket:  232
+Processing bucket:  434
+Processing bucket:  539
+Processing bucket:  805
+Processing bucket:  732
+Processing bucket:  103
+Processing bucket:  835
+Processing bucket:  810
+Processing bucket:  806
+Processing bucket:  740
+Processing bucket:  811
+Processing bucket:  809
+Processing bucket:  812
+Processing bucket:  817
+Processing bucket:  818
+Processing bucket:  819
+Processing bucket:  744
+Processing bucket:  820
+Processing bucket:  760
+Processing bucket:  821
+Processing bucket:  822
+Processing bucket:  764
+Processing bucket:  826
+Processing bucket:  825
+Processing bucket:  831
+Processing bucket:  756
+Processing bucket:  772
+Processing bucket:  785
+Processing bucket:  43
+Processing bucket:  110
+Processing bucket:  106
+Processing bucket:  832
+Processing bucket:  141
+Processing bucket:  206
+Processing bucket:  235
+Processing bucket:  239
+Processing bucket:  205
+Processing bucket:  397
+Processing bucket:  482
+Processing bucket:  557
+Processing bucket:  558
+Processing bucket:  483
+Processing bucket:  347
+Processing bucket:  520
+Processing bucket:  414
+Processing bucket:  449
+Processing bucket:  411
+Processing bucket:  590
+Processing bucket:  200
+Processing bucket:  680
+Processing bucket:  460
+Processing bucket:  461
+Processing bucket:  388
+Processing bucket:  532
+Processing bucket:  136
+Processing bucket:  193
+Processing bucket:  508
+Processing bucket:  546
+Processing bucket:  404
+Processing bucket:  267
+Processing bucket:  173
+Processing bucket:  393
+Processing bucket:  437
+Processing bucket:  260
+Processing bucket:  537
+Processing bucket:  761
+Processing bucket:  409
+Processing bucket:  401
+Processing bucket:  543
+Processing bucket:  233
+Processing bucket:  0
+Processing bucket:  635
+Processing bucket:  2
+Processing bucket:  4
+Processing bucket:  16
+Processing bucket:  637
+Processing bucket:  10
+Processing bucket:  653
+Processing bucket:  647
+Processing bucket:  18
+Processing bucket:  320
+Processing bucket:  8
+Processing bucket:  15
+Processing bucket:  23
+Processing bucket:  30
+Processing bucket:  27
+Processing bucket:  814
+Processing bucket:  745
+Processing bucket:  28
+Processing bucket:  332
+Processing bucket:  665
+Processing bucket:  813
+Processing bucket:  24
+Processing bucket:  34
+Processing bucket:  661
+Processing bucket:  39
+Processing bucket:  40
+Processing bucket:  671
+Processing bucket:  677
+Processing bucket:  676
+Processing bucket:  32
+Processing bucket:  48
+Processing bucket:  352
+Processing bucket:  685
+Processing bucket:  44
+Processing bucket:  348
+Processing bucket:  50
+Processing bucket:  344
+Processing bucket:  687
+Processing bucket:  681
+Processing bucket:  684
+Processing bucket:  47
+Processing bucket:  52
+Processing bucket:  354
+Processing bucket:  351
+Processing bucket:  356
+Processing bucket:  689
+Processing bucket:  56
+Processing bucket:  58
+Processing bucket:  693
+Processing bucket:  69
+Processing bucket:  372
+Processing bucket:  706
+Processing bucket:  79
+Processing bucket:  55
+Processing bucket:  209
+Processing bucket:  71
+Processing bucket:  83
+Processing bucket:  213
+Processing bucket:  81
+Processing bucket:  147
+Processing bucket:  151
+Processing bucket:  211
+Processing bucket:  91
+Processing bucket:  87
+Processing bucket:  155
+Processing bucket:  149
+Processing bucket:  217
+Processing bucket:  159
+Processing bucket:  221
+Processing bucket:  116
+Processing bucket:  97
+Processing bucket:  166
+Processing bucket:  181
+Processing bucket:  95
+Processing bucket:  164
+Processing bucket:  226
+Processing bucket:  171
+Processing bucket:  231
+Processing bucket:  93
+Processing bucket:  102
+Processing bucket:  224
+Processing bucket:  122
+Processing bucket:  254
+Processing bucket:  161
+Processing bucket:  125
+Processing bucket:  187
+Processing bucket:  257
+Processing bucket:  185
+Processing bucket:  190
+Processing bucket:  120
+Processing bucket:  250
+Processing bucket:  184
+Processing bucket:  394
+Processing bucket:  390
+Processing bucket:  534
+Processing bucket:  119
+Processing bucket:  466
+Processing bucket:  406
+Processing bucket:  412
+Processing bucket:  548
+Processing bucket:  410
+Processing bucket:  480
+Processing bucket:  462
+Processing bucket:  419
+Processing bucket:  416
+Processing bucket:  487
+Processing bucket:  555
+Processing bucket:  484
+Processing bucket:  431
+Processing bucket:  574
+Processing bucket:  502
+Processing bucket:  447
+Processing bucket:  588
+Processing bucket:  518
+Processing bucket:  559
+Processing bucket:  494
+Processing bucket:  477
+Processing bucket:  552
+Processing bucket:  444
+Processing bucket:  585
+Processing bucket:  734
+Processing bucket:  742
+Processing bucket:  746
+Processing bucket:  758
+Processing bucket:  762
+Processing bucket:  766
+Processing bucket:  515
+Processing bucket:  787
+Processing bucket:  774
+Processing bucket:  567
+Processing bucket:  829
+Processing bucket:  830
+Processing bucket:  942
+Processing bucket:  940
+Processing bucket:  948
+Processing bucket:  1021
+Processing bucket:  1019
+Processing bucket:  960
+Processing bucket:  1037
+Processing bucket:  950
+Processing bucket:  962
+Processing bucket:  1039
+Processing bucket:  1027
+Processing bucket:  245
+Processing bucket:  238
+Processing bucket:  1029
+Processing bucket:  243
+Processing bucket:  114
+Processing bucket:  198
+Processing bucket:  248
+Processing bucket:  265
+Processing bucket:  168
+Processing bucket:  130
+Processing bucket:  128
+Processing bucket:  99
+Processing bucket:  96
+Processing bucket:  104
+Processing bucket:  263
+Processing bucket:  196
+Processing bucket:  228
+Processing bucket:  799
+Processing bucket:  798
+Processing bucket:  800
+Processing bucket:  803
+Processing bucket:  797
+Processing bucket:  807
+Processing bucket:  808
+Processing bucket:  804
+Processing bucket:  733
+Processing bucket:  717
+Processing bucket:  816
+Processing bucket:  741
+Processing bucket:  823
+Processing bucket:  815
+Processing bucket:  824
+Processing bucket:  765
+Processing bucket:  827
+Processing bucket:  773
+Processing bucket:  757
+Processing bucket:  828
+Processing bucket:  280
+Processing bucket:  281
+Processing bucket:  177
+Processing bucket:  833
+Processing bucket:  179
+Processing bucket:  834
+Processing bucket:  786
+Processing bucket:  794
+Processing bucket:  538
+Processing bucket:  602
+Processing bucket:  175
+Processing bucket:  129
+Processing bucket:  608
+Processing bucket:  616
+Processing bucket:  603
+Processing bucket:  429
+Processing bucket:  578
+Processing bucket:  562
+Processing bucket:  609
+Processing bucket:  475
+Processing bucket:  621
+Processing bucket:  1031
+Processing bucket:  617
+Processing bucket:  780
+Processing bucket:  286
+Processing bucket:  287
+Processing bucket:  620
+Processing bucket:  1032
+Processing bucket:  610
+Processing bucket:  85
+Processing bucket:  611
+Processing bucket:  153
+Processing bucket:  219
+Processing bucket:  215
+Processing bucket:  296
+Processing bucket:  327
+Processing bucket:  157
+Processing bucket:  89
+Processing bucket:  660
+Processing bucket:  652
+Processing bucket:  584
+Processing bucket:  692
+Processing bucket:  343
+Processing bucket:  68
+Processing bucket:  109
+Processing bucket:  194
+Processing bucket:  699
+Processing bucket:  140
+Processing bucket:  241
+Processing bucket:  112
+Processing bucket:  261
+Processing bucket:  284
+Processing bucket:  285
+Processing bucket:  294
+Processing bucket:  427
+Processing bucket:  295
+Processing bucket:  1033
+Processing bucket:  956
+Processing bucket:  540
+Processing bucket:  398
+Processing bucket:  564
+Processing bucket:  470
+Processing bucket:  423
+Processing bucket:  491
+Processing bucket:  1035
+Processing bucket:  958
+Processing bucket:  331
+Processing bucket:  580
+Processing bucket:  664
+Processing bucket:  473
+Processing bucket:  359
+Processing bucket:  9
+Processing bucket:  319
+Processing bucket:  12
+Processing bucket:  20
+Processing bucket:  62
+Processing bucket:  649
+Processing bucket:  131
+Processing bucket:  73
+Processing bucket:  386
+Processing bucket:  530
+Processing bucket:  60
+Processing bucket:  435
+Processing bucket:  402
+Processing bucket:  544
+Processing bucket:  606
+Processing bucket:  506
+Processing bucket:  458
+Processing bucket:  627
+Processing bucket:  607
+Processing bucket:  439
+Processing bucket:  498
+Processing bucket:  510
+Processing bucket:  643
+Processing bucket:  801
+Processing bucket:  626
+Processing bucket:  645
+Processing bucket:  928
+Processing bucket:  802
+Processing bucket:  1007
+Processing bucket:  571
+Processing bucket:  623
+Processing bucket:  932
+Processing bucket:  622
+Processing bucket:  930
+Processing bucket:  1009
+Processing bucket:  1011
+Processing bucket:  938
+Processing bucket:  934
+Processing bucket:  1013
+Processing bucket:  1017
+Processing bucket:  954
+Processing bucket:  964
+Processing bucket:  1041
+Processing bucket:  966
+Processing bucket:  952
+Processing bucket:  1043
+Processing bucket:  970
+Processing bucket:  1047
+Processing bucket:  1050
+Processing bucket:  1056
+Processing bucket:  968
+Processing bucket:  1053
+Processing bucket:  972
+Processing bucket:  976
+Processing bucket:  936
+Processing bucket:  1045
+Processing bucket:  1049
+Processing bucket:  1015
+Processing bucket:  1055
+Processing bucket:  977
+Processing bucket:  1051
+Processing bucket:  371
+Processing bucket:  705
+Processing bucket:  974
+Processing bucket:  1063
+Processing bucket:  989
+Processing bucket:  978
+Processing bucket:  1061
+Processing bucket:  389
+Processing bucket:  80
+Processing bucket:  547
+Processing bucket:  240
+Processing bucket:  1
+Processing bucket:  150
+Processing bucket:  987
+Processing bucket:  201
+Processing bucket:  6
+Processing bucket:  162
+Processing bucket:  1057
+Processing bucket:  415
+Processing bucket:  983
+Processing bucket:  148
+Processing bucket:  111
+Processing bucket:  212
+Processing bucket:  3
+Processing bucket:  210
+Processing bucket:  82
+Processing bucket:  268
+Processing bucket:  382
+Processing bucket:  455
+Processing bucket:  526
+Processing bucket:  1059
+Processing bucket:  985
+Processing bucket:  36
+Processing bucket:  916
+Processing bucket:  995
+Processing bucket:  673
+Processing bucket:  920
+Processing bucket:  922
+Processing bucket:  918
+Processing bucket:  1001
+Processing bucket:  999
+Processing bucket:  997
+Processing bucket:  944
+Processing bucket:  1025
+Processing bucket:  946
+Processing bucket:  299
+Processing bucket:  197
+Processing bucket:  264
+Processing bucket:  169
+Processing bucket:  229
+Processing bucket:  144
+Processing bucket:  1023
+Processing bucket:  300
+Processing bucket:  924
+Processing bucket:  1003
+Processing bucket:  195
+Processing bucket:  926
+Processing bucket:  262
+Processing bucket:  1005
+Processing bucket:  1095
+Processing bucket:  293
+Processing bucket:  1096
+Processing bucket:  1135
+Processing bucket:  297
+Processing bucket:  1134
+Processing bucket:  292
+Processing bucket:  450
+Processing bucket:  298
+Processing bucket:  438
+Processing bucket:  737
+Processing bucket:  142
+Processing bucket:  301
+Processing bucket:  769
+Processing bucket:  790
+Processing bucket:  160
+Processing bucket:  117
+Processing bucket:  395
+Processing bucket:  478
+Processing bucket:  420
+Processing bucket:  495
+Processing bucket:  407
+Processing bucket:  572
+Processing bucket:  545
+Processing bucket:  638
+Processing bucket:  521
+Processing bucket:  721
+Processing bucket:  591
+Processing bucket:  242
+Processing bucket:  509
+Processing bucket:  1154
+Processing bucket:  1153
+Processing bucket:  1160
+Processing bucket:  1159
+Processing bucket:  1170
+Processing bucket:  636
+Processing bucket:  1165
+Processing bucket:  1169
+Processing bucket:  1167
+Processing bucket:  1168
+Processing bucket:  1166
+Processing bucket:  1171
+Processing bucket:  1172
+Processing bucket:  1180
+Processing bucket:  1179
+Processing bucket:  632
+Processing bucket:  290
+Processing bucket:  630
+Processing bucket:  631
+Processing bucket:  633
+Processing bucket:  291
+Processing bucket:  599
+Processing bucket:  1149
+Processing bucket:  598
+Processing bucket:  994
+Processing bucket:  78
+Processing bucket:  274
+Processing bucket:  275
+Processing bucket:  276
+Processing bucket:  1150
+Processing bucket:  992
+Processing bucket:  277
+Processing bucket:  152
+Processing bucket:  84
+Processing bucket:  214
+Processing bucket:  278
+Processing bucket:  596
+Processing bucket:  88
+Processing bucket:  279
+Processing bucket:  597
+Processing bucket:  218
+Processing bucket:  456
+Processing bucket:  383
+Processing bucket:  156
+Processing bucket:  527
+Processing bucket:  387
+Processing bucket:  92
+Processing bucket:  283
+Processing bucket:  459
+Processing bucket:  98
+Processing bucket:  600
+Processing bucket:  531
+Processing bucket:  601
+Processing bucket:  463
+Processing bucket:  535
+Processing bucket:  391
+Processing bucket:  167
+Processing bucket:  604
+Processing bucket:  605
+Processing bucket:  467
+Processing bucket:  282
+Processing bucket:  399
+Processing bucket:  541
+Processing bucket:  403
+Processing bucket:  549
+Processing bucket:  113
+Processing bucket:  288
+Processing bucket:  227
+Processing bucket:  289
+Processing bucket:  182
+Processing bucket:  121
+Processing bucket:  251
+Processing bucket:  186
+Processing bucket:  188
+Processing bucket:  123
+Processing bucket:  255
+Processing bucket:  191
+Processing bucket:  471
+Processing bucket:  553
+Processing bucket:  613
+Processing bucket:  612
+Processing bucket:  126
+Processing bucket:  258
+Processing bucket:  413
+Processing bucket:  481
+Processing bucket:  133
+Processing bucket:  556
+Processing bucket:  615
+Processing bucket:  132
+Processing bucket:  137
+Processing bucket:  143
+Processing bucket:  76
+Processing bucket:  618
+Processing bucket:  485
+Processing bucket:  619
+Processing bucket:  614
+Processing bucket:  568
+Processing bucket:  488
+Processing bucket:  560
+Processing bucket:  452
+Processing bucket:  417
+Processing bucket:  593
+Processing bucket:  492
+Processing bucket:  565
+Processing bucket:  499
+Processing bucket:  624
+Processing bucket:  625
+Processing bucket:  220
+Processing bucket:  523
+Processing bucket:  424
+Processing bucket:  503
+Processing bucket:  436
+Processing bucket:  575
+Processing bucket:  715
+Processing bucket:  379
+Processing bucket:  713
+Processing bucket:  892
+Processing bucket:  432
+Processing bucket:  533
+Processing bucket:  1124
+Processing bucket:  145
+Processing bucket:  381
+Processing bucket:  507
+Processing bucket:  1085
+Processing bucket:  1086
+Processing bucket:  1136
+Processing bucket:  1137
+Processing bucket:  1125
+Processing bucket:  1098
+Processing bucket:  913
+Processing bucket:  1105
+Processing bucket:  100
+Processing bucket:  915
+Processing bucket:  1097
+Processing bucket:  135
+Processing bucket:  1144
+Processing bucket:  115
+Processing bucket:  782
+Processing bucket:  1064
+Processing bucket:  244
+Processing bucket:  917
+Processing bucket:  919
+Processing bucket:  998
+Processing bucket:  1062
+Processing bucket:  996
+Processing bucket:  796
+Processing bucket:  303
+Processing bucket:  305
+Processing bucket:  31
+Processing bucket:  763
+Processing bucket:  648
+Processing bucket:  961
+Processing bucket:  963
+Processing bucket:  672
+Processing bucket:  59
+Processing bucket:  941
+Processing bucket:  943
+Processing bucket:  355
+Processing bucket:  1028
+Processing bucket:  17
+Processing bucket:  29
+Processing bucket:  1030
+Processing bucket:  41
+Processing bucket:  349
+Processing bucket:  49
+Processing bucket:  682
+Processing bucket:  690
+Processing bucket:  353
+Processing bucket:  686
+Processing bucket:  445
+Processing bucket:  45
+Processing bucket:  11
+Processing bucket:  749
+Processing bucket:  975
+Processing bucket:  949
+Processing bucket:  951
+Processing bucket:  1022
+Processing bucket:  1038
+Processing bucket:  516
+Processing bucket:  1040
+Processing bucket:  57
+Processing bucket:  586
+Processing bucket:  1100
+Processing bucket:  1020
+Processing bucket:  1099
+Processing bucket:  1138
+Processing bucket:  1146
+Processing bucket:  1139
+Processing bucket:  443
+Processing bucket:  1145
+Processing bucket:  454
+Processing bucket:  514
+Processing bucket:  595
+Processing bucket:  146
+Processing bucket:  667
+Processing bucket:  1075
+Processing bucket:  583
+Processing bucket:  525
+Processing bucket:  1115
+Processing bucket:  1076
+Processing bucket:  852
+Processing bucket:  1141
+Processing bucket:  1114
+Processing bucket:  1102
+Processing bucket:  1140
+Processing bucket:  1101
+Processing bucket:  906
+Processing bucket:  1157
+Processing bucket:  1152
+Processing bucket:  1151
+Processing bucket:  1121
+Processing bucket:  1120
+Processing bucket:  866
+Processing bucket:  1087
+Processing bucket:  1091
+Processing bucket:  1092
+Processing bucket:  1088
+Processing bucket:  884
+Processing bucket:  1126
+Processing bucket:  1158
+Processing bucket:  1081
+Processing bucket:  1082
+Processing bucket:  1127
+Processing bucket:  876
+Processing bucket:  1130
+Processing bucket:  70
+Processing bucket:  862
+Processing bucket:  897
+Processing bucket:  1131
+Processing bucket:  899
+Processing bucket:  1148
+Processing bucket:  313
+Processing bucket:  650
+Processing bucket:  1103
+Processing bucket:  1147
+Processing bucket:  725
+Processing bucket:  1143
+Processing bucket:  1104
+Processing bucket:  362
+Processing bucket:  522
+Processing bucket:  905
+Processing bucket:  1142
+Processing bucket:  77
+Processing bucket:  980
+Processing bucket:  1164
+Processing bucket:  678
+Processing bucket:  1163
+Processing bucket:  451
+Processing bucket:  872
+Processing bucket:  345
+Processing bucket:  883
+Processing bucket:  881
+Processing bucket:  670
+Processing bucket:  335
+Processing bucket:  701
+Processing bucket:  1008
+Processing bucket:  931
+Processing bucket:  1046
+Processing bucket:  1048
+Processing bucket:  321
+Processing bucket:  90
+Processing bucket:  337
+Processing bucket:  340
+Processing bucket:  875
+Processing bucket:  367
+Processing bucket:  329
+Processing bucket:  1014
+Processing bucket:  969
+Processing bucket:  1106
+Processing bucket:  1107
+Processing bucket:  839
+Processing bucket:  1108
+Processing bucket:  929
+Processing bucket:  1109
+Processing bucket:  1068
+Processing bucket:  1069
+Processing bucket:  1067
+Processing bucket:  719
+Processing bucket:  1070
+Processing bucket:  1078
+Processing bucket:  861
+Processing bucket:  837
+Processing bucket:  1077
+Processing bucket:  1173
+Processing bucket:  357
+Processing bucket:  380
+Processing bucket:  1174
+Processing bucket:  1111
+Processing bucket:  1116
+Processing bucket:  1117
+Processing bucket:  53
+Processing bucket:  1072
+Processing bucket:  1110
+Processing bucket:  1071
+Processing bucket:  642
+Processing bucket:  859
+Processing bucket:  7
+Processing bucket:  869
+Processing bucket:  914
+Processing bucket:  910
+Processing bucket:  751
+Processing bucket:  981
+Processing bucket:  1182
+Processing bucket:  1181
+Processing bucket:  894
+Processing bucket:  988
+Processing bucket:  707
+Processing bucket:  909
+Processing bucket:  33
+Processing bucket:  923
+Processing bucket:  843
+Processing bucket:  1006
+Processing bucket:  336
+Processing bucket:  1002
+Processing bucket:  841
+Processing bucket:  154
+Processing bucket:  1000
+Processing bucket:  921
+Processing bucket:  1128
+Processing bucket:  592
+Processing bucket:  1089
+Processing bucket:  1090
+Processing bucket:  1079
+Processing bucket:  309
+Processing bucket:  216
+Processing bucket:  86
+Processing bucket:  1080
+Processing bucket:  1058
+Processing bucket:  1129
+Processing bucket:  784
+Processing bucket:  1113
+Processing bucket:  315
+Processing bucket:  896
+Processing bucket:  1112
+Processing bucket:  322
+Processing bucket:  628
+Processing bucket:  851
+Processing bucket:  512
+Processing bucket:  441
+Processing bucket:  629
+Processing bucket:  1155
+Processing bucket:  1156
+Processing bucket:  582
+Processing bucket:  662
+Processing bucket:  654
+Processing bucket:  448
+Processing bucket:  440
+Processing bucket:  581
+Processing bucket:  907
+Processing bucket:  1122
+Processing bucket:  589
+Processing bucket:  867
+Processing bucket:  511
+Processing bucket:  1123
+Processing bucket:  634
+Processing bucket:  519
+Processing bucket:  442
+Processing bucket:  1118
+Processing bucket:  513
+Processing bucket:  1119
+Processing bucket:  376
+Processing bucket:  986
+Processing bucket:  377
+Processing bucket:  366
+Processing bucket:  856
+Processing bucket:  369
+Processing bucket:  361
+Processing bucket:  640
+Processing bucket:  72
+Processing bucket:  1175
+Processing bucket:  1176
+Processing bucket:  698
+Processing bucket:  886
+Processing bucket:  878
+Processing bucket:  655
+Processing bucket:  874
+Processing bucket:  524
+Processing bucket:  594
+Processing bucket:  5
+Processing bucket:  694
+Processing bucket:  844
+Processing bucket:  453
+Processing bucket:  65
+Processing bucket:  51
+Processing bucket:  777
+Processing bucket:  1132
+Processing bucket:  688
+Processing bucket:  731
+Processing bucket:  1133
+Processing bucket:  771
+Processing bucket:  314
+Processing bucket:  891
+Processing bucket:  1083
+Processing bucket:  307
+Processing bucket:  1084
+Processing bucket:  900
+Processing bucket:  1074
+Processing bucket:  1073
+Processing bucket:  849
+Processing bucket:  836
+Processing bucket:  840
+Processing bucket:  882
+Processing bucket:  723
+Processing bucket:  935
+Processing bucket:  724
+Processing bucket:  889
+Processing bucket:  1093
+Processing bucket:  792
+Processing bucket:  911
+Processing bucket:  898
+Processing bucket:  990
+Processing bucket:  1094
+Processing bucket:  979
+Processing bucket:  870
+Processing bucket:  902
+Processing bucket:  984
+Processing bucket:  855
+Processing bucket:  669
+Processing bucket:  324
+Processing bucket:  991
+Processing bucket:  25
+Processing bucket:  788
+Processing bucket:  908
+Processing bucket:  904
+Processing bucket:  864
+Processing bucket:  1060
+Processing bucket:  890
+Processing bucket:  993
+Processing bucket:  903
+Processing bucket:  901
+Processing bucket:  912
+Processing bucket:  880
+Processing bucket:  743
+Processing bucket:  982
+Processing bucket:  714
+Processing bucket:  779
+Processing bucket:  333
+Processing bucket:  709
+Processing bucket:  61
+Processing bucket:  317
+Processing bucket:  13
+Processing bucket:  848
+Processing bucket:  846
+Processing bucket:  646
+Processing bucket:  304
+Processing bucket:  312
+Processing bucket:  308
+Processing bucket:  657
+Processing bucket:  842
+Processing bucket:  368
+Processing bucket:  838
+Processing bucket:  888
+Processing bucket:  752
+Processing bucket:  967
+Processing bucket:  860
+Processing bucket:  364
+Processing bucket:  63
+Processing bucket:  702
+Processing bucket:  75
+Processing bucket:  868
+Processing bucket:  374
+Processing bucket:  158
+Processing bucket:  666
+Processing bucket:  1162
+Processing bucket:  378
+Processing bucket:  1161
+Processing bucket:  316
+Processing bucket:  893
+Processing bucket:  973
+Processing bucket:  775
+Processing bucket:  895
+Processing bucket:  1052
+Processing bucket:  334
+Processing bucket:  302
+Processing bucket:  1054
+Processing bucket:  700
+Processing bucket:  306
+Processing bucket:  712
+Processing bucket:  708
+Processing bucket:  74
+Processing bucket:  710
+Processing bucket:  711
+Processing bucket:  1183
+Processing bucket:  375
+Processing bucket:  373
+Processing bucket:  134
+Processing bucket:  1178
+Processing bucket:  727
+Processing bucket:  1004
+Processing bucket:  1177
+Processing bucket:  695
+Processing bucket:  845
+Processing bucket:  925
+Processing bucket:  768
+Processing bucket:  310
+Processing bucket:  644
+Processing bucket:  311
+Processing bucket:  854
+Processing bucket:  927
+Processing bucket:  847
+Processing bucket:  850
+Processing bucket:  853
+Processing bucket:  1010
+Processing bucket:  933
+Processing bucket:  1012
+Processing bucket:  858
+Processing bucket:  360
+Processing bucket:  365
+Processing bucket:  735
+Processing bucket:  66
+Processing bucket:  697
+Processing bucket:  703
+Processing bucket:  64
+Training NN for bucket: 64
+Num NNs to train:   0%|          | 0/1 [00:00<?, ?it/s]
+Upstream width is  20
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  563
+Processing bucket:  759
+Processing bucket:  877
+Processing bucket:  957
+Processing bucket:  959
+Processing bucket:  716
+Processing bucket:  720
+Processing bucket:  728
+Processing bucket:  879
+Processing bucket:  94
+Processing bucket:  639
+Processing bucket:  641
+Processing bucket:  656
+Processing bucket:  729
+Processing bucket:  736
+Processing bucket:  19
+Processing bucket:  739
+Processing bucket:  857
+Processing bucket:  937
+Processing bucket:  939
+Processing bucket:  1016
+Processing bucket:  1018
+Processing bucket:  863
+Processing bucket:  747
+Processing bucket:  865
+Processing bucket:  945
+Processing bucket:  947
+Processing bucket:  1024
+Processing bucket:  1026
+Processing bucket:  21
+Processing bucket:  323
+Processing bucket:  325
+Processing bucket:  328
+Processing bucket:  405
+Processing bucket:  658
+Processing bucket:  748
+Processing bucket:  767
+Processing bucket:  885
+Processing bucket:  887
+Processing bucket:  965
+Processing bucket:  971
+Processing bucket:  1042
+Processing bucket:  1044
+Processing bucket:  755
+Processing bucket:  871
+Processing bucket:  873
+Processing bucket:  953
+Processing bucket:  955
+Processing bucket:  1034
+Processing bucket:  1036
+Processing bucket:  718
+Processing bucket:  722
+Processing bucket:  726
+Processing bucket:  730
+Processing bucket:  738
+Processing bucket:  750
+Overwriting batch size and num sets for full data batches...
+Bucket 64 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 64 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  696
+Processing bucket:  363
+Processing bucket:  789
+Processing bucket:  781
+Processing bucket:  793
+Processing bucket:  857
+Processing bucket:  739
+Processing bucket:  937
+Processing bucket:  939
+Processing bucket:  1018
+Processing bucket:  776
+Processing bucket:  863
+Processing bucket:  767
+Processing bucket:  885
+Processing bucket:  887
+Processing bucket:  965
+Processing bucket:  1016
+Processing bucket:  1042
+Processing bucket:  747
+Processing bucket:  971
+Processing bucket:  945
+Processing bucket:  1044
+Processing bucket:  947
+Processing bucket:  1024
+Processing bucket:  865
+Processing bucket:  1026
+Processing bucket:  877
+Processing bucket:  759
+Processing bucket:  959
+Processing bucket:  871
+Processing bucket:  953
+Processing bucket:  879
+Processing bucket:  955
+Processing bucket:  755
+Processing bucket:  957
+Processing bucket:  1034
+Processing bucket:  19
+Processing bucket:  873
+Processing bucket:  639
+Processing bucket:  94
+Processing bucket:  716
+Training NN for bucket: 716
+Num NNs to train:   0%|          | 0/2 [00:00<?, ?it/s]
+Upstream width is  21
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  563
+Processing bucket:  1036
+Processing bucket:  753
+Processing bucket:  754
+Processing bucket:  770
+Processing bucket:  778
+Processing bucket:  783
+Processing bucket:  791
+Processing bucket:  795
+Processing bucket:  37
+Processing bucket:  338
+Processing bucket:  339
+Processing bucket:  341
+Processing bucket:  674
+Processing bucket:  668
+Overwriting batch size and num sets for full data batches...
+Bucket 716 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 716 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  1036
+Processing bucket:  728
+Processing bucket:  720
+Processing bucket:  754
+Processing bucket:  770
+Processing bucket:  641
+Processing bucket:  791
+Processing bucket:  778
+Processing bucket:  656
+Processing bucket:  783
+Processing bucket:  795
+Processing bucket:  729
+Processing bucket:  37
+Training NN for bucket: 37
+Num NNs to train:   0%|          | 0/3 [00:00<?, ?it/s]
+Upstream width is  16
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  563
+Processing bucket:  736
+Overwriting batch size and num sets for full data batches...
+Bucket 37 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 37 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  338
+Processing bucket:  736
+Processing bucket:  323
+Processing bucket:  21
+Processing bucket:  325
+Processing bucket:  328
+Processing bucket:  341
+Processing bucket:  405
+Processing bucket:  339
+Processing bucket:  668
+Processing bucket:  35
+Processing bucket:  658
+Processing bucket:  674
+Processing bucket:  718
+Processing bucket:  722
+Processing bucket:  738
+Processing bucket:  730
+Processing bucket:  726
+Processing bucket:  748
+Processing bucket:  753
+Processing bucket:  750
+Processing bucket:  563
+Z_hat: -90.450272
+Z_true: -78.139977
+Abs Error: 12.310295
+Num trained buckets: 3
+Time: 77.88s
+
+============================================================
+Testing rbm_20 with scaled_mse
+============================================================
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  28
+Training NN for bucket: 28
+Num NNs to train:   0%|          | 0/1 [00:00<?, ?it/s]
+Upstream width is  20
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  20
+Processing bucket:  21
+Processing bucket:  22
+Processing bucket:  23
+Processing bucket:  24
+Processing bucket:  25
+Processing bucket:  26
+Processing bucket:  27
+Processing bucket:  29
+Processing bucket:  30
+Processing bucket:  31
+Processing bucket:  32
+Processing bucket:  33
+Processing bucket:  34
+Processing bucket:  35
+Processing bucket:  36
+Processing bucket:  37
+Processing bucket:  38
+Processing bucket:  39
+Overwriting batch size and num sets for full data batches...
+Bucket 28 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 28 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  30
+Training NN for bucket: 30
+Num NNs to train:   0%|          | 0/2 [00:00<?, ?it/s]
+Upstream width is  20
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  20
+Processing bucket:  21
+Processing bucket:  22
+Processing bucket:  23
+Processing bucket:  24
+Processing bucket:  25
+Processing bucket:  26
+Processing bucket:  27
+Processing bucket:  29
+Processing bucket:  31
+Processing bucket:  32
+Processing bucket:  33
+Processing bucket:  34
+Processing bucket:  35
+Processing bucket:  36
+Processing bucket:  37
+Processing bucket:  38
+Processing bucket:  39
+Overwriting batch size and num sets for full data batches...
+Bucket 30 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 30 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  35
+Training NN for bucket: 35
+Num NNs to train:   0%|          | 0/3 [00:00<?, ?it/s]
+Upstream width is  20
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  20
+Processing bucket:  21
+Processing bucket:  22
+Processing bucket:  23
+Processing bucket:  24
+Processing bucket:  25
+Processing bucket:  26
+Processing bucket:  27
+Processing bucket:  29
+Processing bucket:  31
+Processing bucket:  32
+Processing bucket:  33
+Processing bucket:  34
+Processing bucket:  36
+Processing bucket:  37
+Processing bucket:  38
+Processing bucket:  39
+Overwriting batch size and num sets for full data batches...
+Bucket 35 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 35 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  27
+Training NN for bucket: 27
+Num NNs to train:   0%|          | 0/4 [00:00<?, ?it/s]
+Upstream width is  20
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  20
+Processing bucket:  21
+Processing bucket:  22
+Processing bucket:  23
+Processing bucket:  24
+Processing bucket:  25
+Processing bucket:  26
+Processing bucket:  29
+Processing bucket:  31
+Processing bucket:  32
+Processing bucket:  33
+Processing bucket:  34
+Processing bucket:  36
+Processing bucket:  37
+Processing bucket:  38
+Processing bucket:  39
+Overwriting batch size and num sets for full data batches...
+Bucket 27 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 27 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  33
+Training NN for bucket: 33
+Num NNs to train:   0%|          | 0/5 [00:00<?, ?it/s]
+Upstream width is  20
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  20
+Processing bucket:  21
+Processing bucket:  22
+Processing bucket:  23
+Processing bucket:  24
+Processing bucket:  25
+Processing bucket:  26
+Processing bucket:  29
+Processing bucket:  31
+Processing bucket:  32
+Processing bucket:  34
+Processing bucket:  36
+Processing bucket:  37
+Processing bucket:  38
+Processing bucket:  39
+Overwriting batch size and num sets for full data batches...
+Bucket 33 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 33 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  29
+Training NN for bucket: 29
+Num NNs to train:   0%|          | 0/6 [00:00<?, ?it/s]
+Upstream width is  20
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  20
+Processing bucket:  21
+Processing bucket:  22
+Processing bucket:  23
+Processing bucket:  24
+Processing bucket:  25
+Processing bucket:  26
+Processing bucket:  31
+Processing bucket:  32
+Processing bucket:  34
+Processing bucket:  36
+Processing bucket:  37
+Processing bucket:  38
+Processing bucket:  39
+Overwriting batch size and num sets for full data batches...
+Bucket 29 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 29 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  23
+Training NN for bucket: 23
+Num NNs to train:   0%|          | 0/7 [00:00<?, ?it/s]
+Upstream width is  20
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  20
+Processing bucket:  21
+Processing bucket:  22
+Processing bucket:  24
+Processing bucket:  25
+Processing bucket:  26
+Processing bucket:  31
+Processing bucket:  32
+Processing bucket:  34
+Processing bucket:  36
+Processing bucket:  37
+Processing bucket:  38
+Processing bucket:  39
+Overwriting batch size and num sets for full data batches...
+Bucket 23 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 23 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  36
+Training NN for bucket: 36
+Num NNs to train:   0%|          | 0/8 [00:00<?, ?it/s]
+Upstream width is  20
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  20
+Processing bucket:  21
+Processing bucket:  22
+Processing bucket:  24
+Processing bucket:  25
+Processing bucket:  26
+Processing bucket:  31
+Processing bucket:  32
+Processing bucket:  34
+Processing bucket:  37
+Processing bucket:  38
+Processing bucket:  39
+Overwriting batch size and num sets for full data batches...
+Bucket 36 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 36 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  31
+Training NN for bucket: 31
+Num NNs to train:   0%|          | 0/9 [00:00<?, ?it/s]
+Upstream width is  20
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  20
+Processing bucket:  21
+Processing bucket:  22
+Processing bucket:  24
+Processing bucket:  25
+Processing bucket:  26
+Processing bucket:  32
+Processing bucket:  34
+Processing bucket:  37
+Processing bucket:  38
+Processing bucket:  39
+Overwriting batch size and num sets for full data batches...
+Bucket 31 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 31 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  25
+Training NN for bucket: 25
+Num NNs to train:   0%|          | 0/10 [00:00<?, ?it/s]
+Upstream width is  20
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  20
+Processing bucket:  21
+Processing bucket:  22
+Processing bucket:  24
+Processing bucket:  26
+Processing bucket:  32
+Processing bucket:  34
+Processing bucket:  37
+Processing bucket:  38
+Processing bucket:  39
+Overwriting batch size and num sets for full data batches...
+Bucket 25 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 25 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  24
+Training NN for bucket: 24
+Num NNs to train:   0%|          | 0/11 [00:00<?, ?it/s]
+Upstream width is  20
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  20
+Processing bucket:  21
+Processing bucket:  22
+Processing bucket:  26
+Processing bucket:  32
+Processing bucket:  34
+Processing bucket:  37
+Processing bucket:  38
+Processing bucket:  39
+Overwriting batch size and num sets for full data batches...
+Bucket 24 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 24 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  39
+Training NN for bucket: 39
+Num NNs to train:   0%|          | 0/12 [00:00<?, ?it/s]
+Upstream width is  20
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  20
+Processing bucket:  21
+Processing bucket:  22
+Processing bucket:  26
+Processing bucket:  32
+Processing bucket:  34
+Processing bucket:  37
+Processing bucket:  38
+Overwriting batch size and num sets for full data batches...
+Bucket 39 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 39 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  37
+Training NN for bucket: 37
+Num NNs to train:   0%|          | 0/13 [00:00<?, ?it/s]
+Upstream width is  20
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  20
+Processing bucket:  21
+Processing bucket:  22
+Processing bucket:  26
+Processing bucket:  32
+Processing bucket:  34
+Processing bucket:  38
+Overwriting batch size and num sets for full data batches...
+Bucket 37 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 37 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  21
+Training NN for bucket: 21
+Num NNs to train:   0%|          | 0/14 [00:00<?, ?it/s]
+Upstream width is  20
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  20
+Processing bucket:  22
+Processing bucket:  26
+Processing bucket:  32
+Processing bucket:  34
+Processing bucket:  38
+Overwriting batch size and num sets for full data batches...
+Bucket 21 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 21 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  26
+Training NN for bucket: 26
+Num NNs to train:   0%|          | 0/15 [00:00<?, ?it/s]
+Upstream width is  20
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  20
+Processing bucket:  22
+Processing bucket:  32
+Processing bucket:  34
+Processing bucket:  38
+Overwriting batch size and num sets for full data batches...
+Bucket 26 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 26 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  38
+Training NN for bucket: 38
+Num NNs to train:   0%|          | 0/16 [00:00<?, ?it/s]
+Upstream width is  20
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  20
+Processing bucket:  22
+Processing bucket:  32
+Processing bucket:  34
+Overwriting batch size and num sets for full data batches...
+Bucket 38 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 38 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  34
+Training NN for bucket: 34
+Num NNs to train:   0%|          | 0/17 [00:00<?, ?it/s]
+Upstream width is  20
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  20
+Processing bucket:  22
+Processing bucket:  32
+Overwriting batch size and num sets for full data batches...
+Bucket 34 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 34 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  22
+Training NN for bucket: 22
+Num NNs to train:   0%|          | 0/18 [00:00<?, ?it/s]
+Upstream width is  20
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  20
+Processing bucket:  32
+Overwriting batch size and num sets for full data batches...
+Bucket 22 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 22 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  32
+Training NN for bucket: 32
+Num NNs to train:   0%|          | 0/19 [00:00<?, ?it/s]
+Upstream width is  20
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  20
+Overwriting batch size and num sets for full data batches...
+Bucket 32 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 32 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  2
+Training NN for bucket: 2
+Num NNs to train:   0%|          | 0/20 [00:00<?, ?it/s]
+Upstream width is  1
+Num NNs to train: 0it [00:00, ?it/s]
+Overwriting batch size and num sets for full data batches...
+Bucket 2 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 2 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  20
+Processing bucket:  13
+Processing bucket:  4
+Processing bucket:  15
+Processing bucket:  7
+Processing bucket:  18
+Processing bucket:  10
+Processing bucket:  8
+Processing bucket:  19
+Processing bucket:  3
+Processing bucket:  9
+Processing bucket:  14
+Processing bucket:  11
+Processing bucket:  1
+Processing bucket:  5
+Processing bucket:  6
+Processing bucket:  16
+Processing bucket:  12
+Processing bucket:  17
+Processing bucket:  0
+Z_hat: 42.918869
+Z_true: 58.530628
+Abs Error: 15.611759
+Num trained buckets: 20
+Time: 362.11s
+
+============================================================
+Testing rbm_21 with scaled_mse
+============================================================
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  24
+Training NN for bucket: 24
+Num NNs to train:   0%|          | 0/1 [00:00<?, ?it/s]
+Upstream width is  21
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  21
+Processing bucket:  22
+Processing bucket:  23
+Processing bucket:  25
+Processing bucket:  26
+Processing bucket:  27
+Processing bucket:  28
+Processing bucket:  29
+Processing bucket:  30
+Processing bucket:  31
+Processing bucket:  32
+Processing bucket:  33
+Processing bucket:  34
+Processing bucket:  35
+Processing bucket:  36
+Processing bucket:  37
+Processing bucket:  38
+Processing bucket:  39
+Processing bucket:  40
+Processing bucket:  41
+Overwriting batch size and num sets for full data batches...
+Bucket 24 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 24 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  37
+Training NN for bucket: 37
+Num NNs to train:   0%|          | 0/2 [00:00<?, ?it/s]
+Upstream width is  21
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  21
+Processing bucket:  22
+Processing bucket:  23
+Processing bucket:  25
+Processing bucket:  26
+Processing bucket:  27
+Processing bucket:  28
+Processing bucket:  29
+Processing bucket:  30
+Processing bucket:  31
+Processing bucket:  32
+Processing bucket:  33
+Processing bucket:  34
+Processing bucket:  35
+Processing bucket:  36
+Processing bucket:  38
+Processing bucket:  39
+Processing bucket:  40
+Processing bucket:  41
+Overwriting batch size and num sets for full data batches...
+Bucket 37 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 37 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  28
+Training NN for bucket: 28
+Num NNs to train:   0%|          | 0/3 [00:00<?, ?it/s]
+Upstream width is  21
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  21
+Processing bucket:  22
+Processing bucket:  23
+Processing bucket:  25
+Processing bucket:  26
+Processing bucket:  27
+Processing bucket:  29
+Processing bucket:  30
+Processing bucket:  31
+Processing bucket:  32
+Processing bucket:  33
+Processing bucket:  34
+Processing bucket:  35
+Processing bucket:  36
+Processing bucket:  38
+Processing bucket:  39
+Processing bucket:  40
+Processing bucket:  41
+Overwriting batch size and num sets for full data batches...
+Bucket 28 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 28 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  27
+Training NN for bucket: 27
+Num NNs to train:   0%|          | 0/4 [00:00<?, ?it/s]
+Upstream width is  21
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  21
+Processing bucket:  22
+Processing bucket:  23
+Processing bucket:  25
+Processing bucket:  26
+Processing bucket:  29
+Processing bucket:  30
+Processing bucket:  31
+Processing bucket:  32
+Processing bucket:  33
+Processing bucket:  34
+Processing bucket:  35
+Processing bucket:  36
+Processing bucket:  38
+Processing bucket:  39
+Processing bucket:  40
+Processing bucket:  41
+Overwriting batch size and num sets for full data batches...
+Bucket 27 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 27 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  36
+Training NN for bucket: 36
+Num NNs to train:   0%|          | 0/5 [00:00<?, ?it/s]
+Upstream width is  21
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  21
+Processing bucket:  22
+Processing bucket:  23
+Processing bucket:  25
+Processing bucket:  26
+Processing bucket:  29
+Processing bucket:  30
+Processing bucket:  31
+Processing bucket:  32
+Processing bucket:  33
+Processing bucket:  34
+Processing bucket:  35
+Processing bucket:  38
+Processing bucket:  39
+Processing bucket:  40
+Processing bucket:  41
+Overwriting batch size and num sets for full data batches...
+Bucket 36 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 36 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  22
+Training NN for bucket: 22
+Num NNs to train:   0%|          | 0/6 [00:00<?, ?it/s]
+Upstream width is  21
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  21
+Processing bucket:  23
+Processing bucket:  25
+Processing bucket:  26
+Processing bucket:  29
+Processing bucket:  30
+Processing bucket:  31
+Processing bucket:  32
+Processing bucket:  33
+Processing bucket:  34
+Processing bucket:  35
+Processing bucket:  38
+Processing bucket:  39
+Processing bucket:  40
+Processing bucket:  41
+Overwriting batch size and num sets for full data batches...
+Bucket 22 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 22 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  30
+Training NN for bucket: 30
+Num NNs to train:   0%|          | 0/7 [00:00<?, ?it/s]
+Upstream width is  21
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  21
+Processing bucket:  23
+Processing bucket:  25
+Processing bucket:  26
+Processing bucket:  29
+Processing bucket:  31
+Processing bucket:  32
+Processing bucket:  33
+Processing bucket:  34
+Processing bucket:  35
+Processing bucket:  38
+Processing bucket:  39
+Processing bucket:  40
+Processing bucket:  41
+Overwriting batch size and num sets for full data batches...
+Bucket 30 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 30 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  34
+Training NN for bucket: 34
+Num NNs to train:   0%|          | 0/8 [00:00<?, ?it/s]
+Upstream width is  21
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  21
+Processing bucket:  23
+Processing bucket:  25
+Processing bucket:  26
+Processing bucket:  29
+Processing bucket:  31
+Processing bucket:  32
+Processing bucket:  33
+Processing bucket:  35
+Processing bucket:  38
+Processing bucket:  39
+Processing bucket:  40
+Processing bucket:  41
+Overwriting batch size and num sets for full data batches...
+Bucket 34 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 34 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  25
+Training NN for bucket: 25
+Num NNs to train:   0%|          | 0/9 [00:00<?, ?it/s]
+Upstream width is  21
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  21
+Processing bucket:  23
+Processing bucket:  26
+Processing bucket:  29
+Processing bucket:  31
+Processing bucket:  32
+Processing bucket:  33
+Processing bucket:  35
+Processing bucket:  38
+Processing bucket:  39
+Processing bucket:  40
+Processing bucket:  41
+Overwriting batch size and num sets for full data batches...
+Bucket 25 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 25 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  33
+Training NN for bucket: 33
+Num NNs to train:   0%|          | 0/10 [00:00<?, ?it/s]
+Upstream width is  21
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  21
+Processing bucket:  23
+Processing bucket:  26
+Processing bucket:  29
+Processing bucket:  31
+Processing bucket:  32
+Processing bucket:  35
+Processing bucket:  38
+Processing bucket:  39
+Processing bucket:  40
+Processing bucket:  41
+Overwriting batch size and num sets for full data batches...
+Bucket 33 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 33 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  35
+Training NN for bucket: 35
+Num NNs to train:   0%|          | 0/11 [00:00<?, ?it/s]
+Upstream width is  21
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  21
+Processing bucket:  23
+Processing bucket:  26
+Processing bucket:  29
+Processing bucket:  31
+Processing bucket:  32
+Processing bucket:  38
+Processing bucket:  39
+Processing bucket:  40
+Processing bucket:  41
+Overwriting batch size and num sets for full data batches...
+Bucket 35 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 35 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  29
+Training NN for bucket: 29
+Num NNs to train:   0%|          | 0/12 [00:00<?, ?it/s]
+Upstream width is  21
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  21
+Processing bucket:  23
+Processing bucket:  26
+Processing bucket:  31
+Processing bucket:  32
+Processing bucket:  38
+Processing bucket:  39
+Processing bucket:  40
+Processing bucket:  41
+Overwriting batch size and num sets for full data batches...
+Bucket 29 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 29 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  26
+Training NN for bucket: 26
+Num NNs to train:   0%|          | 0/13 [00:00<?, ?it/s]
+Upstream width is  21
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  21
+Processing bucket:  23
+Processing bucket:  31
+Processing bucket:  32
+Processing bucket:  38
+Processing bucket:  39
+Processing bucket:  40
+Processing bucket:  41
+Overwriting batch size and num sets for full data batches...
+Bucket 26 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 26 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  32
+Training NN for bucket: 32
+Num NNs to train:   0%|          | 0/14 [00:00<?, ?it/s]
+Upstream width is  21
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  21
+Processing bucket:  23
+Processing bucket:  31
+Processing bucket:  38
+Processing bucket:  39
+Processing bucket:  40
+Processing bucket:  41
+Overwriting batch size and num sets for full data batches...
+Bucket 32 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 32 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  23
+Training NN for bucket: 23
+Num NNs to train:   0%|          | 0/15 [00:00<?, ?it/s]
+Upstream width is  21
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  21
+Processing bucket:  31
+Processing bucket:  38
+Processing bucket:  39
+Processing bucket:  40
+Processing bucket:  41
+Overwriting batch size and num sets for full data batches...
+Bucket 23 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 23 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  38
+Training NN for bucket: 38
+Num NNs to train:   0%|          | 0/16 [00:00<?, ?it/s]
+Upstream width is  21
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  21
+Processing bucket:  31
+Processing bucket:  39
+Processing bucket:  40
+Processing bucket:  41
+Overwriting batch size and num sets for full data batches...
+Bucket 38 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 38 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  39
+Training NN for bucket: 39
+Num NNs to train:   0%|          | 0/17 [00:00<?, ?it/s]
+Upstream width is  21
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  21
+Processing bucket:  31
+Processing bucket:  40
+Processing bucket:  41
+Overwriting batch size and num sets for full data batches...
+Bucket 39 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 39 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  40
+Training NN for bucket: 40
+Num NNs to train:   0%|          | 0/18 [00:00<?, ?it/s]
+Upstream width is  21
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  21
+Processing bucket:  31
+Processing bucket:  41
+Overwriting batch size and num sets for full data batches...
+Bucket 40 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 40 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  31
+Training NN for bucket: 31
+Num NNs to train:   0%|          | 0/19 [00:00<?, ?it/s]
+Upstream width is  21
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  21
+Processing bucket:  41
+Overwriting batch size and num sets for full data batches...
+Bucket 31 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 31 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  41
+Training NN for bucket: 41
+Num NNs to train:   0%|          | 0/20 [00:00<?, ?it/s]
+Upstream width is  21
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  21
+Overwriting batch size and num sets for full data batches...
+Bucket 41 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 41 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  0
+Training NN for bucket: 0
+Num NNs to train:   0%|          | 0/21 [00:00<?, ?it/s]
+Upstream width is  1
+Num NNs to train: 0it [00:00, ?it/s]
+Overwriting batch size and num sets for full data batches...
+Bucket 0 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 0 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  3
+Training NN for bucket: 3
+Num NNs to train:   0%|          | 0/22 [00:00<?, ?it/s]
+Upstream width is  1
+Num NNs to train: 0it [00:00, ?it/s]
+Overwriting batch size and num sets for full data batches...
+Bucket 3 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 3 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  11
+Processing bucket:  15
+Processing bucket:  4
+Processing bucket:  13
+Processing bucket:  21
+Processing bucket:  16
+Processing bucket:  12
+Processing bucket:  18
+Processing bucket:  9
+Processing bucket:  5
+Processing bucket:  8
+Processing bucket:  19
+Processing bucket:  7
+Processing bucket:  2
+Processing bucket:  20
+Processing bucket:  14
+Processing bucket:  10
+Processing bucket:  17
+Processing bucket:  6
+Processing bucket:  1
+Z_hat: 49.750519
+Z_true: 63.146712
+Abs Error: 13.396193
+Num trained buckets: 22
+Time: 687.96s
+
+============================================================
+Testing bn107 with scaled_mse
+============================================================
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  38
+Processing bucket:  17
+Processing bucket:  46
+Processing bucket:  47
+Processing bucket:  22
+Processing bucket:  40
+Processing bucket:  30
+Processing bucket:  37
+Processing bucket:  12
+Processing bucket:  39
+Processing bucket:  48
+Processing bucket:  32
+Processing bucket:  44
+Processing bucket:  49
+Processing bucket:  35
+Processing bucket:  42
+Training NN for bucket: 42
+Num NNs to train:   0%|          | 0/1 [00:00<?, ?it/s]
+Upstream width is  21
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  0
+Processing bucket:  25
+Processing bucket:  33
+Processing bucket:  27
+Processing bucket:  2
+Processing bucket:  24
+Processing bucket:  45
+Processing bucket:  36
+Processing bucket:  34
+Processing bucket:  23
+Processing bucket:  8
+Processing bucket:  13
+Processing bucket:  18
+Overwriting batch size and num sets for full data batches...
+Bucket 42 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 42 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  33
+Processing bucket:  43
+Training NN for bucket: 43
+Num NNs to train:   0%|          | 0/2 [00:00<?, ?it/s]
+Upstream width is  21
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  0
+Processing bucket:  25
+Processing bucket:  27
+Processing bucket:  2
+Processing bucket:  24
+Processing bucket:  45
+Processing bucket:  36
+Processing bucket:  34
+Processing bucket:  23
+Processing bucket:  8
+Processing bucket:  13
+Processing bucket:  18
+Overwriting batch size and num sets for full data batches...
+Bucket 43 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 43 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  45
+Processing bucket:  27
+Processing bucket:  2
+Processing bucket:  24
+Processing bucket:  25
+Processing bucket:  34
+Training NN for bucket: 34
+Num NNs to train:   0%|          | 0/3 [00:00<?, ?it/s]
+Upstream width is  21
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  0
+Processing bucket:  41
+Processing bucket:  31
+Processing bucket:  18
+Processing bucket:  28
+Overwriting batch size and num sets for full data batches...
+Bucket 34 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 34 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  36
+Training NN for bucket: 36
+Num NNs to train:   0%|          | 0/4 [00:00<?, ?it/s]
+Upstream width is  21
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  0
+Processing bucket:  41
+Processing bucket:  31
+Processing bucket:  18
+Processing bucket:  28
+Overwriting batch size and num sets for full data batches...
+Bucket 36 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 36 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  23
+Training NN for bucket: 23
+Num NNs to train:   0%|          | 0/5 [00:00<?, ?it/s]
+Upstream width is  21
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  0
+Processing bucket:  41
+Processing bucket:  31
+Overwriting batch size and num sets for full data batches...
+Bucket 23 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 23 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  41
+Training NN for bucket: 41
+Num NNs to train:   0%|          | 0/6 [00:00<?, ?it/s]
+Upstream width is  21
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  0
+Processing bucket:  8
+Overwriting batch size and num sets for full data batches...
+Bucket 41 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 41 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  3
+Training NN for bucket: 3
+Num NNs to train:   0%|          | 0/7 [00:00<?, ?it/s]
+Upstream width is  9
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  0
+Overwriting batch size and num sets for full data batches...
+Bucket 3 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 3 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  1
+Training NN for bucket: 1
+Num NNs to train:   0%|          | 0/8 [00:00<?, ?it/s]
+Upstream width is  9
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  0
+Overwriting batch size and num sets for full data batches...
+Bucket 1 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Overwriting batch size and num sets for full data batches...
+Bucket 1 training:   0%|          | 0/100000 [00:00<?, ?it/s]
+loss not decreasing after 2000 epochs
+Processing bucket:  4
+Processing bucket:  5
+Processing bucket:  8
+Processing bucket:  6
+Processing bucket:  10
+Processing bucket:  9
+Processing bucket:  7
+Processing bucket:  13
+Processing bucket:  11
+Processing bucket:  16
+Processing bucket:  15
+Processing bucket:  18
+Processing bucket:  14
+Processing bucket:  21
+Processing bucket:  26
+Processing bucket:  20
+Processing bucket:  19
+Processing bucket:  31
+Processing bucket:  28
+Processing bucket:  29
+Processing bucket:  0
+Z_hat: -16.524235
+Z_true: -1.151503
+Abs Error: 15.372732
+Num trained buckets: 8
+Time: 203.68s
+
+==========================================================================================
+BENCHMARK TEST RESULTS - scaled_mse
+==========================================================================================
+Problem                        Z_hat              Z_true             Abs Error       Time (s)  
+------------------------------------------------------------------------------------------
+grid10x10.f10.wrap             326.976593         333.321335         6.344742        98.74     
+grid10x10_f15_wrap             454.472198         497.763483         43.291285       65.90     
+pedigree18                     -90.450272         -78.139977         12.310295       77.88     
+rbm_20                         42.918869          58.530628          15.611759       362.11    
+rbm_21                         49.750519          63.146712          13.396193       687.96    
+bn107                          -16.524235         -1.151503          15.372732       203.68    
+==========================================================================================
+
+Results saved to: /home/cohenn1/NCE/scaled_mse_results.pkl
+CSV spreadsheet saved to: /home/cohenn1/NCE/scaled_mse_results.csv

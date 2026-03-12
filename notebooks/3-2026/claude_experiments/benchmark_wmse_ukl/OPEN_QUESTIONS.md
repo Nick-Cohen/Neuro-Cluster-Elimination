@@ -91,7 +91,7 @@ def weighted_logspace_mse(outputs, targets, bw_hat=None):
 ```
 When `bw_ecl=0`, no backward factors are populated, so `bw_hat=None`. This is correct behavior.
 
-**Question:** Should we also test WMSE WITH backward info (bw_ecl > 0) to verify it truly ignores bw_hat at runtime?
+**Question:** Should we also test WMSE WITH backward info (bw_ecl > 0) to verify it truly ignores bw_hat at runtime? --No
 
 **Recommendation:** Not needed. Code inspection confirms `bw_hat` is unused in the loss computation. Adding this test would add experiments without providing insight into the loss function comparison.
 
@@ -126,6 +126,6 @@ When `bw_ecl=0`, no backward factors are populated, so `bw_hat=None`. This is co
 - `dope_factors=True`: All factor entries are finite, no `-inf` values in training data. Required by some loss functions for numerical stability.
 - `dope_factors=False`: Factor entries may contain `-inf` (log of 0). Both WMSE and UKL handle this through their max-value normalization.
 
-**Question:** Should we use `dope_factors=True` (NeuroBE convention) or `False` (small_problems convention)?
+**Question:** Should we use `dope_factors=True` (NeuroBE convention) or `False` (small_problems convention)? We should use it as true.
 
 **Recommendation:** Use `dope_factors=False` for consistency with the `small_problems` defaults. Both losses (WMSE and UKL) see the same training data, so the comparison is fair. If WMSE shows numerical issues with `-inf` entries, this itself is a useful finding about the loss function's robustness.

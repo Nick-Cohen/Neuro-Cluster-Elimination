@@ -1,0 +1,153 @@
+Traceback (most recent call last):
+  File "/home/cohenn1/NCE/venv/lib/python3.11/site-packages/urllib3/connection.py", line 198, in _new_conn
+    sock = connection.create_connection(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/cohenn1/NCE/venv/lib/python3.11/site-packages/urllib3/util/connection.py", line 85, in create_connection
+    raise err
+  File "/home/cohenn1/NCE/venv/lib/python3.11/site-packages/urllib3/util/connection.py", line 73, in create_connection
+    sock.connect(sa)
+TimeoutError: [Errno 110] Connection timed out
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/cohenn1/NCE/venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/home/cohenn1/NCE/venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 488, in _make_request
+    raise new_e
+  File "/home/cohenn1/NCE/venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 464, in _make_request
+    self._validate_conn(conn)
+  File "/home/cohenn1/NCE/venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 1093, in _validate_conn
+    conn.connect()
+  File "/home/cohenn1/NCE/venv/lib/python3.11/site-packages/urllib3/connection.py", line 704, in connect
+    self.sock = sock = self._new_conn()
+                       ^^^^^^^^^^^^^^^^
+  File "/home/cohenn1/NCE/venv/lib/python3.11/site-packages/urllib3/connection.py", line 207, in _new_conn
+    raise ConnectTimeoutError(
+urllib3.exceptions.ConnectTimeoutError: (<urllib3.connection.HTTPSConnection object at 0x7f38a4d4a550>, 'Connection to sli.ics.uci.edu timed out. (connect timeout=None)')
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/cohenn1/NCE/venv/lib/python3.11/site-packages/requests/adapters.py", line 667, in send
+    resp = conn.urlopen(
+           ^^^^^^^^^^^^^
+  File "/home/cohenn1/NCE/venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "/home/cohenn1/NCE/venv/lib/python3.11/site-packages/urllib3/util/retry.py", line 519, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='sli.ics.uci.edu', port=443): Max retries exceeded with url: /uai-data/Grids/grid40x40.f10.uai.ord (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x7f38a4d4a550>, 'Connection to sli.ics.uci.edu timed out. (connect timeout=None)'))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/cohenn1/SDBE/PyGMs/pyGMs/data/catalog.py", line 63, in __lazyget
+    data = get_urldata(fileurl, verbose=False)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/cohenn1/SDBE/PyGMs/pyGMs/data/catalog.py", line 36, in get_urldata
+    r = requests.get(url, allow_redirects=False)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/cohenn1/NCE/venv/lib/python3.11/site-packages/requests/api.py", line 73, in get
+    return request("get", url, params=params, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/cohenn1/NCE/venv/lib/python3.11/site-packages/requests/api.py", line 59, in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/cohenn1/NCE/venv/lib/python3.11/site-packages/requests/sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/cohenn1/NCE/venv/lib/python3.11/site-packages/requests/sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/cohenn1/NCE/venv/lib/python3.11/site-packages/requests/adapters.py", line 688, in send
+    raise ConnectTimeout(e, request=request)
+requests.exceptions.ConnectTimeout: HTTPSConnectionPool(host='sli.ics.uci.edu', port=443): Max retries exceeded with url: /uai-data/Grids/grid40x40.f10.uai.ord (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x7f38a4d4a550>, 'Connection to sli.ics.uci.edu timed out. (connect timeout=None)'))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/cohenn1/NCE/notebooks/March-2026/claude_experiments/nbe_eval_phase3_full.py", line 65, in <module>
+    fastgm = FastGM(model=model, nn_config=config, device='cuda')
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/cohenn1/NCE/nce/inference/graphical_model.py", line 23, in __init__
+    elim_order = model.order
+                 ^^^^^^^^^^^
+  File "/home/cohenn1/SDBE/PyGMs/pyGMs/data/catalog.py", line 88, in order
+    filepath = self.__lazyget(self.orderfile)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/cohenn1/SDBE/PyGMs/pyGMs/data/catalog.py", line 66, in __lazyget
+    raise ValueError(f'Could not find or download {filename}')
+ValueError: Could not find or download grid40x40.f10.uai.ord
+======================================================================
+Phase 3: Full Benchmark Evaluation
+======================================================================
+Problems: 5
+Using NBE benchmark config (ecl=2^22, device=cuda)
+
+
+======================================================================
+Problem 1/5: pedigree13
+Num vars: 1077, Width: 32
+======================================================================
+Config: iB=20, ecl=2^22, num_epochs=500
+  hidden_sizes=nbe,3, num_samples=nbe,0.1
+FastGM created in 7.72s
+Result: log Z = -23.4234, num_trained = 0, time = 4.7s
+
+======================================================================
+Problem 2/5: grid40x40.f10
+Num vars: 1600, Width: 54
+======================================================================
+Config: iB=20, ecl=2^22, num_epochs=500
+  hidden_sizes=nbe,1, num_samples=nbe,0.35
+
+ERROR in problem grid40x40.f10: Could not find or download grid40x40.f10.uai.ord
+
+======================================================================
+Problem 3/5: grid20x20.f10
+Num vars: 400, Width: 26
+======================================================================
+Config: iB=10, ecl=2^22, num_epochs=500
+  hidden_sizes=nbe,1, num_samples=nbe,0.35
+FastGM created in 1.59s
+Result: log Z = 1332.5142, num_trained = 0, time = 1.3s
+
+======================================================================
+Problem 4/5: rbm_20
+Num vars: 40, Width: 20
+======================================================================
+Config: iB=20, ecl=2^22, num_epochs=500
+  hidden_sizes=nbe,3, num_samples=nbe,0.1
+FastGM created in 0.77s
+Result: log Z = 58.5306, num_trained = 0, time = 0.1s
+
+======================================================================
+Problem 5/5: grid10x10.f5.wrap
+Num vars: 100, Width: 21
+======================================================================
+Config: iB=10, ecl=2^22, num_epochs=500
+  hidden_sizes=nbe,1, num_samples=nbe,0.35
+FastGM created in 0.28s
+Result: log Z = 169.4082, num_trained = 0, time = 0.1s
+
+==========================================================================================
+SUMMARY TABLE - Phase 3: Full Benchmark Evaluation
+==========================================================================================
+Problem                 num_vars  width   iB  num_trained   log_Z_estimate   time(s)   status
+------------------------------------------------------------------------------------------
+pedigree13                  1077     32   20            0         -23.4234       4.7       OK
+grid40x40.f10               1600     54  N/A          N/A            ERROR       N/A    ERROR
+grid20x20.f10                400     26   10            0        1332.5142       1.3       OK
+rbm_20                        40     20   20            0          58.5306       0.1       OK
+grid10x10.f5.wrap            100     21   10            0         169.4082       0.1       OK
+
+Note: num_trained=0 for all problems.
+With ecl=2^22, all mini-bucket messages fit within the exact computation limit.
+The results above are WMB exact eliminations (WMB-BE with given iB), not NBE approximations.
+
+To test actual NN training, lower ecl (e.g., ecl=2^15) or use larger models.
+
+Phase 3 complete.

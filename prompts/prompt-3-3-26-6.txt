@@ -1,0 +1,19 @@
+/home/cohenn1/NCE/docs/neurobe_epsilon_values.md gives specific epsilon values for the problem types. We now wish to construct the functionality to use 'nbe,<epsilon_value>' as the config item under num_samples. Populate the correct epsilon values into the nbe_sanity_check config.
+
+It would be nice if this function to get the number of samples is callable by the bucket class for testing purposes.
+
+Then attempt to implement the actual function that determines the number of samples for each bucket and makes sure to call it and use it. It should do neuroBEs 80:20 split for training and validation data as used by the nbe early stopping code. Check carefully that the code structure makes sense.
+
+Grab a smaller benchmark problem: grid10x10.f5.wrap. Add this to the nbe_sanity_check benchmark set.
+
+Also additional changes to the config we want:
+skip_early_stopping should be False
+loss function should be 'weighted_mse'
+use_bw_approx: False
+ib should be 20 for rbm_20, 10 for grid20x10.f10, 20 for pedigree13, and 20 for grid40x40.f10
+
+Use the show_elimination() function and identify a bucket of width 10. Tell me what that bucket idx is.
+
+Then create a file where we load the benchmark set and associated configs. Load in grid10x10.f5.wrap. Change (in this file only) the config items of the ecl to 2**30 and iB 30 (make it exact by default). Run eliminate_variables(up_to=idx) for that variable we found.
+
+Then get the bucket for idx. Then run the function to get nbe's number of samples.

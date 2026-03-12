@@ -1,0 +1,13 @@
+I want an easier means by which benchmark sets can be referenced and retrieved.
+
+The goal is to ammend your custom instructions to include a pointer to a file that says how to make benchmark sets.
+
+I will give you the rough outline, but then, based on how you actually executed it, you will write a more thorough version of the instructions that will sit in that file thats pointed to including code snippets etc.... whatever is needed.
+
+So right now, I am making a neuro_be_sanity_check benchmark set. It will include:
+
+pedigree13, grid40x40.f10, grid20x20.f10, and rbm-20
+
+all problems, at their root are retrieved through the pygms uai catalogue. caches need to be refreshed. When I create a benchmark set, a python file will be created that can create that benchmark set. So then when we need to do an experiment that uses that benchmark set, we just import the file and refer to the benchmark set variable created in the file.
+
+This test will be successful when a test file can import the benchmark_problems module and call benchmark_problems.neuro_be_sanity_check. Then it should be able to print out the model_object.modelfile, model_object.num_vars.

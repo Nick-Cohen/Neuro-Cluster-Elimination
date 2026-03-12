@@ -1,0 +1,5 @@
+We need to implement the neuroBE function for determining how many uniform samples to draw for each bucket. The neuroBE code base lives here: /home/cohenn1/SDBE/NeuroBE. The paper description lives here: /home/cohenn1/NCE/prompts/NeuroBE.pdf
+
+We cannot necessarily trust the description in the paper for how things are done, since there are many mismatches throughout, but your job is simply to tell me the pseudocode for how the num samples is determined for each bucket as referenced in the paper but also as indicated in the code itself. Its vital that you look at both.
+
+Your task is complete when you tell me the algorithm for determining the number of samples. Output the algorithm to file also, and make sure the description in the file is sufficient to implement this in the nce code base.

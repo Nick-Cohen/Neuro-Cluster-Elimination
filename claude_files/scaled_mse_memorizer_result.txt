@@ -1,0 +1,50 @@
+/home/cohenn1/NCE/venv/lib/python3.11/site-packages/torch/nn/init.py:405: UserWarning: Initializing zero-element tensors is a no-op
+  warnings.warn("Initializing zero-element tensors is a no-op")
+/home/cohenn1/NCE/venv/lib/python3.11/site-packages/torch/nn/init.py:445: UserWarning: Initializing zero-element tensors is a no-op
+  warnings.warn("Initializing zero-element tensors is a no-op")
+======================================================================
+MEMORIZER TEST: scaled_mse conversion
+======================================================================
+
+Problem: grid10x10.f10.wrap
+Loss function: scaled_mse
+
+======================================================================
+CREATING TEST BUCKET
+======================================================================
+Test bucket: 10
+Message scope: []
+Message size: 1.0
+
+======================================================================
+COMPUTING EXACT MESSAGE
+======================================================================
+Exact message shape: torch.Size([1])
+Exact message stats:
+  Min: 0.301084
+  Max: 0.301084
+  Mean: 0.301084
+
+======================================================================
+CREATING TRAINER AND LOADING DATA
+======================================================================
+Traceback (most recent call last):
+  File "/home/cohenn1/NCE/test_scaled_mse_memorizer.py", line 96, in <module>
+    trainer = Trainer(net=net, bucket=test_bucket)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/cohenn1/NCE/nce/neural_networks/train.py", line 51, in __init__
+    self.sample_generator, self.data_preprocessor, self.dataloader = self._make_dataloader()
+                                                                     ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/cohenn1/NCE/nce/neural_networks/train.py", line 550, in _make_dataloader
+    sample_assignments = sg.sample_assignments(1000)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/cohenn1/NCE/nce/sampling/sample_generator.py", line 60, in sample_assignments
+    return self.sample_all()
+           ^^^^^^^^^^^^^^^^^
+  File "/home/cohenn1/NCE/nce/sampling/sample_generator.py", line 69, in sample_all
+    assignments = torch.cartesian_prod(*[torch.arange(size) for size in self.domain_sizes])
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/cohenn1/NCE/venv/lib/python3.11/site-packages/torch/functional.py", line 1137, in cartesian_prod
+    return _VF.cartesian_prod(tensors)  # type: ignore[attr-defined]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: meshgrid expects a non-empty TensorList

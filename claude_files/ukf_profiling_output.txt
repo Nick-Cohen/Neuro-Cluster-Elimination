@@ -1,0 +1,3167 @@
+/home/cohenn1/NCE/nce/neural_networks/train.py:369: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  sf = torch.tensor(self.ukf_sigma_f + 1e-12, device=outputs.device, dtype=outputs.dtype)
+/home/cohenn1/NCE/nce/neural_networks/train.py:370: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  sb = torch.tensor(self.ukf_sigma_g + 1e-12, device=outputs.device, dtype=outputs.dtype)
+/home/cohenn1/NCE/nce/neural_networks/train.py:371: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  Sx = torch.tensor(self.ukf_rho * self.ukf_sigma_f * self.ukf_sigma_g, device=outputs.device, dtype=outputs.dtype)
+/home/cohenn1/NCE/nce/neural_networks/losses.py:996: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  sb_ = torch.sqrt(torch.tensor((1.0 - Sx**2 / (sb**2 * sf**2)) * sb**2, device=outputs.device))
+======================================================================
+UKF SEQUENTIAL LOSS - PROFILING TEST
+======================================================================
+Configuration:
+  Loss function: ukf_sequential
+  Hidden sizes: [3, 3]
+  Num epochs: 100
+  Device: cuda
+======================================================================
+
+Loading problem: grid10x10_f15_wrap
+Width: 21
+
+Creating FastGM...
+
+Training bucket 5...
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  26
+Processing bucket:  24
+Processing bucket:  17
+Processing bucket:  15
+Processing bucket:  8
+Processing bucket:  6
+Processing bucket:  37
+Processing bucket:  13
+Processing bucket:  19
+Processing bucket:  4
+Processing bucket:  35
+Processing bucket:  46
+Processing bucket:  95
+Processing bucket:  97
+Processing bucket:  0
+Processing bucket:  86
+Processing bucket:  2
+Processing bucket:  11
+Processing bucket:  93
+Processing bucket:  20
+Processing bucket:  84
+Processing bucket:  91
+Processing bucket:  82
+Processing bucket:  22
+Processing bucket:  99
+Processing bucket:  73
+Processing bucket:  31
+Processing bucket:  75
+Processing bucket:  88
+Processing bucket:  64
+Processing bucket:  33
+Processing bucket:  77
+Processing bucket:  55
+Processing bucket:  42
+Processing bucket:  39
+Processing bucket:  53
+Processing bucket:  40
+Processing bucket:  80
+Processing bucket:  62
+Processing bucket:  66
+Processing bucket:  51
+Processing bucket:  71
+Processing bucket:  48
+Processing bucket:  79
+Processing bucket:  57
+Processing bucket:  28
+Processing bucket:  60
+Upstream width is  22
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  44
+Processing bucket:  59
+Processing bucket:  68
+Processing bucket:  1
+Processing bucket:  23
+Processing bucket:  29
+Processing bucket:  41
+Processing bucket:  45
+Processing bucket:  63
+Processing bucket:  67
+Processing bucket:  89
+Processing bucket:  18
+Processing bucket:  36
+Processing bucket:  58
+Processing bucket:  70
+Processing bucket:  92
+Processing bucket:  74
+Processing bucket:  32
+Processing bucket:  47
+Processing bucket:  56
+Processing bucket:  81
+Processing bucket:  90
+Processing bucket:  9
+Processing bucket:  10
+Processing bucket:  98
+Processing bucket:  54
+Processing bucket:  65
+Processing bucket:  76
+Processing bucket:  27
+Processing bucket:  38
+Processing bucket:  69
+Processing bucket:  72
+Processing bucket:  78
+Processing bucket:  83
+Processing bucket:  87
+Processing bucket:  12
+Processing bucket:  21
+Processing bucket:  30
+Processing bucket:  34
+Processing bucket:  43
+Processing bucket:  49
+Processing bucket:  50
+Processing bucket:  52
+Processing bucket:  61
+Num NNs to train: 0it [00:00, ?it/s]
+Upstream width is  22
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  44
+Processing bucket:  59
+Processing bucket:  68
+Processing bucket:  1
+Processing bucket:  23
+Processing bucket:  29
+Processing bucket:  41
+Processing bucket:  45
+Processing bucket:  63
+Processing bucket:  67
+Processing bucket:  89
+Processing bucket:  18
+Processing bucket:  36
+Processing bucket:  58
+Processing bucket:  70
+Processing bucket:  92
+Processing bucket:  74
+Processing bucket:  32
+Processing bucket:  47
+Processing bucket:  56
+Processing bucket:  81
+Processing bucket:  90
+Processing bucket:  9
+Processing bucket:  10
+Processing bucket:  98
+Processing bucket:  54
+Processing bucket:  65
+Processing bucket:  76
+Processing bucket:  27
+Processing bucket:  38
+Processing bucket:  69
+Processing bucket:  72
+Processing bucket:  78
+Processing bucket:  83
+Processing bucket:  87
+Processing bucket:  12
+Processing bucket:  21
+Processing bucket:  30
+Processing bucket:  34
+Processing bucket:  43
+Processing bucket:  49
+Processing bucket:  50
+Processing bucket:  52
+Processing bucket:  61
+Overwriting batch size and num sets for full data batches...
+Bucket 5 training:   0%|          | 0/100 [00:00<?, ?it/s]
+DEBUG load_batches: scaling_factor = None
+DEBUG load: scaling_factor = None
+DEBUG load: about to call _normalize_logspace2 with scaling_factor = None
+DEBUG _normalize_logspace2: scaling_factor = None, exp_preprocessing = False
+
+======================================================================
+UKF Sequential Statistics at Epoch 1
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.482159
+  E[Φ̂] (approx log Z) : 22.450306
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 86.670792
+  Var[Φ̂]       : 7.608048
+  Cov[Φ, Φ̂]    : 2.330123
+  Correlation   : 0.090741
+
+Loss Decomposition:
+  Bias² term            : 1227.230705
+  Variance term         : 89.618594
+  Total loss (E[(Φ-Φ̂)²]): 1316.849299
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 35.031853
+  RMSE (√loss)                                 : 36.288418
+  Partition function ratio (exp(35.032))      : 1637345551974400.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 2
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.482159
+  E[Φ̂] (approx log Z) : 22.450306
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 86.670792
+  Var[Φ̂]       : 7.608048
+  Cov[Φ, Φ̂]    : 2.330123
+  Correlation   : 0.090741
+
+Loss Decomposition:
+  Bias² term            : 1227.230705
+  Variance term         : 89.618594
+  Total loss (E[(Φ-Φ̂)²]): 1316.849299
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 35.031853
+  RMSE (√loss)                                 : 36.288418
+  Partition function ratio (exp(35.032))      : 1637345551974400.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 3
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.482159
+  E[Φ̂] (approx log Z) : 22.450306
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 86.670792
+  Var[Φ̂]       : 7.608048
+  Cov[Φ, Φ̂]    : 2.330123
+  Correlation   : 0.090741
+
+Loss Decomposition:
+  Bias² term            : 1227.230705
+  Variance term         : 89.618594
+  Total loss (E[(Φ-Φ̂)²]): 1316.849299
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 35.031853
+  RMSE (√loss)                                 : 36.288418
+  Partition function ratio (exp(35.032))      : 1637345551974400.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 4
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.482159
+  E[Φ̂] (approx log Z) : 22.450306
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 86.670792
+  Var[Φ̂]       : 7.608048
+  Cov[Φ, Φ̂]    : 2.330123
+  Correlation   : 0.090741
+
+Loss Decomposition:
+  Bias² term            : 1227.230705
+  Variance term         : 89.618594
+  Total loss (E[(Φ-Φ̂)²]): 1316.849299
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 35.031853
+  RMSE (√loss)                                 : 36.288418
+  Partition function ratio (exp(35.032))      : 1637345551974400.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 5
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.482159
+  E[Φ̂] (approx log Z) : 22.450306
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 86.670792
+  Var[Φ̂]       : 7.608048
+  Cov[Φ, Φ̂]    : 2.330123
+  Correlation   : 0.090741
+
+Loss Decomposition:
+  Bias² term            : 1227.230705
+  Variance term         : 89.618594
+  Total loss (E[(Φ-Φ̂)²]): 1316.849299
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 35.031853
+  RMSE (√loss)                                 : 36.288418
+  Partition function ratio (exp(35.032))      : 1637345551974400.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 6
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.482159
+  E[Φ̂] (approx log Z) : 22.450306
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 86.670792
+  Var[Φ̂]       : 7.608048
+  Cov[Φ, Φ̂]    : 2.330123
+  Correlation   : 0.090741
+
+Loss Decomposition:
+  Bias² term            : 1227.230705
+  Variance term         : 89.618594
+  Total loss (E[(Φ-Φ̂)²]): 1316.849299
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 35.031853
+  RMSE (√loss)                                 : 36.288418
+  Partition function ratio (exp(35.032))      : 1637345551974400.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 7
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.482159
+  E[Φ̂] (approx log Z) : 22.450306
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 86.670792
+  Var[Φ̂]       : 7.608048
+  Cov[Φ, Φ̂]    : 2.330123
+  Correlation   : 0.090741
+
+Loss Decomposition:
+  Bias² term            : 1227.230705
+  Variance term         : 89.618594
+  Total loss (E[(Φ-Φ̂)²]): 1316.849299
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 35.031853
+  RMSE (√loss)                                 : 36.288418
+  Partition function ratio (exp(35.032))      : 1637345551974400.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 8
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.482159
+  E[Φ̂] (approx log Z) : 22.450306
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 86.670792
+  Var[Φ̂]       : 7.608048
+  Cov[Φ, Φ̂]    : 2.330123
+  Correlation   : 0.090741
+
+Loss Decomposition:
+  Bias² term            : 1227.230705
+  Variance term         : 89.618594
+  Total loss (E[(Φ-Φ̂)²]): 1316.849299
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 35.031853
+  RMSE (√loss)                                 : 36.288418
+  Partition function ratio (exp(35.032))      : 1637345551974400.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 9
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.482159
+  E[Φ̂] (approx log Z) : 22.450306
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 86.670792
+  Var[Φ̂]       : 7.608048
+  Cov[Φ, Φ̂]    : 2.330123
+  Correlation   : 0.090741
+
+Loss Decomposition:
+  Bias² term            : 1227.230705
+  Variance term         : 89.618594
+  Total loss (E[(Φ-Φ̂)²]): 1316.849299
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 35.031853
+  RMSE (√loss)                                 : 36.288418
+  Partition function ratio (exp(35.032))      : 1637345551974400.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 10
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.482159
+  E[Φ̂] (approx log Z) : 22.450306
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 86.670792
+  Var[Φ̂]       : 7.608048
+  Cov[Φ, Φ̂]    : 2.330123
+  Correlation   : 0.090741
+
+Loss Decomposition:
+  Bias² term            : 1227.230705
+  Variance term         : 89.618594
+  Total loss (E[(Φ-Φ̂)²]): 1316.849299
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 35.031853
+  RMSE (√loss)                                 : 36.288418
+  Partition function ratio (exp(35.032))      : 1637345551974400.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 11
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.471363
+  E[Φ̂] (approx log Z) : 22.453972
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 86.324181
+  Var[Φ̂]       : 7.580882
+  Cov[Φ, Φ̂]    : 2.395575
+  Correlation   : 0.093645
+
+Loss Decomposition:
+  Bias² term            : 1226.217687
+  Variance term         : 89.113912
+  Total loss (E[(Φ-Φ̂)²]): 1315.331599
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 35.017391
+  RMSE (√loss)                                 : 36.267501
+  Partition function ratio (exp(35.017))      : 1613837316915200.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 12
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.471363
+  E[Φ̂] (approx log Z) : 22.453972
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 86.324181
+  Var[Φ̂]       : 7.580882
+  Cov[Φ, Φ̂]    : 2.395575
+  Correlation   : 0.093645
+
+Loss Decomposition:
+  Bias² term            : 1226.217687
+  Variance term         : 89.113912
+  Total loss (E[(Φ-Φ̂)²]): 1315.331599
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 35.017391
+  RMSE (√loss)                                 : 36.267501
+  Partition function ratio (exp(35.017))      : 1613837316915200.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 13
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.471363
+  E[Φ̂] (approx log Z) : 22.453972
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 86.324181
+  Var[Φ̂]       : 7.580882
+  Cov[Φ, Φ̂]    : 2.395575
+  Correlation   : 0.093645
+
+Loss Decomposition:
+  Bias² term            : 1226.217687
+  Variance term         : 89.113912
+  Total loss (E[(Φ-Φ̂)²]): 1315.331599
+
+Derived Metrics:
+/home/cohenn1/NCE/nce/utils/plots.py:49: RuntimeWarning: More than 20 figures have been opened. Figures created through the pyplot interface (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, see the rcParam `figure.max_open_warning`). Consider using `matplotlib.pyplot.close()`.
+  plt.figure(figsize=(10, 6))
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 35.017391
+  RMSE (√loss)                                 : 36.267501
+  Partition function ratio (exp(35.017))      : 1613837316915200.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 14
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.471363
+  E[Φ̂] (approx log Z) : 22.453972
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 86.324181
+  Var[Φ̂]       : 7.580882
+  Cov[Φ, Φ̂]    : 2.395575
+  Correlation   : 0.093645
+
+Loss Decomposition:
+  Bias² term            : 1226.217687
+  Variance term         : 89.113912
+  Total loss (E[(Φ-Φ̂)²]): 1315.331599
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 35.017391
+  RMSE (√loss)                                 : 36.267501
+  Partition function ratio (exp(35.017))      : 1613837316915200.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 15
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.471363
+  E[Φ̂] (approx log Z) : 22.453972
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 86.324181
+  Var[Φ̂]       : 7.580882
+  Cov[Φ, Φ̂]    : 2.395575
+  Correlation   : 0.093645
+
+Loss Decomposition:
+  Bias² term            : 1226.217687
+  Variance term         : 89.113912
+  Total loss (E[(Φ-Φ̂)²]): 1315.331599
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 35.017391
+  RMSE (√loss)                                 : 36.267501
+  Partition function ratio (exp(35.017))      : 1613837316915200.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 16
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.471363
+  E[Φ̂] (approx log Z) : 22.453972
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 86.324181
+  Var[Φ̂]       : 7.580882
+  Cov[Φ, Φ̂]    : 2.395575
+  Correlation   : 0.093645
+
+Loss Decomposition:
+  Bias² term            : 1226.217687
+  Variance term         : 89.113912
+  Total loss (E[(Φ-Φ̂)²]): 1315.331599
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 35.017391
+  RMSE (√loss)                                 : 36.267501
+  Partition function ratio (exp(35.017))      : 1613837316915200.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 17
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.471363
+  E[Φ̂] (approx log Z) : 22.453972
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 86.324181
+  Var[Φ̂]       : 7.580882
+  Cov[Φ, Φ̂]    : 2.395575
+  Correlation   : 0.093645
+
+Loss Decomposition:
+  Bias² term            : 1226.217687
+  Variance term         : 89.113912
+  Total loss (E[(Φ-Φ̂)²]): 1315.331599
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 35.017391
+  RMSE (√loss)                                 : 36.267501
+  Partition function ratio (exp(35.017))      : 1613837316915200.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 18
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.471363
+  E[Φ̂] (approx log Z) : 22.453972
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 86.324181
+  Var[Φ̂]       : 7.580882
+  Cov[Φ, Φ̂]    : 2.395575
+  Correlation   : 0.093645
+
+Loss Decomposition:
+  Bias² term            : 1226.217687
+  Variance term         : 89.113912
+  Total loss (E[(Φ-Φ̂)²]): 1315.331599
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 35.017391
+  RMSE (√loss)                                 : 36.267501
+  Partition function ratio (exp(35.017))      : 1613837316915200.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 19
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.471363
+  E[Φ̂] (approx log Z) : 22.453972
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 86.324181
+  Var[Φ̂]       : 7.580882
+  Cov[Φ, Φ̂]    : 2.395575
+  Correlation   : 0.093645
+
+Loss Decomposition:
+  Bias² term            : 1226.217687
+  Variance term         : 89.113912
+  Total loss (E[(Φ-Φ̂)²]): 1315.331599
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 35.017391
+  RMSE (√loss)                                 : 36.267501
+  Partition function ratio (exp(35.017))      : 1613837316915200.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 20
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.471363
+  E[Φ̂] (approx log Z) : 22.453972
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 86.324181
+  Var[Φ̂]       : 7.580882
+  Cov[Φ, Φ̂]    : 2.395575
+  Correlation   : 0.093645
+
+Loss Decomposition:
+  Bias² term            : 1226.217687
+  Variance term         : 89.113912
+  Total loss (E[(Φ-Φ̂)²]): 1315.331599
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 35.017391
+  RMSE (√loss)                                 : 36.267501
+  Partition function ratio (exp(35.017))      : 1613837316915200.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 21
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.466267
+  E[Φ̂] (approx log Z) : 22.486320
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.926186
+  Var[Φ̂]       : 7.599834
+  Cov[Φ, Φ̂]    : 2.432422
+  Correlation   : 0.095186
+
+Loss Decomposition:
+  Bias² term            : 1223.596632
+  Variance term         : 88.661175
+  Total loss (E[(Φ-Φ̂)²]): 1312.257806
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.979946
+  RMSE (√loss)                                 : 36.225099
+  Partition function ratio (exp(34.980))      : 1554524489646080.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 22
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.466267
+  E[Φ̂] (approx log Z) : 22.486320
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.926186
+  Var[Φ̂]       : 7.599834
+  Cov[Φ, Φ̂]    : 2.432422
+  Correlation   : 0.095186
+
+Loss Decomposition:
+  Bias² term            : 1223.596632
+  Variance term         : 88.661175
+  Total loss (E[(Φ-Φ̂)²]): 1312.257806
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.979946
+  RMSE (√loss)                                 : 36.225099
+  Partition function ratio (exp(34.980))      : 1554524489646080.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 23
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.466267
+  E[Φ̂] (approx log Z) : 22.486320
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.926186
+  Var[Φ̂]       : 7.599834
+  Cov[Φ, Φ̂]    : 2.432422
+  Correlation   : 0.095186
+
+Loss Decomposition:
+  Bias² term            : 1223.596632
+  Variance term         : 88.661175
+  Total loss (E[(Φ-Φ̂)²]): 1312.257806
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.979946
+  RMSE (√loss)                                 : 36.225099
+  Partition function ratio (exp(34.980))      : 1554524489646080.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 24
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.466267
+  E[Φ̂] (approx log Z) : 22.486320
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.926186
+  Var[Φ̂]       : 7.599834
+  Cov[Φ, Φ̂]    : 2.432422
+  Correlation   : 0.095186
+
+Loss Decomposition:
+  Bias² term            : 1223.596632
+  Variance term         : 88.661175
+  Total loss (E[(Φ-Φ̂)²]): 1312.257806
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.979946
+  RMSE (√loss)                                 : 36.225099
+  Partition function ratio (exp(34.980))      : 1554524489646080.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 25
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.466267
+  E[Φ̂] (approx log Z) : 22.486320
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.926186
+  Var[Φ̂]       : 7.599834
+  Cov[Φ, Φ̂]    : 2.432422
+  Correlation   : 0.095186
+
+Loss Decomposition:
+  Bias² term            : 1223.596632
+  Variance term         : 88.661175
+  Total loss (E[(Φ-Φ̂)²]): 1312.257806
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.979946
+  RMSE (√loss)                                 : 36.225099
+  Partition function ratio (exp(34.980))      : 1554524489646080.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 26
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.466267
+  E[Φ̂] (approx log Z) : 22.486320
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.926186
+  Var[Φ̂]       : 7.599834
+  Cov[Φ, Φ̂]    : 2.432422
+  Correlation   : 0.095186
+
+Loss Decomposition:
+  Bias² term            : 1223.596632
+  Variance term         : 88.661175
+  Total loss (E[(Φ-Φ̂)²]): 1312.257806
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.979946
+  RMSE (√loss)                                 : 36.225099
+  Partition function ratio (exp(34.980))      : 1554524489646080.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 27
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.466267
+  E[Φ̂] (approx log Z) : 22.486320
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.926186
+  Var[Φ̂]       : 7.599834
+  Cov[Φ, Φ̂]    : 2.432422
+  Correlation   : 0.095186
+
+Loss Decomposition:
+  Bias² term            : 1223.596632
+  Variance term         : 88.661175
+  Total loss (E[(Φ-Φ̂)²]): 1312.257806
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.979946
+  RMSE (√loss)                                 : 36.225099
+  Partition function ratio (exp(34.980))      : 1554524489646080.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 28
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.466267
+  E[Φ̂] (approx log Z) : 22.486320
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.926186
+  Var[Φ̂]       : 7.599834
+  Cov[Φ, Φ̂]    : 2.432422
+  Correlation   : 0.095186
+
+Loss Decomposition:
+  Bias² term            : 1223.596632
+  Variance term         : 88.661175
+  Total loss (E[(Φ-Φ̂)²]): 1312.257806
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.979946
+  RMSE (√loss)                                 : 36.225099
+  Partition function ratio (exp(34.980))      : 1554524489646080.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 29
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.466267
+  E[Φ̂] (approx log Z) : 22.486320
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.926186
+  Var[Φ̂]       : 7.599834
+  Cov[Φ, Φ̂]    : 2.432422
+  Correlation   : 0.095186
+
+Loss Decomposition:
+  Bias² term            : 1223.596632
+  Variance term         : 88.661175
+  Total loss (E[(Φ-Φ̂)²]): 1312.257806
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.979946
+  RMSE (√loss)                                 : 36.225099
+  Partition function ratio (exp(34.980))      : 1554524489646080.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 30
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.466267
+  E[Φ̂] (approx log Z) : 22.486320
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.926186
+  Var[Φ̂]       : 7.599834
+  Cov[Φ, Φ̂]    : 2.432422
+  Correlation   : 0.095186
+
+Loss Decomposition:
+  Bias² term            : 1223.596632
+  Variance term         : 88.661175
+  Total loss (E[(Φ-Φ̂)²]): 1312.257806
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.979946
+  RMSE (√loss)                                 : 36.225099
+  Partition function ratio (exp(34.980))      : 1554524489646080.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 31
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.457951
+  E[Φ̂] (approx log Z) : 22.523880
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.630692
+  Var[Φ̂]       : 7.600315
+  Cov[Φ, Φ̂]    : 2.542394
+  Correlation   : 0.099658
+
+Loss Decomposition:
+  Bias² term            : 1220.389288
+  Variance term         : 88.146219
+  Total loss (E[(Φ-Φ̂)²]): 1308.535507
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.934071
+  RMSE (√loss)                                 : 36.173685
+  Partition function ratio (exp(34.934))      : 1484820928528384.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 32
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.457951
+  E[Φ̂] (approx log Z) : 22.523880
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.630692
+  Var[Φ̂]       : 7.600315
+  Cov[Φ, Φ̂]    : 2.542394
+  Correlation   : 0.099658
+
+Loss Decomposition:
+  Bias² term            : 1220.389288
+  Variance term         : 88.146219
+  Total loss (E[(Φ-Φ̂)²]): 1308.535507
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.934071
+  RMSE (√loss)                                 : 36.173685
+  Partition function ratio (exp(34.934))      : 1484820928528384.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 33
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.457951
+  E[Φ̂] (approx log Z) : 22.523880
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.630692
+  Var[Φ̂]       : 7.600315
+  Cov[Φ, Φ̂]    : 2.542394
+  Correlation   : 0.099658
+
+Loss Decomposition:
+  Bias² term            : 1220.389288
+  Variance term         : 88.146219
+  Total loss (E[(Φ-Φ̂)²]): 1308.535507
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.934071
+  RMSE (√loss)                                 : 36.173685
+  Partition function ratio (exp(34.934))      : 1484820928528384.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 34
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.457951
+  E[Φ̂] (approx log Z) : 22.523880
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.630692
+  Var[Φ̂]       : 7.600315
+  Cov[Φ, Φ̂]    : 2.542394
+  Correlation   : 0.099658
+
+Loss Decomposition:
+  Bias² term            : 1220.389288
+  Variance term         : 88.146219
+  Total loss (E[(Φ-Φ̂)²]): 1308.535507
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.934071
+  RMSE (√loss)                                 : 36.173685
+  Partition function ratio (exp(34.934))      : 1484820928528384.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 35
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.457951
+  E[Φ̂] (approx log Z) : 22.523880
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.630692
+  Var[Φ̂]       : 7.600315
+  Cov[Φ, Φ̂]    : 2.542394
+  Correlation   : 0.099658
+
+Loss Decomposition:
+  Bias² term            : 1220.389288
+  Variance term         : 88.146219
+  Total loss (E[(Φ-Φ̂)²]): 1308.535507
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.934071
+  RMSE (√loss)                                 : 36.173685
+  Partition function ratio (exp(34.934))      : 1484820928528384.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 36
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.457951
+  E[Φ̂] (approx log Z) : 22.523880
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.630692
+  Var[Φ̂]       : 7.600315
+  Cov[Φ, Φ̂]    : 2.542394
+  Correlation   : 0.099658
+
+Loss Decomposition:
+  Bias² term            : 1220.389288
+  Variance term         : 88.146219
+  Total loss (E[(Φ-Φ̂)²]): 1308.535507
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.934071
+  RMSE (√loss)                                 : 36.173685
+  Partition function ratio (exp(34.934))      : 1484820928528384.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 37
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.457951
+  E[Φ̂] (approx log Z) : 22.523880
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.630692
+  Var[Φ̂]       : 7.600315
+  Cov[Φ, Φ̂]    : 2.542394
+  Correlation   : 0.099658
+
+Loss Decomposition:
+  Bias² term            : 1220.389288
+  Variance term         : 88.146219
+  Total loss (E[(Φ-Φ̂)²]): 1308.535507
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.934071
+  RMSE (√loss)                                 : 36.173685
+  Partition function ratio (exp(34.934))      : 1484820928528384.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 38
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.457951
+  E[Φ̂] (approx log Z) : 22.523880
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.630692
+  Var[Φ̂]       : 7.600315
+  Cov[Φ, Φ̂]    : 2.542394
+  Correlation   : 0.099658
+
+Loss Decomposition:
+  Bias² term            : 1220.389288
+  Variance term         : 88.146219
+  Total loss (E[(Φ-Φ̂)²]): 1308.535507
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.934071
+  RMSE (√loss)                                 : 36.173685
+  Partition function ratio (exp(34.934))      : 1484820928528384.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 39
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.457951
+  E[Φ̂] (approx log Z) : 22.523880
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.630692
+  Var[Φ̂]       : 7.600315
+  Cov[Φ, Φ̂]    : 2.542394
+  Correlation   : 0.099658
+
+Loss Decomposition:
+  Bias² term            : 1220.389288
+  Variance term         : 88.146219
+  Total loss (E[(Φ-Φ̂)²]): 1308.535507
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.934071
+  RMSE (√loss)                                 : 36.173685
+  Partition function ratio (exp(34.934))      : 1484820928528384.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 40
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.457951
+  E[Φ̂] (approx log Z) : 22.523880
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.630692
+  Var[Φ̂]       : 7.600315
+  Cov[Φ, Φ̂]    : 2.542394
+  Correlation   : 0.099658
+
+Loss Decomposition:
+  Bias² term            : 1220.389288
+  Variance term         : 88.146219
+  Total loss (E[(Φ-Φ̂)²]): 1308.535507
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.934071
+  RMSE (√loss)                                 : 36.173685
+  Partition function ratio (exp(34.934))      : 1484820928528384.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 41
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.462944
+  E[Φ̂] (approx log Z) : 22.570061
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 84.948380
+  Var[Φ̂]       : 7.605211
+  Cov[Φ, Φ̂]    : 2.541974
+  Correlation   : 0.100009
+
+Loss Decomposition:
+  Bias² term            : 1217.513305
+  Variance term         : 87.469643
+  Total loss (E[(Φ-Φ̂)²]): 1304.982948
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.892883
+  RMSE (√loss)                                 : 36.124548
+  Partition function ratio (exp(34.893))      : 1424907476926464.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 42
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.462944
+  E[Φ̂] (approx log Z) : 22.570061
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 84.948380
+  Var[Φ̂]       : 7.605211
+  Cov[Φ, Φ̂]    : 2.541974
+  Correlation   : 0.100009
+
+Loss Decomposition:
+  Bias² term            : 1217.513305
+  Variance term         : 87.469643
+  Total loss (E[(Φ-Φ̂)²]): 1304.982948
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.892883
+  RMSE (√loss)                                 : 36.124548
+  Partition function ratio (exp(34.893))      : 1424907476926464.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 43
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.462944
+  E[Φ̂] (approx log Z) : 22.570061
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 84.948380
+  Var[Φ̂]       : 7.605211
+  Cov[Φ, Φ̂]    : 2.541974
+  Correlation   : 0.100009
+
+Loss Decomposition:
+  Bias² term            : 1217.513305
+  Variance term         : 87.469643
+  Total loss (E[(Φ-Φ̂)²]): 1304.982948
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.892883
+  RMSE (√loss)                                 : 36.124548
+  Partition function ratio (exp(34.893))      : 1424907476926464.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 44
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.462944
+  E[Φ̂] (approx log Z) : 22.570061
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 84.948380
+  Var[Φ̂]       : 7.605211
+  Cov[Φ, Φ̂]    : 2.541974
+  Correlation   : 0.100009
+
+Loss Decomposition:
+  Bias² term            : 1217.513305
+  Variance term         : 87.469643
+  Total loss (E[(Φ-Φ̂)²]): 1304.982948
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.892883
+  RMSE (√loss)                                 : 36.124548
+  Partition function ratio (exp(34.893))      : 1424907476926464.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 45
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.462944
+  E[Φ̂] (approx log Z) : 22.570061
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 84.948380
+  Var[Φ̂]       : 7.605211
+  Cov[Φ, Φ̂]    : 2.541974
+  Correlation   : 0.100009
+
+Loss Decomposition:
+  Bias² term            : 1217.513305
+  Variance term         : 87.469643
+  Total loss (E[(Φ-Φ̂)²]): 1304.982948
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.892883
+  RMSE (√loss)                                 : 36.124548
+  Partition function ratio (exp(34.893))      : 1424907476926464.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 46
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.462944
+  E[Φ̂] (approx log Z) : 22.570061
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 84.948380
+  Var[Φ̂]       : 7.605211
+  Cov[Φ, Φ̂]    : 2.541974
+  Correlation   : 0.100009
+
+Loss Decomposition:
+  Bias² term            : 1217.513305
+  Variance term         : 87.469643
+  Total loss (E[(Φ-Φ̂)²]): 1304.982948
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.892883
+  RMSE (√loss)                                 : 36.124548
+  Partition function ratio (exp(34.893))      : 1424907476926464.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 47
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.462944
+  E[Φ̂] (approx log Z) : 22.570061
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 84.948380
+  Var[Φ̂]       : 7.605211
+  Cov[Φ, Φ̂]    : 2.541974
+  Correlation   : 0.100009
+
+Loss Decomposition:
+  Bias² term            : 1217.513305
+  Variance term         : 87.469643
+  Total loss (E[(Φ-Φ̂)²]): 1304.982948
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.892883
+  RMSE (√loss)                                 : 36.124548
+  Partition function ratio (exp(34.893))      : 1424907476926464.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 48
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.462944
+  E[Φ̂] (approx log Z) : 22.570061
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 84.948380
+  Var[Φ̂]       : 7.605211
+  Cov[Φ, Φ̂]    : 2.541974
+  Correlation   : 0.100009
+
+Loss Decomposition:
+  Bias² term            : 1217.513305
+  Variance term         : 87.469643
+  Total loss (E[(Φ-Φ̂)²]): 1304.982948
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.892883
+  RMSE (√loss)                                 : 36.124548
+  Partition function ratio (exp(34.893))      : 1424907476926464.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 49
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.462944
+  E[Φ̂] (approx log Z) : 22.570061
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 84.948380
+  Var[Φ̂]       : 7.605211
+  Cov[Φ, Φ̂]    : 2.541974
+  Correlation   : 0.100009
+
+Loss Decomposition:
+  Bias² term            : 1217.513305
+  Variance term         : 87.469643
+  Total loss (E[(Φ-Φ̂)²]): 1304.982948
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.892883
+  RMSE (√loss)                                 : 36.124548
+  Partition function ratio (exp(34.893))      : 1424907476926464.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 50
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.462944
+  E[Φ̂] (approx log Z) : 22.570061
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 84.948380
+  Var[Φ̂]       : 7.605211
+  Cov[Φ, Φ̂]    : 2.541974
+  Correlation   : 0.100009
+
+Loss Decomposition:
+  Bias² term            : 1217.513305
+  Variance term         : 87.469643
+  Total loss (E[(Φ-Φ̂)²]): 1304.982948
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.892883
+  RMSE (√loss)                                 : 36.124548
+  Partition function ratio (exp(34.893))      : 1424907476926464.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 51
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.476006
+  E[Φ̂] (approx log Z) : 22.634968
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.296936
+  Var[Φ̂]       : 7.647706
+  Cov[Φ, Φ̂]    : 2.648773
+  Correlation   : 0.103708
+
+Loss Decomposition:
+  Bias² term            : 1213.897912
+  Variance term         : 87.647097
+  Total loss (E[(Φ-Φ̂)²]): 1301.545008
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.841038
+  RMSE (√loss)                                 : 36.076932
+  Partition function ratio (exp(34.841))      : 1352914832457728.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 52
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.476006
+  E[Φ̂] (approx log Z) : 22.634968
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.296936
+  Var[Φ̂]       : 7.647706
+  Cov[Φ, Φ̂]    : 2.648773
+  Correlation   : 0.103708
+
+Loss Decomposition:
+  Bias² term            : 1213.897912
+  Variance term         : 87.647097
+  Total loss (E[(Φ-Φ̂)²]): 1301.545008
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.841038
+  RMSE (√loss)                                 : 36.076932
+  Partition function ratio (exp(34.841))      : 1352914832457728.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 53
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.476006
+  E[Φ̂] (approx log Z) : 22.634968
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.296936
+  Var[Φ̂]       : 7.647706
+  Cov[Φ, Φ̂]    : 2.648773
+  Correlation   : 0.103708
+
+Loss Decomposition:
+  Bias² term            : 1213.897912
+  Variance term         : 87.647097
+  Total loss (E[(Φ-Φ̂)²]): 1301.545008
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.841038
+  RMSE (√loss)                                 : 36.076932
+  Partition function ratio (exp(34.841))      : 1352914832457728.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 54
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.476006
+  E[Φ̂] (approx log Z) : 22.634968
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.296936
+  Var[Φ̂]       : 7.647706
+  Cov[Φ, Φ̂]    : 2.648773
+  Correlation   : 0.103708
+
+Loss Decomposition:
+  Bias² term            : 1213.897912
+  Variance term         : 87.647097
+  Total loss (E[(Φ-Φ̂)²]): 1301.545008
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.841038
+  RMSE (√loss)                                 : 36.076932
+  Partition function ratio (exp(34.841))      : 1352914832457728.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 55
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.476006
+  E[Φ̂] (approx log Z) : 22.634968
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.296936
+  Var[Φ̂]       : 7.647706
+  Cov[Φ, Φ̂]    : 2.648773
+  Correlation   : 0.103708
+
+Loss Decomposition:
+  Bias² term            : 1213.897912
+  Variance term         : 87.647097
+  Total loss (E[(Φ-Φ̂)²]): 1301.545008
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.841038
+  RMSE (√loss)                                 : 36.076932
+  Partition function ratio (exp(34.841))      : 1352914832457728.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 56
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.476006
+  E[Φ̂] (approx log Z) : 22.634968
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.296936
+  Var[Φ̂]       : 7.647706
+  Cov[Φ, Φ̂]    : 2.648773
+  Correlation   : 0.103708
+
+Loss Decomposition:
+  Bias² term            : 1213.897912
+  Variance term         : 87.647097
+  Total loss (E[(Φ-Φ̂)²]): 1301.545008
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.841038
+  RMSE (√loss)                                 : 36.076932
+  Partition function ratio (exp(34.841))      : 1352914832457728.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 57
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.476006
+  E[Φ̂] (approx log Z) : 22.634968
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.296936
+  Var[Φ̂]       : 7.647706
+  Cov[Φ, Φ̂]    : 2.648773
+  Correlation   : 0.103708
+
+Loss Decomposition:
+  Bias² term            : 1213.897912
+  Variance term         : 87.647097
+  Total loss (E[(Φ-Φ̂)²]): 1301.545008
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.841038
+  RMSE (√loss)                                 : 36.076932
+  Partition function ratio (exp(34.841))      : 1352914832457728.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 58
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.476006
+  E[Φ̂] (approx log Z) : 22.634968
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.296936
+  Var[Φ̂]       : 7.647706
+  Cov[Φ, Φ̂]    : 2.648773
+  Correlation   : 0.103708
+
+Loss Decomposition:
+  Bias² term            : 1213.897912
+  Variance term         : 87.647097
+  Total loss (E[(Φ-Φ̂)²]): 1301.545008
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.841038
+  RMSE (√loss)                                 : 36.076932
+  Partition function ratio (exp(34.841))      : 1352914832457728.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 59
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.476006
+  E[Φ̂] (approx log Z) : 22.634968
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.296936
+  Var[Φ̂]       : 7.647706
+  Cov[Φ, Φ̂]    : 2.648773
+  Correlation   : 0.103708
+
+Loss Decomposition:
+  Bias² term            : 1213.897912
+  Variance term         : 87.647097
+  Total loss (E[(Φ-Φ̂)²]): 1301.545008
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.841038
+  RMSE (√loss)                                 : 36.076932
+  Partition function ratio (exp(34.841))      : 1352914832457728.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 60
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.476006
+  E[Φ̂] (approx log Z) : 22.634968
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.296936
+  Var[Φ̂]       : 7.647706
+  Cov[Φ, Φ̂]    : 2.648773
+  Correlation   : 0.103708
+
+Loss Decomposition:
+  Bias² term            : 1213.897912
+  Variance term         : 87.647097
+  Total loss (E[(Φ-Φ̂)²]): 1301.545008
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.841038
+  RMSE (√loss)                                 : 36.076932
+  Partition function ratio (exp(34.841))      : 1352914832457728.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 61
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.489979
+  E[Φ̂] (approx log Z) : 22.729393
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.153595
+  Var[Φ̂]       : 7.714835
+  Cov[Φ, Φ̂]    : 2.847720
+  Correlation   : 0.111105
+
+Loss Decomposition:
+  Bias² term            : 1208.298324
+  Variance term         : 87.172990
+  Total loss (E[(Φ-Φ̂)²]): 1295.471314
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.760586
+  RMSE (√loss)                                 : 35.992656
+  Partition function ratio (exp(34.761))      : 1248333452541952.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 62
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.489979
+  E[Φ̂] (approx log Z) : 22.729393
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.153595
+  Var[Φ̂]       : 7.714835
+  Cov[Φ, Φ̂]    : 2.847720
+  Correlation   : 0.111105
+
+Loss Decomposition:
+  Bias² term            : 1208.298324
+  Variance term         : 87.172990
+  Total loss (E[(Φ-Φ̂)²]): 1295.471314
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.760586
+  RMSE (√loss)                                 : 35.992656
+  Partition function ratio (exp(34.761))      : 1248333452541952.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 63
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.489979
+  E[Φ̂] (approx log Z) : 22.729393
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.153595
+  Var[Φ̂]       : 7.714835
+  Cov[Φ, Φ̂]    : 2.847720
+  Correlation   : 0.111105
+
+Loss Decomposition:
+  Bias² term            : 1208.298324
+  Variance term         : 87.172990
+  Total loss (E[(Φ-Φ̂)²]): 1295.471314
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.760586
+  RMSE (√loss)                                 : 35.992656
+  Partition function ratio (exp(34.761))      : 1248333452541952.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 64
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.489979
+  E[Φ̂] (approx log Z) : 22.729393
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.153595
+  Var[Φ̂]       : 7.714835
+  Cov[Φ, Φ̂]    : 2.847720
+  Correlation   : 0.111105
+
+Loss Decomposition:
+  Bias² term            : 1208.298324
+  Variance term         : 87.172990
+  Total loss (E[(Φ-Φ̂)²]): 1295.471314
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.760586
+  RMSE (√loss)                                 : 35.992656
+  Partition function ratio (exp(34.761))      : 1248333452541952.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 65
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.489979
+  E[Φ̂] (approx log Z) : 22.729393
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.153595
+  Var[Φ̂]       : 7.714835
+  Cov[Φ, Φ̂]    : 2.847720
+  Correlation   : 0.111105
+
+Loss Decomposition:
+  Bias² term            : 1208.298324
+  Variance term         : 87.172990
+  Total loss (E[(Φ-Φ̂)²]): 1295.471314
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.760586
+  RMSE (√loss)                                 : 35.992656
+  Partition function ratio (exp(34.761))      : 1248333452541952.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 66
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.489979
+  E[Φ̂] (approx log Z) : 22.729393
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.153595
+  Var[Φ̂]       : 7.714835
+  Cov[Φ, Φ̂]    : 2.847720
+  Correlation   : 0.111105
+
+Loss Decomposition:
+  Bias² term            : 1208.298324
+  Variance term         : 87.172990
+  Total loss (E[(Φ-Φ̂)²]): 1295.471314
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.760586
+  RMSE (√loss)                                 : 35.992656
+  Partition function ratio (exp(34.761))      : 1248333452541952.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 67
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.489979
+  E[Φ̂] (approx log Z) : 22.729393
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.153595
+  Var[Φ̂]       : 7.714835
+  Cov[Φ, Φ̂]    : 2.847720
+  Correlation   : 0.111105
+
+Loss Decomposition:
+  Bias² term            : 1208.298324
+  Variance term         : 87.172990
+  Total loss (E[(Φ-Φ̂)²]): 1295.471314
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.760586
+  RMSE (√loss)                                 : 35.992656
+  Partition function ratio (exp(34.761))      : 1248333452541952.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 68
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.489979
+  E[Φ̂] (approx log Z) : 22.729393
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.153595
+  Var[Φ̂]       : 7.714835
+  Cov[Φ, Φ̂]    : 2.847720
+  Correlation   : 0.111105
+
+Loss Decomposition:
+  Bias² term            : 1208.298324
+  Variance term         : 87.172990
+  Total loss (E[(Φ-Φ̂)²]): 1295.471314
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.760586
+  RMSE (√loss)                                 : 35.992656
+  Partition function ratio (exp(34.761))      : 1248333452541952.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 69
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.489979
+  E[Φ̂] (approx log Z) : 22.729393
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.153595
+  Var[Φ̂]       : 7.714835
+  Cov[Φ, Φ̂]    : 2.847720
+  Correlation   : 0.111105
+
+Loss Decomposition:
+  Bias² term            : 1208.298324
+  Variance term         : 87.172990
+  Total loss (E[(Φ-Φ̂)²]): 1295.471314
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.760586
+  RMSE (√loss)                                 : 35.992656
+  Partition function ratio (exp(34.761))      : 1248333452541952.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 70
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.489979
+  E[Φ̂] (approx log Z) : 22.729393
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.153595
+  Var[Φ̂]       : 7.714835
+  Cov[Φ, Φ̂]    : 2.847720
+  Correlation   : 0.111105
+
+Loss Decomposition:
+  Bias² term            : 1208.298324
+  Variance term         : 87.172990
+  Total loss (E[(Φ-Φ̂)²]): 1295.471314
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.760586
+  RMSE (√loss)                                 : 35.992656
+  Partition function ratio (exp(34.761))      : 1248333452541952.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 71
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.473724
+  E[Φ̂] (approx log Z) : 22.839712
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.372749
+  Var[Φ̂]       : 7.788288
+  Cov[Φ, Φ̂]    : 2.942085
+  Correlation   : 0.114097
+
+Loss Decomposition:
+  Bias² term            : 1199.514803
+  Variance term         : 87.276868
+  Total loss (E[(Φ-Φ̂)²]): 1286.791671
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.634012
+  RMSE (√loss)                                 : 35.871879
+  Partition function ratio (exp(34.634))      : 1099916092899328.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 72
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.473724
+  E[Φ̂] (approx log Z) : 22.839712
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.372749
+  Var[Φ̂]       : 7.788288
+  Cov[Φ, Φ̂]    : 2.942085
+  Correlation   : 0.114097
+
+Loss Decomposition:
+  Bias² term            : 1199.514803
+  Variance term         : 87.276868
+  Total loss (E[(Φ-Φ̂)²]): 1286.791671
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.634012
+  RMSE (√loss)                                 : 35.871879
+  Partition function ratio (exp(34.634))      : 1099916092899328.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 73
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.473724
+  E[Φ̂] (approx log Z) : 22.839712
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.372749
+  Var[Φ̂]       : 7.788288
+  Cov[Φ, Φ̂]    : 2.942085
+  Correlation   : 0.114097
+
+Loss Decomposition:
+  Bias² term            : 1199.514803
+  Variance term         : 87.276868
+  Total loss (E[(Φ-Φ̂)²]): 1286.791671
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.634012
+  RMSE (√loss)                                 : 35.871879
+  Partition function ratio (exp(34.634))      : 1099916092899328.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 74
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.473724
+  E[Φ̂] (approx log Z) : 22.839712
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.372749
+  Var[Φ̂]       : 7.788288
+  Cov[Φ, Φ̂]    : 2.942085
+  Correlation   : 0.114097
+
+Loss Decomposition:
+  Bias² term            : 1199.514803
+  Variance term         : 87.276868
+  Total loss (E[(Φ-Φ̂)²]): 1286.791671
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.634012
+  RMSE (√loss)                                 : 35.871879
+  Partition function ratio (exp(34.634))      : 1099916092899328.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 75
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.473724
+  E[Φ̂] (approx log Z) : 22.839712
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.372749
+  Var[Φ̂]       : 7.788288
+  Cov[Φ, Φ̂]    : 2.942085
+  Correlation   : 0.114097
+
+Loss Decomposition:
+  Bias² term            : 1199.514803
+  Variance term         : 87.276868
+  Total loss (E[(Φ-Φ̂)²]): 1286.791671
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.634012
+  RMSE (√loss)                                 : 35.871879
+  Partition function ratio (exp(34.634))      : 1099916092899328.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 76
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.473724
+  E[Φ̂] (approx log Z) : 22.839712
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.372749
+  Var[Φ̂]       : 7.788288
+  Cov[Φ, Φ̂]    : 2.942085
+  Correlation   : 0.114097
+
+Loss Decomposition:
+  Bias² term            : 1199.514803
+  Variance term         : 87.276868
+  Total loss (E[(Φ-Φ̂)²]): 1286.791671
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.634012
+  RMSE (√loss)                                 : 35.871879
+  Partition function ratio (exp(34.634))      : 1099916092899328.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 77
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.473724
+  E[Φ̂] (approx log Z) : 22.839712
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.372749
+  Var[Φ̂]       : 7.788288
+  Cov[Φ, Φ̂]    : 2.942085
+  Correlation   : 0.114097
+
+Loss Decomposition:
+  Bias² term            : 1199.514803
+  Variance term         : 87.276868
+  Total loss (E[(Φ-Φ̂)²]): 1286.791671
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.634012
+  RMSE (√loss)                                 : 35.871879
+  Partition function ratio (exp(34.634))      : 1099916092899328.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 78
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.473724
+  E[Φ̂] (approx log Z) : 22.839712
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.372749
+  Var[Φ̂]       : 7.788288
+  Cov[Φ, Φ̂]    : 2.942085
+  Correlation   : 0.114097
+
+Loss Decomposition:
+  Bias² term            : 1199.514803
+  Variance term         : 87.276868
+  Total loss (E[(Φ-Φ̂)²]): 1286.791671
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.634012
+  RMSE (√loss)                                 : 35.871879
+  Partition function ratio (exp(34.634))      : 1099916092899328.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 79
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.473724
+  E[Φ̂] (approx log Z) : 22.839712
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.372749
+  Var[Φ̂]       : 7.788288
+  Cov[Φ, Φ̂]    : 2.942085
+  Correlation   : 0.114097
+
+Loss Decomposition:
+  Bias² term            : 1199.514803
+  Variance term         : 87.276868
+  Total loss (E[(Φ-Φ̂)²]): 1286.791671
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.634012
+  RMSE (√loss)                                 : 35.871879
+  Partition function ratio (exp(34.634))      : 1099916092899328.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 80
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.473724
+  E[Φ̂] (approx log Z) : 22.839712
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.372749
+  Var[Φ̂]       : 7.788288
+  Cov[Φ, Φ̂]    : 2.942085
+  Correlation   : 0.114097
+
+Loss Decomposition:
+  Bias² term            : 1199.514803
+  Variance term         : 87.276868
+  Total loss (E[(Φ-Φ̂)²]): 1286.791671
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.634012
+  RMSE (√loss)                                 : 35.871879
+  Partition function ratio (exp(34.634))      : 1099916092899328.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 81
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.480309
+  E[Φ̂] (approx log Z) : 22.970360
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.395699
+  Var[Φ̂]       : 7.961016
+  Cov[Φ, Φ̂]    : 3.203743
+  Correlation   : 0.122873
+
+Loss Decomposition:
+  Bias² term            : 1190.936561
+  Variance term         : 86.949229
+  Total loss (E[(Φ-Φ̂)²]): 1277.885790
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.509949
+  RMSE (√loss)                                 : 35.747528
+  Partition function ratio (exp(34.510))      : 971583879380992.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 82
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.480309
+  E[Φ̂] (approx log Z) : 22.970360
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.395699
+  Var[Φ̂]       : 7.961016
+  Cov[Φ, Φ̂]    : 3.203743
+  Correlation   : 0.122873
+
+Loss Decomposition:
+  Bias² term            : 1190.936561
+  Variance term         : 86.949229
+  Total loss (E[(Φ-Φ̂)²]): 1277.885790
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.509949
+  RMSE (√loss)                                 : 35.747528
+  Partition function ratio (exp(34.510))      : 971583879380992.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 83
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.480309
+  E[Φ̂] (approx log Z) : 22.970360
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.395699
+  Var[Φ̂]       : 7.961016
+  Cov[Φ, Φ̂]    : 3.203743
+  Correlation   : 0.122873
+
+Loss Decomposition:
+  Bias² term            : 1190.936561
+  Variance term         : 86.949229
+  Total loss (E[(Φ-Φ̂)²]): 1277.885790
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.509949
+  RMSE (√loss)                                 : 35.747528
+  Partition function ratio (exp(34.510))      : 971583879380992.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 84
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.480309
+  E[Φ̂] (approx log Z) : 22.970360
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.395699
+  Var[Φ̂]       : 7.961016
+  Cov[Φ, Φ̂]    : 3.203743
+  Correlation   : 0.122873
+
+Loss Decomposition:
+  Bias² term            : 1190.936561
+  Variance term         : 86.949229
+  Total loss (E[(Φ-Φ̂)²]): 1277.885790
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.509949
+  RMSE (√loss)                                 : 35.747528
+  Partition function ratio (exp(34.510))      : 971583879380992.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 85
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.480309
+  E[Φ̂] (approx log Z) : 22.970360
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.395699
+  Var[Φ̂]       : 7.961016
+  Cov[Φ, Φ̂]    : 3.203743
+  Correlation   : 0.122873
+
+Loss Decomposition:
+  Bias² term            : 1190.936561
+  Variance term         : 86.949229
+  Total loss (E[(Φ-Φ̂)²]): 1277.885790
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.509949
+  RMSE (√loss)                                 : 35.747528
+  Partition function ratio (exp(34.510))      : 971583879380992.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 86
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.480309
+  E[Φ̂] (approx log Z) : 22.970360
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.395699
+  Var[Φ̂]       : 7.961016
+  Cov[Φ, Φ̂]    : 3.203743
+  Correlation   : 0.122873
+
+Loss Decomposition:
+  Bias² term            : 1190.936561
+  Variance term         : 86.949229
+  Total loss (E[(Φ-Φ̂)²]): 1277.885790
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.509949
+  RMSE (√loss)                                 : 35.747528
+  Partition function ratio (exp(34.510))      : 971583879380992.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 87
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.480309
+  E[Φ̂] (approx log Z) : 22.970360
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.395699
+  Var[Φ̂]       : 7.961016
+  Cov[Φ, Φ̂]    : 3.203743
+  Correlation   : 0.122873
+
+Loss Decomposition:
+  Bias² term            : 1190.936561
+  Variance term         : 86.949229
+  Total loss (E[(Φ-Φ̂)²]): 1277.885790
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.509949
+  RMSE (√loss)                                 : 35.747528
+  Partition function ratio (exp(34.510))      : 971583879380992.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 88
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.480309
+  E[Φ̂] (approx log Z) : 22.970360
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.395699
+  Var[Φ̂]       : 7.961016
+  Cov[Φ, Φ̂]    : 3.203743
+  Correlation   : 0.122873
+
+Loss Decomposition:
+  Bias² term            : 1190.936561
+  Variance term         : 86.949229
+  Total loss (E[(Φ-Φ̂)²]): 1277.885790
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.509949
+  RMSE (√loss)                                 : 35.747528
+  Partition function ratio (exp(34.510))      : 971583879380992.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 89
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.480309
+  E[Φ̂] (approx log Z) : 22.970360
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.395699
+  Var[Φ̂]       : 7.961016
+  Cov[Φ, Φ̂]    : 3.203743
+  Correlation   : 0.122873
+
+Loss Decomposition:
+  Bias² term            : 1190.936561
+  Variance term         : 86.949229
+  Total loss (E[(Φ-Φ̂)²]): 1277.885790
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.509949
+  RMSE (√loss)                                 : 35.747528
+  Partition function ratio (exp(34.510))      : 971583879380992.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 90
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.480309
+  E[Φ̂] (approx log Z) : 22.970360
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.395699
+  Var[Φ̂]       : 7.961016
+  Cov[Φ, Φ̂]    : 3.203743
+  Correlation   : 0.122873
+
+Loss Decomposition:
+  Bias² term            : 1190.936561
+  Variance term         : 86.949229
+  Total loss (E[(Φ-Φ̂)²]): 1277.885790
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.509949
+  RMSE (√loss)                                 : 35.747528
+  Partition function ratio (exp(34.510))      : 971583879380992.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 91
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.462784
+  E[Φ̂] (approx log Z) : 23.115965
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.897079
+  Var[Φ̂]       : 8.112238
+  Cov[Φ, Φ̂]    : 3.242807
+  Correlation   : 0.122846
+
+Loss Decomposition:
+  Bias² term            : 1179.703970
+  Variance term         : 87.523704
+  Total loss (E[(Φ-Φ̂)²]): 1267.227674
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.346819
+  RMSE (√loss)                                 : 35.598141
+  Partition function ratio (exp(34.347))      : 825340377169920.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 92
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.462784
+  E[Φ̂] (approx log Z) : 23.115965
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.897079
+  Var[Φ̂]       : 8.112238
+  Cov[Φ, Φ̂]    : 3.242807
+  Correlation   : 0.122846
+
+Loss Decomposition:
+  Bias² term            : 1179.703970
+  Variance term         : 87.523704
+  Total loss (E[(Φ-Φ̂)²]): 1267.227674
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.346819
+  RMSE (√loss)                                 : 35.598141
+  Partition function ratio (exp(34.347))      : 825340377169920.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 93
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.462784
+  E[Φ̂] (approx log Z) : 23.115965
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.897079
+  Var[Φ̂]       : 8.112238
+  Cov[Φ, Φ̂]    : 3.242807
+  Correlation   : 0.122846
+
+Loss Decomposition:
+  Bias² term            : 1179.703970
+  Variance term         : 87.523704
+  Total loss (E[(Φ-Φ̂)²]): 1267.227674
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.346819
+  RMSE (√loss)                                 : 35.598141
+  Partition function ratio (exp(34.347))      : 825340377169920.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 94
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.462784
+  E[Φ̂] (approx log Z) : 23.115965
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.897079
+  Var[Φ̂]       : 8.112238
+  Cov[Φ, Φ̂]    : 3.242807
+  Correlation   : 0.122846
+
+Loss Decomposition:
+  Bias² term            : 1179.703970
+  Variance term         : 87.523704
+  Total loss (E[(Φ-Φ̂)²]): 1267.227674
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.346819
+  RMSE (√loss)                                 : 35.598141
+  Partition function ratio (exp(34.347))      : 825340377169920.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 95
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.462784
+  E[Φ̂] (approx log Z) : 23.115965
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.897079
+  Var[Φ̂]       : 8.112238
+  Cov[Φ, Φ̂]    : 3.242807
+  Correlation   : 0.122846
+
+Loss Decomposition:
+  Bias² term            : 1179.703970
+  Variance term         : 87.523704
+  Total loss (E[(Φ-Φ̂)²]): 1267.227674
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.346819
+  RMSE (√loss)                                 : 35.598141
+  Partition function ratio (exp(34.347))      : 825340377169920.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 96
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.462784
+  E[Φ̂] (approx log Z) : 23.115965
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.897079
+  Var[Φ̂]       : 8.112238
+  Cov[Φ, Φ̂]    : 3.242807
+  Correlation   : 0.122846
+
+Loss Decomposition:
+  Bias² term            : 1179.703970
+  Variance term         : 87.523704
+  Total loss (E[(Φ-Φ̂)²]): 1267.227674
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.346819
+  RMSE (√loss)                                 : 35.598141
+  Partition function ratio (exp(34.347))      : 825340377169920.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 97
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.462784
+  E[Φ̂] (approx log Z) : 23.115965
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.897079
+  Var[Φ̂]       : 8.112238
+  Cov[Φ, Φ̂]    : 3.242807
+  Correlation   : 0.122846
+
+Loss Decomposition:
+  Bias² term            : 1179.703970
+  Variance term         : 87.523704
+  Total loss (E[(Φ-Φ̂)²]): 1267.227674
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.346819
+  RMSE (√loss)                                 : 35.598141
+  Partition function ratio (exp(34.347))      : 825340377169920.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 98
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.462784
+  E[Φ̂] (approx log Z) : 23.115965
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.897079
+  Var[Φ̂]       : 8.112238
+  Cov[Φ, Φ̂]    : 3.242807
+  Correlation   : 0.122846
+
+Loss Decomposition:
+  Bias² term            : 1179.703970
+  Variance term         : 87.523704
+  Total loss (E[(Φ-Φ̂)²]): 1267.227674
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.346819
+  RMSE (√loss)                                 : 35.598141
+  Partition function ratio (exp(34.347))      : 825340377169920.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+UKF Sequential Statistics at Epoch 99
+======================================================================
+Mean vector (Lmu):
+  E[Φ]  (exact log Z)  : 57.462784
+  E[Φ̂] (approx log Z) : 23.115965
+
+Covariance matrix (Lsig):
+  Var[Φ]        : 85.897079
+  Var[Φ̂]       : 8.112238
+  Cov[Φ, Φ̂]    : 3.242807
+  Correlation   : 0.122846
+
+Loss Decomposition:
+  Bias² term            : 1179.703970
+  Variance term         : 87.523704
+  Total loss (E[(Φ-Φ̂)²]): 1267.227674
+
+Derived Metrics:
+  Expected log partition error (|E[Φ] - E[Φ̂]|): 34.346819
+  RMSE (√loss)                                 : 35.598141
+  Partition function ratio (exp(34.347))      : 825340377169920.000x
+
+Forward/Backward Message Statistics:
+  σ_f (forward std)  : 7.688870
+  σ_g (backward std) : 7.137487
+  ρ (correlation)    : -0.166583
+======================================================================
+
+
+======================================================================
+TRAINING COMPLETE
+======================================================================
+Total training time: 64.70s
+Z_hat: 492.69677734375
+Z: 497.7632751464844
+
+======================================================================
+PROFILING RESULTS
+======================================================================
+
+======================================================================
+UKF PROFILING STATISTICS
+======================================================================
+estimate_gaussian   :    10 calls, total:   0.0098s, avg:   0.9781ms
+ukf_accumulate      :   100 calls, total:  29.8432s, avg: 298.4324ms
+ukf_combine         :   100 calls, total:   0.0868s, avg:   0.8677ms
+loss_seq            :   100 calls, total:  29.9427s, avg: 299.4266ms
+lse2                : 179300 calls, total:  16.5864s, avg:   0.0925ms
+======================================================================
+
+
+Done!

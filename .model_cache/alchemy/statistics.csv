@@ -1,0 +1,3 @@
+name,modelfile,evidencefile,orderfile,num_evid,width,depth,logSS,num_vars,avg_states,max_states,num_factors,avg_scope,max_scope,sparsity,sparsity_std,values_std,MPE,MPLP,PR,LBP
+smokers_10,smokers_10.uai,smokers_10.uai.evid,none,0,55,86,16.37,120,2.0,2,230,1.87,3,0.0,0.0,0.73,157.214601,,163.20403,
+smokers_20,smokers_20.uai,smokers_20.uai.evid,smokers_20.uai.ord,0,19,21,5.42,440,2.0,2,860,1.93,3,0.0,0.0,0.73,583.69178,,606.279199,

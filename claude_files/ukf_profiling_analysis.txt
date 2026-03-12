@@ -1,0 +1,222 @@
+UKF SEQUENTIAL LOSS - PROFILING ANALYSIS RESULTS
+================================================================
+
+## Test Configuration
+
+- Problem: grid10x10_f15_wrap (width 21)
+- Bucket: 5
+- Hidden sizes: [3, 3]
+- Num epochs: 100
+- Device: CUDA
+- Loss function: ukf_sequential (default params: recompute every 10 batches, 500 samples)
+
+## Training Results
+
+Total training time: **64.70 seconds**
+Final loss: 1267.23
+Expected log partition error: 34.35
+
+## Profiling Results
+
+======================================================================
+UKF PROFILING STATISTICS
+======================================================================
+estimate_gaussian   :    10 calls, total:   0.0098s, avg:   0.9781ms
+ukf_accumulate      :   100 calls, total:  29.8432s, avg: 298.4324ms
+ukf_combine         :   100 calls, total:   0.0868s, avg:   0.8677ms
+loss_seq            :   100 calls, total:  29.9427s, avg: 299.4266ms
+lse2                : 179300 calls, total:  16.5864s, avg:   0.0925ms
+======================================================================
+
+## Breakdown Analysis
+
+### Time Distribution
+
+| Function             | Total Time | % of Total | Avg Time/Call |
+|---------------------|-----------|-----------|---------------|
+| **ukf_accumulate**  | 29.84s    | **46.1%** | 298.4 ms      |
+| lse2                | 16.59s    | **25.6%** | 0.09 ms       |
+| estimate_gaussian   | 0.01s     | 0.0%      | 0.98 ms       |
+| ukf_combine         | 0.09s     | 0.1%      | 0.87 ms       |
+| loss_seq (overhead) | ~0.22s    | 0.3%      | 2.2 ms        |
+| **Other (NN, data)**| ~18.0s    | **27.8%** | -             |
+
+### Critical Findings
+
+1. **BOTTLENECK IDENTIFIED: ukf_accumulate()**
+   - Takes 29.84 seconds (46% of total training time)
+   - Called 100 times (once per batch)
+   - Average: 298ms per call
+   - **This is the sequential loop processing states one-by-one**
+
+2. **Secondary BOTTLENECK: lse2()**
+   - Takes 16.59 seconds (25.6% of total time)
+   - Called 179,300 times!
+   - Most calls are from within ukf_accumulate:
+     - 6 calls per state × ~256 states × 100 batches = ~153,600 calls
+     - Plus calls from ukf_combine and estimate_gaussian
+
+3. **NOT a bottleneck: estimate_gaussian()**
+   - Only takes 0.01 seconds total
+   - Vectorization worked perfectly!
+   - Called 10 times (once every 10 batches as configured)
+
+4. **NOT a bottleneck: ukf_combine()**
+   - Only takes 0.09 seconds total
+   - Very efficient
+
+## Implications
+
+### Why is ukf_accumulate so slow?
+
+Looking at the code (ukf_helpers.py:102-151), ukf_accumulate has a **sequential loop** that cannot be easily parallelized:
+
+```python
+for j in range(len(f)):  # Loop over ALL states (e.g., 256)
+    Chol, info = torch.linalg.cholesky_ex(Sig)  # Cholesky decomposition
+    # ... generate 6 sigma points ...
+    Xsigmas = torch.vstack(
+        sum(((lse2(mu + delta * Chol[:, i], ffh),
+              lse2(mu - delta * Chol[:, i], ffh))
+             for i in range(n - 1)), tuple()) +
+        (lse2(mu, ffh + delta * sb), lse2(mu, ffh - delta * sb))
+    )
+    # ... update mu and Sig ...
+```
+
+For each of 256 states:
+- 1 Cholesky decomposition (~10μs)
+- 6 lse2() calls (~0.5ms total)
+- Matrix operations (~0.5ms)
+- **Total: ~1.0-1.5ms per state**
+
+Expected time: 256 states × 1.5ms = **384ms per batch**
+Actual time: **298ms per batch** ✓ (close to theoretical!)
+
+This is **fundamentally sequential** - each iteration depends on the updated `mu` and `Sig` from the previous iteration. This is the UKF update step.
+
+### Why is lse2() so slow in aggregate?
+
+lse2() is called **179,300 times** during training:
+- 16.59s / 179,300 calls = **0.0925ms per call**
+
+This is actually quite fast! The problem is the sheer volume of calls:
+- 6 lse2() calls per state in ukf_accumulate
+- 256 states per batch
+- 100 batches
+- = 153,600 calls just from ukf_accumulate
+
+The lse2() function is already optimized (using torch.logsumexp), so not much room for improvement.
+
+## Optimization Recommendations
+
+### Priority 1: Optimize ukf_accumulate Sequential Loop (HARD)
+
+**Current bottleneck: 29.84s (46% of time)**
+
+Options:
+
+1. **Parallel UKF variants** (research required)
+   - Look for parallelizable UKF formulations
+   - May sacrifice some accuracy
+   - Potential speedup: 5-10x
+
+2. **Batched operations using torch.vmap()**
+   - Use PyTorch's vmap to batch Cholesky and lse2 calls
+   - May not work due to sequential dependency
+   - Potential speedup: 2-3x if feasible
+
+3. **Custom CUDA kernel**
+   - Write specialized CUDA kernel for this specific loop
+   - Significant development effort
+   - Potential speedup: 3-5x
+
+4. **Dimensionality reduction**
+   - Reduce from 256 states to fewer representative states
+   - Trade accuracy for speed
+   - Potential speedup: Linear with reduction factor
+
+5. **Accept the tradeoff**
+   - UKF sequential is inherently sequential
+   - Consider using a different loss function for large buckets
+   - Use UKF only for small-medium buckets (<100 states)
+
+### Priority 2: Reduce lse2() Call Overhead (MEDIUM)
+
+**Current overhead: 16.59s (25.6% of time)**
+
+Options:
+
+1. **Cache repeated lse2() calls**
+   - Some calls might be repeated with same inputs
+   - Profile to check if caching would help
+   - Potential speedup: 10-20% if many duplicates
+
+2. **JIT compilation**
+   - Use torch.jit.script on lse2() and ukf_accumulate
+   - May help PyTorch optimize better
+   - Potential speedup: 10-30%
+
+3. **Fused operations**
+   - Combine multiple lse2 calls into single custom operation
+   - Requires custom kernel
+   - Potential speedup: 20-40%
+
+### Priority 3: Use Different Loss for Large Buckets (EASY)
+
+**Practical recommendation:**
+
+For buckets with >100 states, switch to a faster loss function:
+- logspace_mse_fdb: ~10x faster
+- elp_least_squares: ~5x faster
+- Only use ukf_sequential for critical small buckets
+
+Implementation:
+```python
+if bucket_size > 100:
+    config['loss_fn'] = 'logspace_mse_fdb'
+else:
+    config['loss_fn'] = 'ukf_sequential'
+```
+
+## Realistic Speedup Expectations
+
+### Quick Wins (already implemented):
+- ✅ Vectorized estimate_gaussian: Working perfectly (0.01s total)
+- ✅ Reduced n_samp to 500: Working
+- ✅ Optimized lse2(): Working
+
+### Additional realistic improvements:
+
+1. **torch.jit.script** on ukf_accumulate and lse2:
+   - Effort: Low (1-2 hours)
+   - Expected speedup: 1.2-1.5x
+   - Total time: 64s → 43-53s
+
+2. **Use ukf_sequential only for small buckets**:
+   - Effort: Very Low (5 minutes)
+   - For >100 state buckets, use logspace_mse_fdb instead
+   - Expected speedup: Not applicable (changes problem)
+
+3. **Research parallel UKF variants**:
+   - Effort: High (days to weeks)
+   - Expected speedup: 3-10x (if feasible)
+   - Total time: 64s → 6-20s
+
+## Summary
+
+**The UKF sequential loss is fundamentally limited by the sequential nature of ukf_accumulate.**
+
+Current performance:
+- 64.7 seconds for 100 epochs on a typical bucket
+- 46% of time spent in ukf_accumulate (sequential loop)
+- 26% of time spent in lse2 calls (mostly from ukf_accumulate)
+
+The optimizations we've already implemented (vectorization, reduced sampling) are working well. The remaining bottleneck is architectural - the sequential UKF update loop cannot be easily parallelized without changing the algorithm itself.
+
+**Recommended next steps:**
+1. Accept the current performance for small-medium buckets (<100 states)
+2. Use faster loss functions (logspace_mse_fdb, elp) for large buckets
+3. Investigate torch.jit.script for modest 20-50% speedup
+4. For significant speedup (5-10x), would need to research fundamentally different algorithms
+

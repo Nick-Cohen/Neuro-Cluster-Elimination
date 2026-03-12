@@ -12,7 +12,7 @@ requirements: [quick-18]
 must_haves:
   truths:
     - "grid10x10.f10.uai runs with UKL loss, bw_ecl=0, ecl=1024, num_epochs=500 on CUDA"
-    - "CSV output contains all requested columns: problem_name, width, num_vars, log_Z_star, log_Z_hat, err, abs_err, num_trained, time, num_samples, architecture, loss_fn"
+    - "CSV output contains all requested columns: problem_name, width, num_vars, log_Z_ground_truth, log_Z_hat, err, abs_err, num_trained, time, num_samples, architecture, loss_fn"
     - "Pickle file contains full experimental results (fastgm state, config, per-bucket data)"
     - "Analysis script produces bar chart and summary table from pickle"
   artifacts:

@@ -1,0 +1,15 @@
+======================================================================
+MEMORIZER TEST: scaled_mse conversion
+======================================================================
+
+Problem: grid10x10.f10.wrap
+Loss function: scaled_mse
+
+======================================================================
+CREATING TEST BUCKET
+======================================================================
+Traceback (most recent call last):
+  File "/home/cohenn1/NCE/test_scaled_mse_memorizer.py", line 72, in <module>
+    for b in fastgm.ordering:
+             ^^^^^^^^^^^^^^^
+AttributeError: 'FastGM' object has no attribute 'ordering'

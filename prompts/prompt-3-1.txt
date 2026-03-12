@@ -1,0 +1,25 @@
+This prompt is intended to be a message to the NCE manager. Once this is processed, it is ideally moved into the messages for the NCE manager. I don't want this file sitting here, so move/delete it once processed.
+
+Project information and checklist items for NCE project manager:
+
+The first thing I want to confirm before experiments start running is to confirm a level of knowledge and competence about this project.
+
+The purpose of this project is to improve upon message passing algorithms in discrete graphical models using approximate variable elimination algorithms. The goal query is to minimize error to the log partition function. Solving this query is essentially the same methodology  as solving for other queries in the GM so its a good target for demonstrating competence of an algorithm.
+
+Currently, the project is testing how "backward messages" can be used to weigh the terms of a loss between exact and approximate messages. Currently, neural networks are the main approximation parameterization of messages. Backward messages should be researched, both in this project, in the PyGMs project (it sits in this file system and it imported in this project), and from papers and textbooks on the web.
+
+Just as forward messages (regular messages from variable elimination) must be approximated for large GMs, so too must backward messages. The hypothesis is that using these approximate backward messages improves performance of the learning algorithm. We additionally want to show that using better approximations of the backward message improves performance.
+
+The approximation form of backward messages is currently different than the approximation form of forward messages. Backward messages use a technique called mini bucket approximation. There is regular minibucket, weighted minibucket, weighted mini bucket with cost shifting, and weighted minibucke with moment matching. All of these need to be researched and used to help construct the knowledge graph.
+
+Cluster elimination is the process of eliminating more than one variable at a time for a "super bucket" where a super bucket or cluster has a *set* of elimination variables. They are constructed from a merge criteria. These things need to be looked up and researched and used on construction of the knowledge graph.
+
+I want it researched whether or not corriculum learning might be useful for training neural networks in this domain. By corriculum learning I mean tayloring the order of examples shown to the neural network to optimize learning.
+
+I want it researched and added to the knowledge graph how minibucket (of any kind whether weighted/cost shifting etc) sampling works.
+
+Same thing but with adversarial learning. Something like: a generative model produces inputs that it predicts to have the highest loss, the predictor trains on these. I want this researched and reported on in the context of this type of learning I'm doing: discrete vector -> real number.
+
+I already implemented a neural network + memorizes the largest n assignment-value pairs that have been seen. I have not yet tested it. I want this studied and looked at to make sure it doesn't have bugs and will work.
+
+I also recently tried to implement a quantization model. Same thing for that. Research its implementation and how they work in general. add to knowledge graph. Look for bugs etc.

@@ -1,0 +1,171 @@
+======================================================================
+SCALED_UKL SIMPLE TEST
+======================================================================
+
+Problem: grid10x10.f10
+Width: 12
+Z_true: 303.085815
+
+======================================================================
+Testing scaled_ukl
+======================================================================
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  90
+Processing bucket:  91
+Processing bucket:  99
+Processing bucket:  9
+Processing bucket:  89
+Processing bucket:  8
+Processing bucket:  80
+Processing bucket:  98
+Processing bucket:  19
+Processing bucket:  60
+Processing bucket:  69
+Processing bucket:  6
+Processing bucket:  93
+Processing bucket:  96
+Processing bucket:  40
+Processing bucket:  49
+Processing bucket:  4
+Processing bucket:  20
+Processing bucket:  18
+Processing bucket:  81
+Processing bucket:  88
+Processing bucket:  29
+Processing bucket:  70
+Processing bucket:  2
+Processing bucket:  11
+Processing bucket:  97
+Processing bucket:  71
+Processing bucket:  82
+Processing bucket:  94
+Processing bucket:  7
+Processing bucket:  87
+Processing bucket:  78
+Processing bucket:  13
+Processing bucket:  17
+Processing bucket:  79
+Processing bucket:  3
+Processing bucket:  31
+Processing bucket:  28
+Processing bucket:  58
+Processing bucket:  30
+Processing bucket:  85
+Processing bucket:  15
+Processing bucket:  67
+Processing bucket:  51
+Processing bucket:  76
+Processing bucket:  22
+Processing bucket:  26
+Processing bucket:  24
+Processing bucket:  42
+Processing bucket:  35
+Processing bucket:  37
+Processing bucket:  62
+Processing bucket:  53
+Processing bucket:  33
+Processing bucket:  46
+Processing bucket:  44
+Processing bucket:  73
+Processing bucket:  64
+Processing bucket:  92
+Processing bucket:  55
+Processing bucket:  39
+Processing bucket:  38
+Processing bucket:  27
+Processing bucket:  77
+Processing bucket:  16
+Processing bucket:  86
+Processing bucket:  83
+Processing bucket:  68
+Processing bucket:  21
+Processing bucket:  72
+Processing bucket:  61
+Processing bucket:  57
+Processing bucket:  12
+Processing bucket:  75
+Processing bucket:  66
+Processing bucket:  36
+Processing bucket:  63
+Processing bucket:  52
+Processing bucket:  25
+Processing bucket:  1
+Processing bucket:  10
+Processing bucket:  47
+Training NN for bucket: 47
+Num NNs to train:   0%|          | 0/1 [00:00<?, ?it/s]
+Upstream width is  11
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  0
+Processing bucket:  41
+Training NN for bucket: 41
+Warning: Could not get fw/bw stats for scaled_ukl: list index out of range
+Overwriting batch size and num sets for full data batches...
+Bucket 47 training:   0%|          | 0/100 [00:00<?, ?it/s]
+DEBUG load_batches: scaling_factor = None
+DEBUG load: scaling_factor = None
+DEBUG load: about to call _normalize_logspace2 with scaling_factor = None
+DEBUG _normalize_logspace2: scaling_factor = None, exp_preprocessing = False
+Processing bucket:  59
+DEBUG undo_normalization: exp_preprocessing=False, scaling_factor=None, y_max_after_scaling=None
+DEBUG undo_normalization: exp_preprocessing=False, scaling_factor=None, y_max_after_scaling=None
+Training NN for bucket: 59
+DEBUG undo_normalization: exp_preprocessing=False, scaling_factor=None, y_max_after_scaling=None
+Num NNs to train:   0%|          | 0/2 [00:00<?, ?it/s]
+DEBUG undo_normalization: exp_preprocessing=False, scaling_factor=None, y_max_after_scaling=None
+Upstream width is  11
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  0
+Processing bucket:  41
+Training NN for bucket: 41
+Warning: Could not get fw/bw stats for scaled_ukl: list index out of range
+Overwriting batch size and num sets for full data batches...
+Bucket 59 training:   0%|          | 0/100 [00:00<?, ?it/s]
+DEBUG load_batches: scaling_factor = None
+DEBUG load: scaling_factor = None
+DEBUG undo_normalization: exp_preprocessing=False, scaling_factor=None, y_max_after_scaling=None
+DEBUG load: about to call _normalize_logspace2 with scaling_factor = None
+DEBUG _normalize_logspace2: scaling_factor = None, exp_preprocessing = False
+Processing bucket:  48
+DEBUG undo_normalization: exp_preprocessing=False, scaling_factor=None, y_max_after_scaling=None
+Processing bucket:  56
+Processing bucket:  45
+Processing bucket:  34
+Processing bucket:  54
+Training NN for bucket: 54
+Num NNs to train:   0%|          | 0/3 [00:00<?, ?it/s]
+Upstream width is  6
+Num NNs to train: 0it [00:00, ?it/s]
+Processing bucket:  0
+Overwriting batch size and num sets for full data batches...
+Bucket 54 training:   0%|          | 0/100 [00:00<?, ?it/s]
+DEBUG load_batches: scaling_factor = None
+DEBUG load: scaling_factor = None
+DEBUG load: about to call _normalize_logspace2 with scaling_factor = None
+DEBUG _normalize_logspace2: scaling_factor = None, exp_preprocessing = False
+Processing bucket:  74
+DEBUG undo_normalization: exp_preprocessing=False, scaling_factor=None, y_max_after_scaling=None
+Processing bucket:  84
+Processing bucket:  65
+Processing bucket:  95
+Processing bucket:  5
+Processing bucket:  41
+Processing bucket:  32
+Processing bucket:  23
+Processing bucket:  50
+Processing bucket:  14
+Processing bucket:  43
+Processing bucket:  0
+
+✓ scaled_ukl completed successfully!
+
+Z_hat: 292.389038
+Z_true: 303.085815
+Error: -10.696777
+Abs Error: 10.696777
+Num trained: 3
+Time: 2.09s
+
+======================================================================
+TEST COMPLETE
+======================================================================

@@ -1,0 +1,5 @@
+there should now be information on generating benchmark sets in this codebase docs. The benchmark of 12_4 problems in the iB10 and iB15 sets needs to be made into a benchmark set called small_problems. Repeated problems should be stripped away. The config files associated with this script /home/cohenn1/NCE/notebooks/_1-2026/claude_files/full_algorithm_12_4_bwecl.py should be included as the default values. The ecl values should be set to those found under auto_ecl value listed in this file /home/cohenn1/NCE/notebooks/_1-2026/problem_ecl_values.csv
+
+come up with a way to easily change all the bw_ecl values associated with this entire benchmark set after loading it in.
+
+You are finished when you create a test file for me where we load in these benchmark problems and configs in a #%% python cells file. I will print their configs. Include how to en masse change their bw ecl values in this file.

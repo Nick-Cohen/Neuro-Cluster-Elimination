@@ -1,0 +1,6 @@
+Now that the benchmark set is ready. We are going to try to give benchmark sets optional config sets to go along with them. the nn_config parameter is passed into the constructor of FastGM objects.
+
+For the neuro_be_sanity_check benchmark set, we are trying to recreate the neuroBE config. This means we use batch size 256, hidden sizes = 'nbe, n' where n is 3 for pedigree13, 1 for grid40x40.f10 and grid20x20.f10, and 3 for rbm_20.
+It also uses nsamples of 'nbe' where 'nbe' is a new function that must be implemented. For now, just leave it as 'nbe'.
+
+Your job will be done when you output a testing script that I myself can run with the #%% python cells in it where I can load the benchmark set and configs together and print out what the config is and it matches my expectations.

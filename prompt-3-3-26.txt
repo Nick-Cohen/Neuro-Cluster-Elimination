@@ -1,0 +1,8 @@
+Okay, I will give you information on how to correctly implement new ideas.
+
+The workflow should be:
+1. attempt to construct pseudocode for the idea (if it is complicated, else skip this). For complicated pseudocode, message me what it is or document it in the lab notebook and message me that it's there so I can review it.
+2. Run the hierarchal verification script with the new idea (more on this).
+3. Run the full experiment with:
+    a) extensive logging that can verify failed execution of the experiment or idea before completion
+    b) time specific check-ins (e.g. you determine that after 20m, logs should provide verification of most failure modes). Run the auto-prompt.sh --verify-progress script
