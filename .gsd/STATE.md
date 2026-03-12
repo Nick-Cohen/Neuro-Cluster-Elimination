@@ -10,7 +10,7 @@
 - ⬜ **M002:** M002
 
 ## Recent Decisions
-- D014: `prepare_config` defaults to `strict=False` (warn+strip for dead fields in flat configs)
+- None recorded
 
 ## Blockers
 - None
