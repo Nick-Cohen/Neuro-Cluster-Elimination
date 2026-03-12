@@ -9,16 +9,11 @@
 - 🔄 **M001:** Config & Visualization
 - ⬜ **M002:** M002
 
-## Current Task Progress
-- [x] **T01:** Set up pytest and write failing acceptance tests (22 tests, all fail on ImportError as expected)
-- [ ] **T02:** Build config_schema.py — schema, validation, and translation
-- [ ] **T03:** Wire prepare_config into FastGM and verify end-to-end
-
 ## Recent Decisions
-- None new in T01
+- None recorded
 
 ## Blockers
 - None
 
 ## Next Action
-Execute T02: Build config_schema.py with schema, validation, and prepare_config() implementation.
+Execute T02: Build config_schema.py — schema, validation, and translation in slice S01.
