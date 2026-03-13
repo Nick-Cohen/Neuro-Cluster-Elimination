@@ -16,4 +16,4 @@
 - None
 
 ## Next Action
-Execute T01: Build shared fixtures and hand-built test problems in slice S01.
+Execute T02: Exact inference correctness and domain≥3 tests in slice S01.

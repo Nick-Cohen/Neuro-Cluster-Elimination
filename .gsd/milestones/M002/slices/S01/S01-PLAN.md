@@ -47,7 +47,7 @@
 
 ## Tasks
 
-- [ ] **T01: Build shared fixtures and hand-built test problems** `est:30m`
+- [x] **T01: Build shared fixtures and hand-built test problems** `est:30m`
   - Why: All subsequent tests depend on a complete NN training config fixture and hand-built factor problems with known partition functions. Fixtures first, tests after.
   - Files: `tests/conftest.py`
   - Do: Add `nn_training_config` fixture (copy `reference_flat_config`, override: `device='cpu'`, `num_epochs=50`, `ecl=4`, `iB=2`, `hidden_sizes=[8,8]`, `sampling_scheme='all'`, `num_samples=256`, `dope_factors=False`, `set_size=None`). Add `binary_chain_factors` fixture (X0–X1 chain, Z=2.0). Add `ternary_chain_factors` fixture (X0–X1 with domain 3, Z=4.5). Add `star_graph_factors` fixture (X0 hub connected to X1,X2,X3 — bucket 0 has message scope large enough to trigger NN with ecl=4). All factor tensors in log10 space. Include analytically computed log10(Z) as part of each fixture's return value.
