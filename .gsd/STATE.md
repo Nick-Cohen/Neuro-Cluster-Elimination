@@ -16,4 +16,4 @@
 - None
 
 ## Next Action
-Execute T01: Create regression test script and pytest test in slice S07.
+Execute T02: Verify failure detection and finalize in slice S07.

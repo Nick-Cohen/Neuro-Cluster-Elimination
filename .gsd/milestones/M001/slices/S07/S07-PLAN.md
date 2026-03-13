@@ -41,7 +41,7 @@
 
 ## Tasks
 
-- [ ] **T01: Create regression test script and pytest test** `est:45m`
+- [x] **T01: Create regression test script and pytest test** `est:45m`
   - Why: Delivers both test artifacts that prove R017. The standalone script follows the `scripts/verify_logging.py` pattern. The pytest test follows `tests/test_benchmark_configs.py` patterns.
   - Files: `scripts/regression_test.py`, `tests/test_regression.py`
   - Do: Write standalone script with 3 checks (config equality, exact-mode inference, NN-mode inference) using rbm_20. Write pytest test with 3 test methods covering the same checks. Both must handle CUDA unavailability gracefully. Use 2 epochs / 500 samples for NN mode to keep runtime ~10s total. Assert bitwise equality. Copy configs before use to avoid mutation.
