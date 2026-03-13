@@ -54,7 +54,7 @@
   - Verify: `pytest tests/ --co -q` collects all existing tests without error (fixtures importable)
   - Done when: All 4 new fixtures exist in conftest.py, existing 110 tests still collected
 
-- [ ] **T02: Exact inference correctness and domain≥3 tests** `est:30m`
+- [x] **T02: Exact inference correctness and domain≥3 tests** `est:30m`
   - Why: R018 (exact inference correctness) and R020 (domain≥3) are the foundation — if exact inference is wrong, everything else is meaningless.
   - Files: `tests/test_inference.py`
   - Do: Create `test_inference.py` with: (1) `test_binary_chain_exact_z` — build FastGM from binary chain factors, eliminate all, assert `log_partition_function ≈ log10(2.0)` within 1e-5. (2) `test_ternary_chain_exact_z` — same with ternary chain, assert `log_partition_function ≈ log10(4.5)` within 1e-5. (3) `test_star_graph_exact_z` — star graph with high ecl (exact path), verify Z. Use `FastGM(factors=..., elim_order=..., nn_config=config, device='cpu')` with `ecl=2**30` to force exact computation. Set `dope_factors=False` in config.

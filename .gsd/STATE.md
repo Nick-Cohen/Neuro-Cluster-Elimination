@@ -10,10 +10,10 @@
 - 🔄 **M002:** Test Suite
 
 ## Recent Decisions
-- None recorded
+- Exact config override requires both `ecl=2**30` AND `iB=100` — process_bucket gates on both thresholds
 
 ## Blockers
 - None
 
 ## Next Action
-Execute T02: Exact inference correctness and domain≥3 tests in slice S01.
+Execute T03: Single-bucket NN training and convergence tests in slice S01.
