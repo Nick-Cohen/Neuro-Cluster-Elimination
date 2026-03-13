@@ -61,7 +61,7 @@
   - Verify: `pytest tests/test_inference.py -v` — all 3 tests pass
   - Done when: R018 has 2+ passing tests (binary chain, star graph), R020 has 1+ passing test (ternary chain)
 
-- [ ] **T03: Single-bucket NN training and convergence tests** `est:45m`
+- [x] **T03: Single-bucket NN training and convergence tests** `est:45m`
   - Why: R019 (training runs without error) and R021 (loss actually decreases) are the core NN validation. Uses the star graph which produces a multi-variable message exceeding ecl=4.
   - Files: `tests/test_nn_training.py`
   - Do: Create `test_nn_training.py` with: (1) `test_single_bucket_trains_without_error` — build FastGM from star graph with `nn_training_config`, call `eliminate_variables(all=True)`, assert no exception, assert `gm.per_bucket_training_log` is non-empty. (2) `test_convergence_loss_decreases` — same setup, extract loss curves from training log, assert final loss < 0.9 × initial loss for at least one NN-trained bucket. (3) `test_losses_are_tuples` — verify `trainer.losses` entries are `(epoch, loss_value)` tuples (guard against format regression). Use `nn_training_config` fixture. Seed=42 for reproducibility.

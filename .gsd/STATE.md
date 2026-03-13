@@ -16,4 +16,4 @@
 - None
 
 ## Next Action
-Execute T03: Single-bucket NN training and convergence tests in slice S01.
+Execute T04: Robustness edge-case tests and extensibility pattern in slice S01.
