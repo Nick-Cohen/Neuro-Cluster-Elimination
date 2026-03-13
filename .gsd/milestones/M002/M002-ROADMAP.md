@@ -47,7 +47,7 @@ This milestone is complete only when all are true:
 
 ## Slices
 
-- [ ] **S01: Inference & Training Test Suite** `risk:medium` `depends:[]`
+- [x] **S01: Inference & Training Test Suite** `risk:medium` `depends:[]`
   > After this: `pytest tests/` runs all new tests — exact inference correctness on hand-built problems, single-bucket NN training, domain≥3 handling, convergence over 50 epochs, infinity/edge-case robustness — alongside the 110 existing config tests, all green.
 
 <!--

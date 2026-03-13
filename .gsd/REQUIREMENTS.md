@@ -195,79 +195,79 @@ This file is the explicit capability and coverage contract for the project.
 
 ### R018 — Exact inference correctness test
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: Test that exact inference (no NN approximation) produces known-correct partition function values
 - Why it matters: Baseline correctness — if exact inference is wrong, everything built on it is wrong
 - Source: user
 - Primary owning slice: M002/S01
 - Supporting slices: none
-- Validation: unmapped
+- Validation: M002
 - Notes: Use small problems where exact partition function is computable
 
 ### R019 — Single bucket training functional test
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: Test that a single bucket can be trained via the NN path without errors
 - Why it matters: Bucket training is the atomic unit of NN inference; must work in isolation
 - Source: user
 - Primary owning slice: M002/S01
 - Supporting slices: none
-- Validation: unmapped
+- Validation: M002
 - Notes: none
 
 ### R020 — Domain size ≥3 variable handling test
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: Test that inference works correctly for problems with variables of domain size 3 or higher
 - Why it matters: Most test problems are binary; multi-valued variables exercise different code paths (one-hot encoding, domain size handling)
 - Source: user
 - Primary owning slice: M002/S01
 - Supporting slices: none
-- Validation: unmapped
+- Validation: M002
 - Notes: none
 
 ### R021 — Convergence test
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: Test that loss decreases when training one bucket for ~50 epochs
 - Why it matters: Sanity check that training actually learns, not just runs without error
 - Source: user
 - Primary owning slice: M002/S01
 - Supporting slices: none
-- Validation: unmapped
+- Validation: M002
 - Notes: none
 
 ### R022 — No-infinity output robustness test
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: Test that loss functions never output infinity during training
 - Why it matters: Infinity propagation silently corrupts results
 - Source: user
 - Primary owning slice: M002/S01
 - Supporting slices: none
-- Validation: unmapped
+- Validation: M002
 - Notes: none
 
 ### R023 — All-neg-inf / all-zero target handling test
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: Test that loss functions handle target batches of all -inf (logspace) or all 0 (linspace) without crashing
 - Why it matters: These edge cases occur in real problems when bucket messages are deterministic
 - Source: user
 - Primary owning slice: M002/S01
 - Supporting slices: none
-- Validation: unmapped
+- Validation: M002
 - Notes: none
 
 ### R024 — Extensible failure-mode regression pattern
 - Class: quality-attribute
-- Status: active
+- Status: validated
 - Description: Test suite has a clear pattern for adding new failure-mode regression tests as they appear
 - Why it matters: User wants to add test scripts for common failure modes as they encounter them
 - Source: user
 - Primary owning slice: M002/S01
 - Supporting slices: none
-- Validation: unmapped
+- Validation: M002
 - Notes: Convention/structure, not a feature
 
 ## Deferred
@@ -381,13 +381,13 @@ This file is the explicit capability and coverage contract for the project.
 | R015 | core-capability | validated | M001/S05 | none | M001 |
 | R016 | core-capability | validated | M001/S06 | none | M001 |
 | R017 | quality-attribute | validated | M001/S07 | none | M001 |
-| R018 | core-capability | active | M002/S01 | none | unmapped |
-| R019 | core-capability | active | M002/S01 | none | unmapped |
-| R020 | core-capability | active | M002/S01 | none | unmapped |
-| R021 | core-capability | active | M002/S01 | none | unmapped |
-| R022 | core-capability | active | M002/S01 | none | unmapped |
-| R023 | core-capability | active | M002/S01 | none | unmapped |
-| R024 | quality-attribute | active | M002/S01 | none | unmapped |
+| R018 | core-capability | validated | M002/S01 | none | M002 |
+| R019 | core-capability | validated | M002/S01 | none | M002 |
+| R020 | core-capability | validated | M002/S01 | none | M002 |
+| R021 | core-capability | validated | M002/S01 | none | M002 |
+| R022 | core-capability | validated | M002/S01 | none | M002 |
+| R023 | core-capability | validated | M002/S01 | none | M002 |
+| R024 | quality-attribute | validated | M002/S01 | none | M002 |
 | R025 | core-capability | deferred | none | none | unmapped |
 | R026 | core-capability | deferred | none | none | unmapped |
 | R027 | core-capability | deferred | none | none | unmapped |
@@ -400,5 +400,5 @@ This file is the explicit capability and coverage contract for the project.
 
 - Active requirements: 24
 - Mapped to slices: 24
-- Validated: 17
+- Validated: 24
 - Unmapped active requirements: 0

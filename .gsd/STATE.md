@@ -1,19 +1,19 @@
 # GSD State
 
-**Active Milestone:** M002 — Test Suite
-**Active Slice:** S01 — Inference & Training Test Suite
-**Phase:** planning
-**Requirements Status:** 7 active · 17 validated · 4 deferred · 4 out of scope
+**Active Milestone:** None
+**Active Slice:** None
+**Phase:** idle
+**Requirements Status:** 0 active · 24 validated · 4 deferred · 4 out of scope
 
 ## Milestone Registry
 - ✅ **M001:** Config & Visualization
-- 🔄 **M002:** Test Suite
+- ✅ **M002:** Test Suite
 
 ## Recent Decisions
-- None recorded
+- D020–D025: Test suite conventions (single slice, hand-built factors, CPU-only, tolerance-based convergence, direct loss calls, no-crash assertions)
 
 ## Blockers
 - None
 
 ## Next Action
-Plan slice S01 (Inference & Training Test Suite).
+Both milestones complete. Awaiting next milestone or task.
