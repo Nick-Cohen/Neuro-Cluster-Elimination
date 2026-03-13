@@ -68,7 +68,7 @@
   - Verify: `pytest tests/test_nn_training.py -v` — all tests pass
   - Done when: R019 has 1+ passing test (training completes), R021 has 1+ passing test (loss decrease verified)
 
-- [ ] **T04: Robustness edge-case tests and extensibility pattern** `est:30m`
+- [x] **T04: Robustness edge-case tests and extensibility pattern** `est:30m`
   - Why: R022 (inf handling), R023 (all-neg-inf targets), R024 (extensible pattern). These are standalone loss function tests — no Trainer needed.
   - Files: `tests/test_robustness.py`, `tests/PATTERN.md`
   - Do: Create `test_robustness.py` with: (1) `test_loss_fn_inf_input_no_crash` — parametrize over `[logspace_mse_fdb, linspace_mse_fdb, weighted_logspace_mse]`, pass `outputs=tensor([inf, 0, -1])` and valid targets, assert no unhandled exception (R022). (2) `test_loss_fn_all_neg_inf_targets_no_crash` — same parametrization, pass `targets=tensor([-inf, -inf, -inf])` with valid outputs, assert no unhandled exception (R023). (3) `test_loss_fn_all_zero_logspace_targets_no_crash` — pass `targets=tensor([0, 0, 0])`, assert no crash. Create `tests/PATTERN.md` documenting: file-per-concern structure, how to add a new failure-mode test (copy template, parametrize, assert no crash or assert specific behavior), fixture usage patterns (R024).
