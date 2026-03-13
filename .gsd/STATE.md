@@ -16,4 +16,4 @@
 - None
 
 ## Next Action
-Execute T01: Create regression test script and pytest test.
+Execute T01: Create regression test script and pytest test in slice S07.
