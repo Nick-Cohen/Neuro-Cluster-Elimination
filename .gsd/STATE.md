@@ -1,19 +1,19 @@
 # GSD State
 
-**Active Milestone:** None
+**Active Milestone:** M002 — Test Suite
 **Active Slice:** None
-**Phase:** idle
-**Requirements Status:** 0 active · 24 validated · 4 deferred · 4 out of scope
+**Phase:** complete
+**Requirements Status:** 7 active · 17 validated · 4 deferred · 4 out of scope
 
 ## Milestone Registry
 - ✅ **M001:** Config & Visualization
 - ✅ **M002:** Test Suite
 
 ## Recent Decisions
-- D020–D025: Test suite conventions (single slice, hand-built factors, CPU-only, tolerance-based convergence, direct loss calls, no-crash assertions)
+- None recorded
 
 ## Blockers
 - None
 
 ## Next Action
-Both milestones complete. Awaiting next milestone or task.
+All milestones complete.
