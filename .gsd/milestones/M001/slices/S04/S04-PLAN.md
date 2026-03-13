@@ -55,7 +55,7 @@
   - Verify: `python -c "from nce.state import save_state, load_state, undo_normalization; print('all exports ok')"` — module importable with all three functions.
   - Done when: `nce/state/` module exists with `save_state`, `load_state`, `undo_normalization` functions that handle both metadata-only and weights-included modes.
 
-- [ ] **T03: Round-trip verification script on a real NN-trained problem** `est:1h`
+- [x] **T03: Round-trip verification script on a real NN-trained problem** `est:1h`
   - Why: Proves the entire pipeline works end-to-end — train NNs, capture state, save, load, inspect. Without this, T01 and T02 are untested plumbing. This is the slice's objective stopping condition.
   - Files: `scripts/verify_s04_state_preservation.py`
   - Do: Write a verification script that: (1) loads a small benchmark problem (BN_1 from small_problems or grid10x10 from nbe_sanity_check — pick whichever has NN-eligible buckets with low ecl), (2) runs `eliminate_variables(all=True)` with a config that forces a few NN buckets (low ecl, 2-5 epochs for speed), (3) calls `save_state(fastgm, path)` in metadata-only mode, (4) calls `load_state(path)` and asserts: training log is non-empty, each entry has `losses` key with non-empty list, `epochs_trained` > 0, (5) repeats with `save_weights=True` and asserts: `nn_state_dict` present, `normalizing_constant` is a finite float, (6) tests `undo_normalization` with a dummy tensor and the saved constant — asserts output is finite and different from input, (7) prints PASS/FAIL summary. The script must handle the case where the benchmark problem needs to be downloaded or generated. Use 2-5 epochs and a low ecl to keep runtime under 60 seconds.
