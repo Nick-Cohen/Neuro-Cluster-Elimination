@@ -10,11 +10,10 @@
 - ⬜ **M002:** M002
 
 ## Recent Decisions
-- D015: State dict is inspection-only, not reconstructable
-- D016: Weight capture at training time, stripping at save time
+- None recorded
 
 ## Blockers
 - None
 
 ## Next Action
-Execute T01: Extend per_bucket_training_log to capture loss curves and optional NN weights.
+Execute T01: Extend per_bucket_training_log to capture loss curves and optional NN weights in slice S04.
