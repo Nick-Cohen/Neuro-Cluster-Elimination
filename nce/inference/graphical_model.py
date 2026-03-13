@@ -3,6 +3,7 @@ from .bucket import FastBucket
 from .elimination_order import wtminfill_order
 from nce.config_schema import prepare_config
 from nce.utils.stats import get_message_stats
+from nce.training_logger import setup_training_logger
 import pyGMs as gm
 from pyGMs import wmb
 from pyGMs.neuro import *
@@ -73,7 +74,13 @@ class FastGM:
             self.set_size = self.config.get('set_size')
             self.seed = self.config.get('seed')
             self.gather_message_stats = self.config.get('gather_message_stats', False)
-            
+
+        # Set up training logger (JSONL file) if log_file is configured
+        log_file_path = self.config.get('log_file')
+        if log_file_path:
+            self._training_logger = setup_training_logger(log_file_path)
+        else:
+            self._training_logger = None
 
         if uai_file is not None:
             self._load_from_uai(uai_file, elim_order=elim_order, evid=evid)
