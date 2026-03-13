@@ -6,5 +6,6 @@ without calling ``plt.show()``.
 """
 
 from nce.visualization.learning_curves import plot_learning_curves
+from nce.visualization.comparison import compare_experiments
 
-__all__ = ["plot_learning_curves"]
+__all__ = ["plot_learning_curves", "compare_experiments"]

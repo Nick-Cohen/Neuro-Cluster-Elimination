@@ -56,7 +56,7 @@
   - Verify: `python -c "from nce.visualization import plot_learning_curves; print('ok')"`
   - Done when: Function importable, accepts state dict with known entries, returns Figure with correct subplot count
 
-- [ ] **T02: Create compare_experiments function** `est:45m`
+- [x] **T02: Create compare_experiments function** `est:45m`
   - Why: Cross-experiment comparison for R015 — side-by-side training comparison across configs
   - Files: `nce/visualization/comparison.py`, `nce/visualization/__init__.py`
   - Do: Implement `compare_experiments(sources, labels=None, save_path=None, max_subplots=20)` — normalize all sources via `_extract_training_log`, build bucket-label index across experiments, produce (1) summary panel of final loss per bucket per experiment, (2) per-bucket overlaid learning curves for matching bucket labels. Handle mismatched bucket sets gracefully. Return Figure.

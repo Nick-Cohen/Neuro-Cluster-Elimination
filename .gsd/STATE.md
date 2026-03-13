@@ -16,4 +16,4 @@
 - None
 
 ## Next Action
-Execute T02: Create compare_experiments function in slice S05.
+Execute T03: End-to-end verification script in slice S05.
