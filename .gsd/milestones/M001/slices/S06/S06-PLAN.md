@@ -56,7 +56,7 @@
   - Verify: `python -c "from nce.training_logger import setup_training_logger, get_training_logger"` succeeds; manual smoke test with a small problem confirms log file is created
   - Done when: All 5 event types are emitted from the correct code locations, logger is properly configured via config, no existing behavior changes
 
-- [ ] **T02: Verification script and config docs update** `est:30m`
+- [x] **T02: Verification script and config docs update** `est:30m`
   - Why: Proves R016 is satisfied end-to-end and updates docs for the new field
   - Files: `scripts/verify_logging.py`, `docs/config_reference.md`
   - Do: Write verification script that runs inference on nbe_sanity_check problem[0] with log_file set, then validates JSONL content (valid JSON per line, required event types present, required fields present, chronological ordering). Also run without log_file to confirm disabled-by-default. Update config_reference.md output section with `log_file` row.

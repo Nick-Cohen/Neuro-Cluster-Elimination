@@ -223,6 +223,7 @@ Controls debugging output, error tracking, plotting, and diagnostic data collect
 | `traced_losses` | `traced_losses` | `list[str]` | `[]` | List of additional loss function names to evaluate (but not train with) at each epoch. Results stored in `FastGM.traced_losses_data`. Useful for comparing loss landscapes. |
 | `gather_message_stats` | `gather_message_stats` | `bool` | `False` | Collect forward/backward message statistics (variance, correlation) during elimination. Required for `approx_smg` loss functions that use global statistics. Results stored in `FastGM.message_stats`. |
 | `complexity_limit` | `complexity_limit` | `int` | `0` | Skip training for buckets whose message complexity exceeds this limit. `0` disables the limit (no buckets skipped). |
+| `log_file` | `log_file` | `str` \| `None` | `None` | Path to a JSONL file for structured training event logging. When set, emits per-bucket events (`bucket_training_start`, `epoch_loss`, `bucket_training_end`, `early_stopping`, `val_loss`) with timestamps. `None` disables logging (default). |
 
 ---
 
