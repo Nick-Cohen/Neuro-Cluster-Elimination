@@ -2,7 +2,7 @@
 
 **Active Milestone:** M001 — Config & Visualization
 **Active Slice:** S04 — FastGM State Preservation
-**Phase:** planning
+**Phase:** executing
 **Requirements Status:** 24 active · 0 validated · 4 deferred · 4 out of scope
 
 ## Milestone Registry
@@ -10,10 +10,11 @@
 - ⬜ **M002:** M002
 
 ## Recent Decisions
-- None recorded
+- D015: State dict is inspection-only, not reconstructable
+- D016: Weight capture at training time, stripping at save time
 
 ## Blockers
 - None
 
 ## Next Action
-Plan slice S04 (FastGM State Preservation).
+Execute T01: Extend per_bucket_training_log to capture loss curves and optional NN weights.
