@@ -16,4 +16,4 @@
 - None
 
 ## Next Action
-Execute T02: Create nce/state/ module with save_state, load_state, and undo_normalization in slice S04.
+Execute T03: Round-trip verification script on a real NN-trained problem in slice S04.

@@ -48,7 +48,7 @@
   - Verify: `python -c "from nce.inference.bucket import FastBucket; print('import ok')"` — no syntax errors. Manual inspection of the diff confirms all fields captured before `del self.buckets[var]`.
   - Done when: `per_bucket_training_log` entries contain `losses` and `val_losses` keys, and optionally `nn_state_dict` + `normalizing_constant` when flag is set.
 
-- [ ] **T02: Create nce/state/ module with save_state, load_state, and undo_normalization** `est:45m`
+- [x] **T02: Create nce/state/ module with save_state, load_state, and undo_normalization** `est:45m`
   - Why: D004 mandates state preservation as a separate module. This is the user-facing API for saving, loading, and inspecting FastGM state. Also delivers the standalone undo_normalization function (R011).
   - Files: `nce/state/__init__.py`, `nce/state/state.py`
   - Do: `save_state(fastgm, path, save_weights=False)` extracts a dict from FastGM attributes (`per_bucket_training_log`, `config`, `logZ`, `elim_order`, `num_trained`, summary metadata) and pickles it. `load_state(path)` unpickles and returns the dict. `undo_normalization(outputs, normalizing_constant)` is a standalone function that adds back the normalizing constant and divides by ln(10), matching DataPreprocessor.undo_normalization() logic. CUDA tensors in state_dicts already CPU'd at capture time (T01). Handle edge cases: empty training log, missing optional fields.
