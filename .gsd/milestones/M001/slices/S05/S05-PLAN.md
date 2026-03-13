@@ -49,7 +49,7 @@
 
 ## Tasks
 
-- [ ] **T01: Create visualization module with plot_learning_curves** `est:45m`
+- [x] **T01: Create visualization module with plot_learning_curves** `est:45m`
   - Why: Core function for R013 and R014 — per-NN learning curve subplots from any source
   - Files: `nce/visualization/__init__.py`, `nce/visualization/learning_curves.py`
   - Do: Create `_extract_training_log(source)` helper that normalizes FastGM/dict/path inputs. Implement `plot_learning_curves(source, save_path=None, max_subplots=20, bucket_labels=None)` — computes grid layout, creates one subplot per NN entry, plots train loss and optional val loss, handles empty losses and zero-entry edge cases. No `plt.show()`. Return Figure.

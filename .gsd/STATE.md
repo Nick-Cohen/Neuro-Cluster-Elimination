@@ -16,4 +16,4 @@
 - None
 
 ## Next Action
-Execute T01: Create visualization module with plot_learning_curves in slice S05.
+Execute T02: Create compare_experiments function in slice S05.
