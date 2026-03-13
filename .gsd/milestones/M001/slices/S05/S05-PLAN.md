@@ -63,7 +63,7 @@
   - Verify: `python -c "from nce.visualization import compare_experiments; print('ok')"`
   - Done when: Function importable, accepts list of two state dicts, returns Figure with summary + per-bucket overlays
 
-- [ ] **T03: End-to-end verification script** `est:30m`
+- [x] **T03: End-to-end verification script** `est:30m`
   - Why: Proves R013, R014, R015 work on real inference data — the objective stopping condition for S05
   - Files: `scripts/verify_s05_visualization.py`
   - Do: Follow S04's verification pattern (check/summarize_and_exit). Run inference on rbm_20 (3 epochs, ecl=2^19, same config as S04 verification). Exercise both functions with FastGM, state dict, and file path inputs. Verify subplot counts, save_path output, edge cases (empty log, empty losses). Clean up temp files.
