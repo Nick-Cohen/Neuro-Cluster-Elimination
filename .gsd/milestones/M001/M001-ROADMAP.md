@@ -60,7 +60,7 @@ This milestone is complete only when all are true:
 - [x] **S03: Config Documentation** `risk:low` `depends:[S01]`
   > After this: A markdown guide documents every config field (type, default, purpose). Code comments at config definition sites enforce doc-sync.
 
-- [ ] **S04: FastGM State Preservation** `risk:medium` `depends:[]`
+- [x] **S04: FastGM State Preservation** `risk:medium` `depends:[]`
   > After this: Pickle a FastGM after inference, unpickle in a fresh session, inspect per-bucket loss curves. Optionally save full NN weights with undo-normalization function accessible.
 
 - [ ] **S05: Visualization Module** `risk:low` `depends:[S04]`
