@@ -1,19 +1,19 @@
 # GSD State
 
-**Active Milestone:** M001 — Config & Visualization
-**Active Slice:** S07 — Regression Verification
-**Phase:** planning
-**Requirements Status:** 24 active · 0 validated · 4 deferred · 4 out of scope
+**Active Milestone:** None
+**Active Slice:** None
+**Phase:** idle
+**Requirements Status:** 7 active · 17 validated · 4 deferred · 4 out of scope
 
 ## Milestone Registry
-- 🔄 **M001:** Config & Visualization
-- ⬜ **M002:** M002
+- ✅ **M001:** Config & Visualization — complete, all 17 requirements validated
+- ⬜ **M002:** Test Suite
 
 ## Recent Decisions
-- None recorded
+- D019: Logger module named `training_logger.py` to avoid shadowing stdlib `logging`
 
 ## Blockers
 - None
 
 ## Next Action
-Plan slice S07 (Regression Verification).
+M001 complete. Next milestone: M002 (Test Suite).

@@ -2,194 +2,196 @@
 
 This file is the explicit capability and coverage contract for the project.
 
-## Active
+## Validated
 
 ### R001 — Nested config sections
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: Config dict supports nested sections (inference, nn, training, sampling, backward, output) as input format
 - Why it matters: 42-field flat dict is unreadable and error-prone; nested sections group related fields
 - Source: user
 - Primary owning slice: M001/S01
 - Supporting slices: M001/S02
-- Validation: unmapped
+- Validation: M001
 - Notes: Internal code continues using flat dict; translation happens at entry point
 
 ### R002 — Dead config field removal
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: All dead config fields from removed/unused code paths are absent and raise errors if present
 - Why it matters: Dead fields confuse users and create false expectations about functionality
 - Source: user
 - Primary owning slice: M001/S01
 - Supporting slices: none
-- Validation: unmapped
+- Validation: M001
 - Notes: Fields like num_epochs2, loss_fn2, complexity_limit, exact, memorizer
 
 ### R003 — Config field name cleanup
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: Field names are consistent and self-describing (lr→learning_rate, ecl→exact_computation_limit, iB→i_bound, fdb→forward_diff_barrier)
 - Why it matters: Cryptic abbreviations require looking up meanings; readable names are self-documenting
 - Source: user
 - Primary owning slice: M001/S01
 - Supporting slices: M001/S02, M001/S03
-- Validation: unmapped
+- Validation: M001
 - Notes: Old names still accepted via backward compat layer
 
 ### R004 — Config validation with section-specific errors
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: Config validation catches missing required fields and unexpected keys with messages that name the offending field and its section
 - Why it matters: Generic "invalid config" errors waste debugging time
 - Source: user
 - Primary owning slice: M001/S01
 - Supporting slices: none
-- Validation: unmapped
+- Validation: M001
 - Notes: none
 
 ### R005 — Backward compat for flat configs
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: Old flat config dicts are auto-detected and accepted without modification
 - Why it matters: Existing scripts, notebooks, and benchmark configs must not break
 - Source: user
 - Primary owning slice: M001/S01
 - Supporting slices: none
-- Validation: unmapped
+- Validation: M001
 - Notes: Detection logic lives in config_schema.py, not FastGM
 
 ### R006 — Translation logic separated from FastGM
 - Class: quality-attribute
-- Status: active
+- Status: validated
 - Description: All config detection, validation, and translation logic lives in config_schema.py, not in FastGM.__init__
 - Why it matters: Clean separation — FastGM calls one function and gets back a flat dict
 - Source: user
 - Primary owning slice: M001/S01
 - Supporting slices: none
-- Validation: unmapped
+- Validation: M001
 - Notes: FastGM.__init__ imports and calls a single function from config_schema
 
 ### R007 — Config documentation guide
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: A documentation guide exists listing every config field with its type, default value, and purpose in plain language
 - Why it matters: Config is the primary user interface for experiments; it must be documented
 - Source: user
 - Primary owning slice: M001/S03
 - Supporting slices: none
-- Validation: unmapped
+- Validation: M001
 - Notes: none
 
 ### R008 — Code-level doc-sync enforcement
 - Class: quality-attribute
-- Status: active
+- Status: validated
 - Description: Every field definition in the codebase has a comment linking to or reproducing its documentation entry; adding a new field without updating the guide is detectable
 - Why it matters: Documentation drifts from code without enforcement
 - Source: user
 - Primary owning slice: M001/S03
 - Supporting slices: none
-- Validation: unmapped
+- Validation: M001
 - Notes: none
 
 ### R009 — FastGM picklable with training metadata
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: FastGM object can be pickled and unpickled with all per-bucket training logs (loss curves, epochs trained, hidden sizes) intact
 - Why it matters: Training state is currently lost after inference; researchers need to inspect results after the fact
 - Source: user
 - Primary owning slice: M001/S04
 - Supporting slices: M001/S05
-- Validation: unmapped
+- Validation: M001
 - Notes: Default mode — lightweight, no NN weights
 
 ### R010 — Optional full NN weight preservation
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: An optional flag (default off) preserves trained NN weights alongside training metadata when saving FastGM state
 - Why it matters: Enables re-evaluation of trained networks on new inputs without retraining
 - Source: user
 - Primary owning slice: M001/S04
 - Supporting slices: none
-- Validation: unmapped
+- Validation: M001
 - Notes: When enabled, NN state dicts saved per bucket
 
 ### R011 — Undo-normalization accessible from saved state
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: When NN weights are preserved, a function to convert NN output back to original scale (undo normalization) is accessible from the saved state
 - Why it matters: NN outputs are trained on normalized targets; need to recover actual values
 - Source: user
 - Primary owning slice: M001/S04
 - Supporting slices: none
-- Validation: unmapped
+- Validation: M001
 - Notes: data_processor.undo_normalization() already exists; this makes it accessible from saved state
 
 ### R012 — Modular state preservation
 - Class: quality-attribute
-- Status: active
+- Status: validated
 - Description: State preservation is cleanly separated and modularized, not tangled into FastGM internals
 - Why it matters: User explicitly requested separable/modular design
 - Source: user
 - Primary owning slice: M001/S04
 - Supporting slices: none
-- Validation: unmapped
+- Validation: M001
 - Notes: Likely a separate module (e.g. nce/state/) that FastGM delegates to
 
 ### R013 — Standalone plotting functions on FastGM objects
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: Standalone functions generate plots directly from FastGM objects (live or unpickled) without requiring separate scripts
 - Why it matters: Current plotting requires ad-hoc scripts; integrated plotting enables quick inspection
 - Source: inferred
 - Primary owning slice: M001/S05
 - Supporting slices: none
-- Validation: unmapped
+- Validation: M001
 - Notes: New nce/visualization/ module
 
 ### R014 — Per-NN learning curve visualization
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: Each bucket's NN produces a distinct learning curve subplot showing its individual training trajectory (loss over epochs)
 - Why it matters: Diagnosing training issues requires per-bucket inspection
 - Source: user
 - Primary owning slice: M001/S05
 - Supporting slices: none
-- Validation: unmapped
+- Validation: M001
 - Notes: none
 
 ### R015 — Cross-experiment comparison plotting
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: Comparison functions accept multiple FastGM objects/logs and plot side-by-side comparisons
 - Why it matters: Research requires comparing configs, loss functions, architectures across experiments
 - Source: user
 - Primary owning slice: M001/S05
 - Supporting slices: none
-- Validation: unmapped
+- Validation: M001
 - Notes: Compare across configs on same problem, same config across problems, or both
 
 ### R016 — Comprehensive logging to configurable log file
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: When a log file path is set in config, all training events (epoch, loss, bucket id) are written line-by-line to that file during inference
 - Why it matters: Post-hoc debugging of long training runs requires persistent logs
 - Source: user
 - Primary owning slice: M001/S06
 - Supporting slices: none
-- Validation: unmapped
+- Validation: M001
 - Notes: none
 
 ### R017 — Regression test for config restructure
 - Class: quality-attribute
-- Status: active
+- Status: validated
 - Description: A regression test script translates a flat config to nested format and runs inference on a reference problem, confirming identical partition function estimates within numerical tolerance
 - Why it matters: Config restructure must not change inference behavior
 - Source: user
 - Primary owning slice: M001/S07
 - Supporting slices: none
-- Validation: unmapped
+- Validation: M001
 - Notes: One-command, pass/fail output
+
+## Active
 
 ### R018 — Exact inference correctness test
 - Class: core-capability
@@ -313,7 +315,6 @@ This file is the explicit capability and coverage contract for the project.
 - Supporting slices: none
 - Validation: unmapped
 - Notes: Deferred — alpha=0.3 fill_between already used for confidence bands
-
 ## Out of Scope
 
 ### R029 — Interactive dashboard
@@ -359,28 +360,27 @@ This file is the explicit capability and coverage contract for the project.
 - Supporting slices: none
 - Validation: n/a
 - Notes: none
-
 ## Traceability
 
 | ID | Class | Status | Primary owner | Supporting | Proof |
 |---|---|---|---|---|---|
-| R001 | core-capability | active | M001/S01 | M001/S02 | unmapped |
-| R002 | core-capability | active | M001/S01 | none | unmapped |
-| R003 | core-capability | active | M001/S01 | M001/S02, M001/S03 | unmapped |
-| R004 | core-capability | active | M001/S01 | none | unmapped |
-| R005 | core-capability | active | M001/S01 | none | unmapped |
-| R006 | quality-attribute | active | M001/S01 | none | unmapped |
-| R007 | core-capability | active | M001/S03 | none | unmapped |
-| R008 | quality-attribute | active | M001/S03 | none | unmapped |
-| R009 | core-capability | active | M001/S04 | M001/S05 | unmapped |
-| R010 | core-capability | active | M001/S04 | none | unmapped |
-| R011 | core-capability | active | M001/S04 | none | unmapped |
-| R012 | quality-attribute | active | M001/S04 | none | unmapped |
-| R013 | core-capability | active | M001/S05 | none | unmapped |
-| R014 | core-capability | active | M001/S05 | none | unmapped |
-| R015 | core-capability | active | M001/S05 | none | unmapped |
-| R016 | core-capability | active | M001/S06 | none | unmapped |
-| R017 | quality-attribute | active | M001/S07 | none | unmapped |
+| R001 | core-capability | validated | M001/S01 | M001/S02 | M001 |
+| R002 | core-capability | validated | M001/S01 | none | M001 |
+| R003 | core-capability | validated | M001/S01 | M001/S02, M001/S03 | M001 |
+| R004 | core-capability | validated | M001/S01 | none | M001 |
+| R005 | core-capability | validated | M001/S01 | none | M001 |
+| R006 | quality-attribute | validated | M001/S01 | none | M001 |
+| R007 | core-capability | validated | M001/S03 | none | M001 |
+| R008 | quality-attribute | validated | M001/S03 | none | M001 |
+| R009 | core-capability | validated | M001/S04 | M001/S05 | M001 |
+| R010 | core-capability | validated | M001/S04 | none | M001 |
+| R011 | core-capability | validated | M001/S04 | none | M001 |
+| R012 | quality-attribute | validated | M001/S04 | none | M001 |
+| R013 | core-capability | validated | M001/S05 | none | M001 |
+| R014 | core-capability | validated | M001/S05 | none | M001 |
+| R015 | core-capability | validated | M001/S05 | none | M001 |
+| R016 | core-capability | validated | M001/S06 | none | M001 |
+| R017 | quality-attribute | validated | M001/S07 | none | M001 |
 | R018 | core-capability | active | M002/S01 | none | unmapped |
 | R019 | core-capability | active | M002/S01 | none | unmapped |
 | R020 | core-capability | active | M002/S01 | none | unmapped |
@@ -396,10 +396,9 @@ This file is the explicit capability and coverage contract for the project.
 | R030 | anti-feature | out-of-scope | none | none | n/a |
 | R031 | anti-feature | out-of-scope | none | none | n/a |
 | R032 | anti-feature | out-of-scope | none | none | n/a |
-
 ## Coverage Summary
 
 - Active requirements: 24
 - Mapped to slices: 24
-- Validated: 0
+- Validated: 17
 - Unmapped active requirements: 0

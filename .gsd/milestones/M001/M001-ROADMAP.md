@@ -69,7 +69,7 @@ This milestone is complete only when all are true:
 - [x] **S06: Logging System** `risk:low` `depends:[]`
   > After this: Set a log file path in config, run inference, find structured per-bucket training events (epoch, loss, bucket id) in the log file.
 
-- [ ] **S07: Regression Verification** `risk:medium` `depends:[S01,S02]`
+- [x] **S07: Regression Verification** `risk:medium` `depends:[S01,S02]`
   > After this: A one-command script translates flat→nested config, runs inference on a reference problem, confirms identical partition function estimate. Reports pass/fail.
 
 ## Boundary Map
