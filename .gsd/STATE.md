@@ -16,4 +16,4 @@
 - None
 
 ## Next Action
-Execute T01: Create visualization module with plot_learning_curves.
+Execute T01: Create visualization module with plot_learning_curves in slice S05.
