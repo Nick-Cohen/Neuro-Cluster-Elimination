@@ -2,7 +2,7 @@
 
 **Active Milestone:** M001 — Config & Visualization
 **Active Slice:** S05 — Visualization Module
-**Phase:** planning
+**Phase:** executing
 **Requirements Status:** 24 active · 0 validated · 4 deferred · 4 out of scope
 
 ## Milestone Registry
@@ -16,4 +16,4 @@
 - None
 
 ## Next Action
-Plan slice S05 (Visualization Module).
+Execute T01: Create visualization module with plot_learning_curves.
