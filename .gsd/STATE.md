@@ -1,8 +1,8 @@
 # GSD State
 
 **Active Milestone:** M001 — Config & Visualization
-**Active Slice:** S05 — Visualization Module
-**Phase:** executing
+**Active Slice:** S06 — Logging System
+**Phase:** planning
 **Requirements Status:** 24 active · 0 validated · 4 deferred · 4 out of scope
 
 ## Milestone Registry
@@ -16,4 +16,4 @@
 - None
 
 ## Next Action
-S05 complete — all 3 tasks done, all verification checks pass. Ready to proceed to next slice.
+Plan slice S06 (Logging System).

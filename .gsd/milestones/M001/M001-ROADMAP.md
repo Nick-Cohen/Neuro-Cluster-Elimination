@@ -63,7 +63,7 @@ This milestone is complete only when all are true:
 - [x] **S04: FastGM State Preservation** `risk:medium` `depends:[]`
   > After this: Pickle a FastGM after inference, unpickle in a fresh session, inspect per-bucket loss curves. Optionally save full NN weights with undo-normalization function accessible.
 
-- [ ] **S05: Visualization Module** `risk:low` `depends:[S04]`
+- [x] **S05: Visualization Module** `risk:low` `depends:[S04]`
   > After this: Call `plot_learning_curves(fastgm)` on a pickled FastGM and get per-NN loss-over-epoch subplots. Call `compare_experiments([gm1, gm2])` for side-by-side comparison.
 
 - [ ] **S06: Logging System** `risk:low` `depends:[]`
