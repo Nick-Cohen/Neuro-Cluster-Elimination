@@ -10,7 +10,7 @@
 - 🔄 **M002:** Test Suite
 
 ## Recent Decisions
-- Exact config override requires both `ecl=2**30` AND `iB=100` — process_bucket gates on both thresholds
+- None recorded
 
 ## Blockers
 - None
