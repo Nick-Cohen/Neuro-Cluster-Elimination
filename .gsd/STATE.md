@@ -1,7 +1,7 @@
 # GSD State
 
 **Active Milestone:** M001 — Config & Visualization
-**Active Slice:** S04 — FastGM State Preservation
+**Active Slice:** S05 — Visualization Module
 **Phase:** planning
 **Requirements Status:** 24 active · 0 validated · 4 deferred · 4 out of scope
 
@@ -16,4 +16,4 @@
 - None
 
 ## Next Action
-Plan slice S04 (FastGM State Preservation).
+Plan slice S05 (Visualization Module).
