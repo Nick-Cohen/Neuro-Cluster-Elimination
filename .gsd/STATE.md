@@ -2,7 +2,7 @@
 
 **Active Milestone:** M001 — Config & Visualization
 **Active Slice:** S07 — Regression Verification
-**Phase:** planning
+**Phase:** executing
 **Requirements Status:** 24 active · 0 validated · 4 deferred · 4 out of scope
 
 ## Milestone Registry
@@ -16,4 +16,4 @@
 - None
 
 ## Next Action
-Plan slice S07 (Regression Verification).
+Execute T01: Create regression test script and pytest test.
