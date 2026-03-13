@@ -2,6 +2,7 @@ from .losses import *
 from collections import deque
 from nce.data import *
 from nce.sampling import *
+from nce.training_logger import log_epoch_loss, log_val_loss, log_early_stopping
 # from NCE.inference.graphical_model import *
 import torch
 import torch.nn.functional as F
@@ -487,6 +488,8 @@ class Trainer:
                     loss = self.train_epoch(set_batches, plot=plot, epoch=epoch)
                     global_epoch_num = s * num_epochs + epoch
                     self.losses.append((global_epoch_num, loss.item()))
+                    if self.bucket.gm._training_logger:
+                        log_epoch_loss(self.bucket.gm._training_logger, self.bucket.label, global_epoch_num, loss.item())
 
                     # Step scheduler once per epoch (not per batch)
                     if self.use_scheduler and hasattr(self, 'scheduler') and self.scheduler is not None:
@@ -519,6 +522,8 @@ class Trainer:
                         # Check if validation loss is very low - stop immediately
                         if val_loss_value < 0.0001:
                             print(f'Validation loss {val_loss_value:.6e} is below 0.0001 threshold. Stopping training at epoch {epoch}.')
+                            if self.bucket.gm._training_logger:
+                                log_early_stopping(self.bucket.gm._training_logger, self.bucket.label, epoch, "val_loss_below_0.0001", val_loss_value)
                             return traced_losses_data
 
                         # Check for improvement every 100 epochs (10 validation checks)
@@ -542,6 +547,8 @@ class Trainer:
                                     if val_loss_value < 0.01:
                                         # Loss is good enough, stop
                                         print(f'Validation loss {val_loss_value:.6e} is below 0.01 threshold. Stopping training at epoch {epoch}.')
+                                        if self.bucket.gm._training_logger:
+                                            log_early_stopping(self.bucket.gm._training_logger, self.bucket.label, epoch, "val_loss_below_0.01_no_improvement", val_loss_value)
                                         return traced_losses_data
                                     else:
                                         # Loss is still high - check for weak improvement
@@ -550,6 +557,8 @@ class Trainer:
                                         if not any_weak_improvement:
                                             # No improvement at all, even with weak threshold - stop
                                             print(f'Validation loss {val_loss_value:.6e} not decreasing after {epoch} epochs (no weak improvement).')
+                                            if self.bucket.gm._training_logger:
+                                                log_early_stopping(self.bucket.gm._training_logger, self.bucket.label, epoch, "val_loss_no_weak_improvement", val_loss_value)
                                             return traced_losses_data
                                         else:
                                             print(f'Epoch {epoch}: Validation loss {val_loss_value:.6e} still high but showing weak improvement. Continuing...')
@@ -559,6 +568,8 @@ class Trainer:
                         # Check if loss is very low - stop immediately
                         if loss.item() < 0.0001:
                             print(f'Loss {loss.item():.6e} is below 0.0001 threshold. Stopping training at epoch {epoch}.')
+                            if self.bucket.gm._training_logger:
+                                log_early_stopping(self.bucket.gm._training_logger, self.bucket.label, epoch, "loss_below_0.0001", loss.item())
                             return traced_losses_data
 
                         # Check every 1000 epochs for improvement
@@ -575,6 +586,8 @@ class Trainer:
                                 if current_loss < 0.01:
                                     # Loss is good enough, stop
                                     print(f'Loss {current_loss:.6e} is below 0.01 threshold. Stopping training at epoch {epoch}.')
+                                    if self.bucket.gm._training_logger:
+                                        log_early_stopping(self.bucket.gm._training_logger, self.bucket.label, epoch, "loss_below_0.01_no_improvement", current_loss)
                                     return traced_losses_data
                                 else:
                                     # Loss is still high - check for weak improvement
@@ -584,6 +597,8 @@ class Trainer:
                                     if not any_weak_improvement:
                                         # No improvement at all, even with weak threshold - stop
                                         print(f'Loss {current_loss:.6e} not decreasing after {epoch} epochs (no weak improvement).')
+                                        if self.bucket.gm._training_logger:
+                                            log_early_stopping(self.bucket.gm._training_logger, self.bucket.label, epoch, "loss_no_weak_improvement", current_loss)
                                         return traced_losses_data
                                     else:
                                         # Weak improvement detected and loss is high - be patient, continue training
@@ -597,6 +612,8 @@ class Trainer:
                             if self.config.get('debug', True):
                                 print(f'Convex early stopping triggered at epoch {epoch_number}')
                             self.bucket.gm.traced_losses_data.append((self.bucket.label, traced_losses_data))
+                            if self.bucket.gm._training_logger:
+                                log_early_stopping(self.bucket.gm._training_logger, self.bucket.label, epoch_number, "convex_early_stopping", loss.item())
                             return traced_losses_data
 
                     # NBE early stopping check
@@ -622,6 +639,8 @@ class Trainer:
                         nbe_val_losses.append(nbe_val_loss_value)
                         # Store validation losses on self for access in plotting
                         self.val_losses.append((global_epoch, nbe_val_loss_value))
+                        if self.bucket.gm._training_logger:
+                            log_val_loss(self.bucket.gm._training_logger, self.bucket.label, global_epoch, nbe_val_loss_value)
 
                         # Simple early stopping: stop if validation loss increased 3 times in a row
                         if global_epoch >= nbe_warmup_epochs and len(nbe_val_losses) >= 4:
@@ -636,6 +655,8 @@ class Trainer:
                                 print(f'NBE early stopping at epoch {global_epoch}: '
                                       f'val_loss increased 3 times in a row: {v_prev3:.6e} -> {v_prev2:.6e} -> {v_prev1:.6e} -> {v_curr:.6e}')
                                 self.bucket.gm.traced_losses_data.append((self.bucket.label, traced_losses_data))
+                                if self.bucket.gm._training_logger:
+                                    log_early_stopping(self.bucket.gm._training_logger, self.bucket.label, global_epoch, "nbe_3_consecutive_increases", v_curr)
                                 return traced_losses_data
 
                         # OLD two-phase early stopping (temporarily disabled):
@@ -695,7 +716,7 @@ class Trainer:
         if new_loss_fn is not None:
             self.config['loss_fn'] = old_loss_fn_name
             self.loss_fn = self._get_loss_fn(old_loss_fn_name)
-            
+
         return traced_losses_data
               
     def train_batch(self, x_batch, y_batch, bw_hat_batch=None, plot_message=False, epoch=None):

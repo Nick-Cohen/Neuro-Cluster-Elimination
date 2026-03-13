@@ -123,6 +123,7 @@ NESTED_SECTIONS = OrderedDict([
         'traced_losses':        _field('traced_losses', default=[]),
         'gather_message_stats': _field('gather_message_stats', default=False),
         'complexity_limit':     _field('complexity_limit', default=0),
+        'log_file':             _field('log_file', default=None),
     }),
 ])
 

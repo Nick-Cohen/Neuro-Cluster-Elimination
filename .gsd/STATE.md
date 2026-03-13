@@ -16,4 +16,4 @@
 - None
 
 ## Next Action
-Execute T01: Implement training logger module and wire into inference pipeline in slice S06.
+Execute T02: Verification script and config docs update in slice S06.

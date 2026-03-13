@@ -49,7 +49,7 @@
 
 ## Tasks
 
-- [ ] **T01: Implement training logger module and wire into inference pipeline** `est:1h`
+- [x] **T01: Implement training logger module and wire into inference pipeline** `est:1h`
   - Why: Core implementation — creates the logger, adds the config field, hooks all emission points
   - Files: `nce/training_logger.py`, `nce/config_schema.py`, `nce/inference/graphical_model.py`, `nce/inference/bucket.py`, `nce/neural_networks/train.py`
   - Do: Create `nce/training_logger.py` with `setup_training_logger(log_file_path)` and event emission helpers using JSONL format. Add `log_file` field to output section of config_schema.py. Call setup in FastGM.__init__. Emit `epoch_loss` at train.py line 489, `val_loss` at validation recording sites, `early_stopping` at all `return traced_losses_data` exit points (12 sites), `bucket_training_start`/`bucket_training_end` in bucket.py compute_message_nn. Ensure idempotent handler setup and unbuffered writes.

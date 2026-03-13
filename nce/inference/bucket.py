@@ -1,5 +1,6 @@
 from .factor import FastFactor
 from .factor_nn import FactorNN
+from nce.training_logger import log_bucket_training_start, log_bucket_training_end
 from typing import List
 import numpy as np
 import torch
@@ -318,6 +319,17 @@ class FastBucket:
                 # will be computed lazily on first load() call using the training samples
                 t.data_preprocessor.use_bw_approx = True
 
+            # Emit bucket_training_start event
+            if self.gm._training_logger:
+                log_bucket_training_start(
+                    self.gm._training_logger,
+                    bucket_id=self.label,
+                    hidden_sizes=hidden_sizes,
+                    num_epochs=self.config.get('num_epochs'),
+                    loss_fn=self.config.get('loss_fn'),
+                    num_samples=self.config.get('num_samples'),
+                )
+
             t.train()
             self.epochs_trained = t.losses[-1][0] + 1 if t.losses else 0
             self.trained_hidden_sizes = hidden_sizes
@@ -337,6 +349,16 @@ class FastBucket:
                     entry['nn_state_dict'] = {k: v.cpu().clone() for k, v in net.state_dict().items()}
                     entry['normalizing_constant'] = t.data_preprocessor.normalizing_constant.cpu().item()
                 self.gm.per_bucket_training_log.append(entry)
+
+            # Emit bucket_training_end event
+            if self.gm._training_logger:
+                final_loss = t.losses[-1][1] if t.losses else None
+                log_bucket_training_end(
+                    self.gm._training_logger,
+                    bucket_id=self.label,
+                    epochs_trained=self.epochs_trained,
+                    final_loss=final_loss,
+                )
 
             # Synchronize CUDA operations to prevent race conditions
             if torch.cuda.is_available():
