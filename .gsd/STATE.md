@@ -16,4 +16,4 @@
 - None
 
 ## Next Action
-Execute T01: Extend per_bucket_training_log to capture loss curves and optional NN weights in slice S04.
+Execute T02: Create nce/state/ module with save_state, load_state, and undo_normalization in slice S04.

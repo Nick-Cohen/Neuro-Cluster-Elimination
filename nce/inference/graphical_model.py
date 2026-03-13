@@ -54,7 +54,7 @@ class FastGM:
         self.track_errors = self.config.get('track_errors', False)
         self.nn_errors = []
         self.error_tracking_data = []  # List of (bucket_label, [(epoch, loss, log_Z_err, abs_log_Z_err), ...])
-        self.per_bucket_training_log = []  # List of {label, epochs_trained, hidden_sizes} per NN bucket
+        self.per_bucket_training_log = []  # List of dicts per NN bucket: {label, epochs_trained, hidden_sizes, losses, val_losses, [nn_state_dict, normalizing_constant]}
         self.populate_bw_factors = self.config.get('populate_bw_factors', False)
         if self.config:
             self.sampling_scheme = self.config.get('sampling_scheme')

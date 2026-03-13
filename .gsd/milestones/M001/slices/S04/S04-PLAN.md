@@ -41,7 +41,7 @@
 
 ## Tasks
 
-- [ ] **T01: Extend per_bucket_training_log to capture loss curves and optional NN weights** `est:45m`
+- [x] **T01: Extend per_bucket_training_log to capture loss curves and optional NN weights** `est:45m`
   - Why: Currently only `{label, epochs_trained, hidden_sizes}` is saved before bucket deletion. Loss curves and NN state are lost forever. This is the foundation for all state preservation — without it, there's nothing to save.
   - Files: `nce/inference/bucket.py`, `nce/inference/graphical_model.py`
   - Do: At the append site (bucket.py:328), add `losses: t.losses`, `val_losses: t.val_losses` to the dict. When `config.get('save_nn_weights', False)` is true, also add `nn_state_dict: {k: v.cpu() for k, v in net.state_dict().items()}` and `normalizing_constant: t.data_preprocessor.normalizing_constant.cpu().item()`. In graphical_model.py, update the comment on `per_bucket_training_log` to reflect the new schema.
