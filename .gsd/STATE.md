@@ -1,8 +1,8 @@
 # GSD State
 
 **Active Milestone:** M001 — Config & Visualization
-**Active Slice:** S06 — Logging System
-**Phase:** slice-complete
+**Active Slice:** S07 — Regression Verification
+**Phase:** planning
 **Requirements Status:** 24 active · 0 validated · 4 deferred · 4 out of scope
 
 ## Milestone Registry
@@ -16,4 +16,4 @@
 - None
 
 ## Next Action
-S06 complete (T01 + T02 done, all slice verification checks pass). Proceed to next slice in M001.
+Plan slice S07 (Regression Verification).
