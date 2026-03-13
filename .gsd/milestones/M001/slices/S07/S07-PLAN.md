@@ -48,7 +48,7 @@
   - Verify: `python scripts/regression_test.py` exits 0; `pytest tests/test_regression.py -v` passes all tests
   - Done when: both commands succeed on GPU with PASS for all checks
 
-- [ ] **T02: Verify failure detection and finalize** `est:20m`
+- [x] **T02: Verify failure detection and finalize** `est:20m`
   - Why: Proves the tests actually detect regressions (not just vacuously passing). Confirms the test is robust.
   - Files: `scripts/regression_test.py`, `tests/test_regression.py`
   - Do: Run both test artifacts on GPU. Temporarily modify a config value (e.g., change num_epochs from 2 to 3 in one path) and verify the NN test detects the mismatch. Restore the original. Verify final clean run. Check that CUDA-skip logic works by mocking availability if needed.
