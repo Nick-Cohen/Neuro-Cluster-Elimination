@@ -11,7 +11,7 @@
 - 🔄 **M003:** NeuroBE Reproduction Mode
 
 ## Recent Decisions
-- neurobe_weighted_mse signature omits bw_hat positional arg; Trainer closure handles interface mismatch
+- None recorded
 
 ## Blockers
 - None
