@@ -307,14 +307,14 @@ This file is the explicit capability and coverage contract for the project.
 
 ### R036 — Matched NN counts via ecl tuning
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: Per-problem ecl values that produce the same number of NN-trained buckets as NeuroBE's width-based dispatch for the 15 working binary-domain problems
 - Why it matters: Apples-to-apples comparison requires the same buckets to be NN-trained in both codebases
 - Source: user
 - Primary owning slice: M003/S02
 - Supporting slices: none
-- Validation: unmapped
-- Notes: NeuroBE used iB=25, width_problem=MaxWidth-1 per problem
+- Validation: M003
+- Notes: ecl = 2^width_problem - 1; verified by scripts/verify_nn_counts.py (all 15 MATCH)
 
 ### R037 — Normalization round-trip test
 - Class: quality-attribute
@@ -544,7 +544,7 @@ This file is the explicit capability and coverage contract for the project.
 | R033 | core-capability | active | M003/S01 | none | unmapped |
 | R034 | core-capability | active | M003/S01 | none | unmapped |
 | R035 | core-capability | active | M003/S01 | none | unmapped |
-| R036 | core-capability | active | M003/S02 | none | unmapped |
+| R036 | core-capability | validated | M003/S02 | none | M003 |
 | R037 | quality-attribute | active | M003/S01 | none | unmapped |
 | R038 | core-capability | active | M003/S02 | none | unmapped |
 | R039 | core-capability | active | M004/TBD | none | unmapped |
@@ -558,5 +558,5 @@ This file is the explicit capability and coverage contract for the project.
 
 - Active requirements: 37
 - Mapped to slices: 30
-- Validated: 24
+- Validated: 25
 - Unmapped active requirements: 7 (R039–R045, pending M004 planning)
