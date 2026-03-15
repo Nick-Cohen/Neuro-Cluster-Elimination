@@ -9,6 +9,7 @@
 - ✅ **M001:** Config & Visualization
 - ✅ **M002:** Test Suite
 - 🔄 **M003:** NeuroBE Reproduction Mode
+- ⬜ **M004:** M004
 
 ## Recent Decisions
 - None recorded
