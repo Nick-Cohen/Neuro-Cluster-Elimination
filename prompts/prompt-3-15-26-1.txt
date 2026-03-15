@@ -1,0 +1,25 @@
+I want you to add to the testers to include the following functionality.
+
+Large test on a wide variety of single buckets from a large variety of problems. The test will evaluate the local error on 10 or so different buckets each of which is considered 'hard to learn'
+
+Each time we run a test, it would be nice to record info about it's config and date and such and compare it with the best performers over time.
+
+Ideally, these testers will be time efficient in that they will preload the forward message and backward messages. For starters, we can have bw message with backward ecl of: 2**2, 2**3, 2**5, 2**10, 2**15, and 2**25. The testers can load from saved files these backward messages.
+
+All of these buckets should be of the small_problems type. All of them should have exactly solvable backward messages everywhere throughout. If that is not the case something is wrong and I should be pinged. There is maybe one problem where I know that's the case.
+
+So to find the buckets in question, we want to run the NCE algorithm with UKL + bw information. We want to use an ecl that is selected to be as large as possible without leading to no training of NNs (we have information on this already documented and we have a record of exactly what value this should be for each problem already). Then, we want to select the bucket from each problem with the highest local error when we train for 10000 epochs using full data batches (full data batches means that we run the entire message through each forward pass and do backprop over that full batch.). Local error is found by enabling the error tracking. It means that it is the quantity |true_log_Z - \logsumexp_{all assignments} (approx_fw_message + exact_bw_message)|. The code to calculate this already exists and should be easily callable. If not obvious/easy to find, ping me.
+
+Now, if the local error is high, that is, above 0.1, include it in the test set of buckets/messages to learn. If the list of buckets is less than 10 in length, we have our finished list. Otherwise, remove those with the lowest local error until there are ten messages to learn.
+
+We want the tester to work by loading in the exact fw message, the exact bw message, the bw_approximation used (if any). Then it trains the single bucket's message and computes the local error with the trained bucket. Ideally, it also tracks both the loss and local error over the tester's period of opperation. The track errors code should already have this functinoality.
+
+The tester should output a folder with the graphs of the loss over epochs, the local error of epochs.
+
+It should also output a chart of the local errors from this test vs the best local errors over any test that ran for the same amount of time or less. So this means we need to record how long each test takes to train. In the folder we want that time info, the config used, num epochs etc. loss function,  you get the idea.
+
+The tester should have a fast and slow mode. It should take in a config file but adjust it's num_epochs until it finishes with the allotted time. So we need a special timeout functionality that saves the NN weights after the time and converts it to an exact message and computes the local error etc.
+
+The epochs where we record the performance should be spaced out like before training, epoch 10, epoch 20, epoch 50, epoch 100, epoch 500, epoch 1000, epoch 2000, etc. or, if batch size is small and epochs are slow, we could check on the local error and loss after 1m of training periods.
+
+Your work is complete when I can run a python command where I input the script with arguments of a config file followed by fast or slow where fast corresonds to 1m of training per message and slow to 1h of training per message. It runs the messages in parallel across all 4 gpus by default or on the specified gpu's by argument to the function. Then after each bucket finishes, the output folder is populated with the graphs and chart of its comparative performance. 

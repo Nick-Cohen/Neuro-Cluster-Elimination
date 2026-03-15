@@ -61,7 +61,7 @@
   - Verify: `python -m pytest tests/ -v --tb=short -k "not neurobe_mode"` — existing 125 tests still pass; manual check that `Net` with `activation='relu'` uses ReLU layers
   - Done when: Config schema accepts all new fields; Net respects activation config; bucket.py parses `neurobe,3` correctly
 
-- [ ] **T04: Implement neurobe_mode config expansion, patience-based early stopping, and pass all tests** `est:1h`
+- [x] **T04: Implement neurobe_mode config expansion, patience-based early stopping, and pass all tests** `est:1h`
   - Why: This is the closer — wires neurobe_mode expansion in prepare_config, implements patience-based early stopping in Trainer, and verifies all tests pass including the full existing suite.
   - Files: `nce/config_schema.py`, `nce/neural_networks/train.py`, `tests/test_neurobe_mode.py`
   - Do: Add NEUROBE_DEFAULTS dict and expansion block in `prepare_config()` — when `neurobe_mode` is True, set defaults for all neurobe-faithful fields (user overrides win). Add patience-based early stopping branch in Trainer.train(): config fields `neurobe_early_stopping`, `neurobe_stop_iter`; counter starts 0, increments when `loss >= prev_best`, resets on improvement, breaks when `count > stop_iter`. Fix any test assertions that need adjustment based on actual implementation behavior.

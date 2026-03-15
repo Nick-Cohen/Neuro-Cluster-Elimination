@@ -190,6 +190,12 @@ class Trainer:
         nbe_val_losses = []
         nbe_warmup_epochs = 5  # Don't check early stopping until after this many epochs
 
+        # NeuroBE patience-based early stopping (distinct from NBE early stopping)
+        use_neurobe_early_stopping = self.config.get('neurobe_early_stopping', False)
+        neurobe_stop_iter = self.config.get('neurobe_stop_iter', 2)
+        neurobe_patience_count = 0
+        neurobe_prev_best = float('inf')
+
         # IMPORTANT: Initialize normalizing constant from TRAINING data, not validation data
         # This ensures that max(y + bw) from training is used to prevent overflow in UKL loss
         # We load a small training sample first just to trigger the normalization computation
@@ -684,6 +690,41 @@ class Trainer:
                         #             if v_curr > v_base and v_prev1 > v_base and v_prev2 > v_base:
                         #                 return traced_losses_data
 
+                    # NeuroBE patience-based early stopping check
+                    if use_neurobe_early_stopping and nbe_val_set is not None:
+                        global_epoch_nb = s * num_epochs + epoch
+
+                        # Compute validation loss
+                        with torch.no_grad():
+                            val_batch_nb = nbe_val_set[0]
+                            x_val_nb = val_batch_nb['x']
+                            y_val_nb = val_batch_nb['y']
+                            bw_val_nb = val_batch_nb.get('bw', val_batch_nb.get('mgh'))
+                            outputs_val_nb = self.net(x_val_nb).squeeze()
+                            if bw_val_nb is not None:
+                                neurobe_val_loss = self.loss_fn(outputs_val_nb, y_val_nb, bw_val_nb)
+                            else:
+                                neurobe_val_loss = self.loss_fn(outputs_val_nb, y_val_nb)
+                            if neurobe_val_loss.dim() > 0:
+                                neurobe_val_loss = neurobe_val_loss.mean()
+                            neurobe_val_loss_value = neurobe_val_loss.item()
+
+                        # Patience counter: reset on improvement, increment otherwise
+                        if neurobe_val_loss_value < neurobe_prev_best:
+                            neurobe_prev_best = neurobe_val_loss_value
+                            neurobe_patience_count = 0
+                        else:
+                            neurobe_patience_count += 1
+
+                        if neurobe_patience_count > neurobe_stop_iter:
+                            print(f'NeuroBE patience early stopping at epoch {global_epoch_nb}: '
+                                  f'count {neurobe_patience_count} > stop_iter {neurobe_stop_iter}, '
+                                  f'best_val_loss={neurobe_prev_best:.6e}, current={neurobe_val_loss_value:.6e}')
+                            self.bucket.gm.traced_losses_data.append((self.bucket.label, traced_losses_data))
+                            if self.bucket.gm._training_logger:
+                                log_early_stopping(self.bucket.gm._training_logger, self.bucket.label, global_epoch_nb, "neurobe_patience", neurobe_val_loss_value)
+                            return traced_losses_data
+
                     # track different losses-------------------
                     if val_set is None:
                         all_losses = self.evaluate_epoch(traced_loss_fns, set_batches)
@@ -712,6 +753,12 @@ class Trainer:
                     #     self.bucket.gm.traced_losses_data.append((self.bucket.label, traced_losses_data))
                     #     return traced_losses_data
         self.bucket.gm.traced_losses_data.append((self.bucket.label, traced_losses_data))
+
+        # Expose neurobe patience state for observability
+        if use_neurobe_early_stopping:
+            self.neurobe_patience_count = neurobe_patience_count
+            self.neurobe_prev_best = neurobe_prev_best
+
         # for retraining after one loss, reverts config back
         if new_loss_fn is not None:
             self.config['loss_fn'] = old_loss_fn_name

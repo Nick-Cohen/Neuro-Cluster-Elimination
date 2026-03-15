@@ -137,6 +137,34 @@ SECTION_NAMES = set(NESTED_SECTIONS.keys())
 
 
 # ===================================================================
+# NeuroBE mode defaults — applied when neurobe_mode=True
+# ===================================================================
+# These are the NeuroBE-faithful training defaults. When neurobe_mode
+# is True in the config, each key is set ONLY if not already present
+# (explicit user overrides win).
+
+NEUROBE_DEFAULTS = {
+    'normalization_mode': 'minmax_01',
+    'loss_fn': 'neurobe_weighted_mse',
+    'batch_size': 256,
+    'lr': 0.001,
+    'num_epochs': 500,
+    'neurobe_early_stopping': True,
+    'neurobe_stop_iter': 2,
+    'use_bw_approx': False,
+    'populate_bw_factors': False,
+    'activation': 'relu',
+    'use_amp': False,
+    'hidden_sizes': 'neurobe,3',
+    'skip_early_stopping': True,
+    'nbe_early_stopping': False,
+    'lower_dim': True,
+    'sampling_scheme': 'all',
+    'iB': 25,
+}
+
+
+# ===================================================================
 # Dead fields — present in benchmark configs but never read from config
 # ===================================================================
 
@@ -418,10 +446,18 @@ def prepare_config(config_dict, strict=False):
         # Nested config path: validate sections, then flatten
         validate_nested_config(config)
         flat = flatten_config(config)
-        flat = _validate_flat_config(flat, strict=strict)
     else:
-        # Flat config path: resolve aliases, then validate
+        # Flat config path: resolve aliases
         flat = _resolve_aliases(config)
-        flat = _validate_flat_config(flat, strict=strict)
+
+    # neurobe_mode expansion: fill in NEUROBE_DEFAULTS for any key
+    # not already set by the user. User overrides win.
+    # Runs before validation so expanded defaults satisfy required-field checks.
+    if flat.get('neurobe_mode'):
+        for key, default_value in NEUROBE_DEFAULTS.items():
+            if key not in flat:
+                flat[key] = default_value
+
+    flat = _validate_flat_config(flat, strict=strict)
 
     return flat
