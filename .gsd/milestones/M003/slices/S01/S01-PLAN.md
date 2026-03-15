@@ -40,7 +40,7 @@
 
 ## Tasks
 
-- [ ] **T01: Create test file and neurobe config fixture (initially failing)** `est:30m`
+- [x] **T01: Create test file and neurobe config fixture (initially failing)** `est:30m`
   - Why: Define objective stopping conditions before any implementation. Tests document the contract for normalization round-trip, early stopping semantics, config expansion, and loss function correctness.
   - Files: `tests/test_neurobe_mode.py`, `tests/conftest.py`
   - Do: Write 4 test classes: `TestNormalizationRoundTrip` (known log10 values → minmax_01 normalize → undo → compare within 1e-6), `TestNeurobeEarlyStoppingPatience` (mock loss sequence → verify stops at correct epoch), `TestNeurobeConfigExpansion` (neurobe_mode=True → verify all NEUROBE_DEFAULTS), `TestNeurobeWeightedMSE` (hand-computed expected loss). Add `neurobe_training_config` fixture to conftest.py.
