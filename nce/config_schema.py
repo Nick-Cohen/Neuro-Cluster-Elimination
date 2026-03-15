@@ -144,6 +144,7 @@ SECTION_NAMES = set(NESTED_SECTIONS.keys())
 # (explicit user overrides win).
 
 NEUROBE_DEFAULTS = {
+    'approximation_method': 'nn',
     'normalization_mode': 'minmax_01',
     'loss_fn': 'neurobe_weighted_mse',
     'batch_size': 256,
@@ -161,6 +162,9 @@ NEUROBE_DEFAULTS = {
     'lower_dim': True,
     'sampling_scheme': 'all',
     'iB': 25,
+    'debug': False,
+    'traced_losses': [],
+    'optimizer': 'adam',
 }
 
 

@@ -49,7 +49,7 @@
   - Verify: `python scripts/verify_nn_counts.py` → 15/15 match, 0 mismatches. `pytest tests/ -v` → 134+ passed.
   - Done when: All 15 models load successfully, NN counts match NeuroBE for all 15, verification script passes, existing tests still green.
 
-- [ ] **T02: Run neurobe_mode experiments on all 15 problems** `est:2h`
+- [x] **T02: Run neurobe_mode experiments on all 15 problems** `est:2h`
   - Why: This is the core R038 execution — running the actual inference experiments that produce the NCE results for comparison.
   - Files: `scripts/run_neurobe_experiments.py`, `notebooks/March-2025/neurobe_comparison_results.csv`
   - Do: (1) Write `scripts/run_neurobe_experiments.py` that iterates all 15 neurobe_binary problems, runs `FastGM` inference with neurobe_mode configs on CUDA, captures log_Z, num_trained, elapsed time per problem. Catches exceptions per-problem and logs failures without stopping. Writes results to CSV. (2) Run in background on GPU. (3) Collect results CSV when complete.

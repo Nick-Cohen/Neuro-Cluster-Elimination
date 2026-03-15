@@ -12,10 +12,10 @@
 - ⬜ **M004:** M004
 
 ## Recent Decisions
-- None recorded
+- Added approximation_method, debug, traced_losses, optimizer to NEUROBE_DEFAULTS — keeps neurobe_mode self-contained
 
 ## Blockers
 - None
 
 ## Next Action
-Execute T02: Run neurobe_mode experiments on all 15 problems in slice S02.
+T02 complete (experiment running on GPU, PID 3291719). Execute T03: Build combined comparison table and verify results — wait for experiment CSV to be written first.
