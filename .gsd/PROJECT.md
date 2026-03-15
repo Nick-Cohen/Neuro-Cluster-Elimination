@@ -39,3 +39,4 @@ See `.gsd/REQUIREMENTS.md` for the explicit capability contract, requirement sta
 - [x] M001: Config & Visualization — Clean configs, state preservation, standalone plotting, regression verification
 - [x] M002: Test Suite — Correctness, functional, convergence, and robustness tests with extensible failure-mode pattern
 - [ ] M003: NeuroBE Reproduction Mode — Faithful reproduction of NeuroBE algorithm in NCE for direct comparison on 15 binary-domain problems
+- [ ] M004: Single-Bucket Learning Benchmark — Reusable benchmark harness evaluating NN learning quality on hard buckets with historical comparison

@@ -338,6 +338,83 @@ This file is the explicit capability and coverage contract for the project.
 - Validation: unmapped
 - Notes: Table should include log_Z, error, abs_error, time, NNs for both codebases
 
+### R039 — Hard bucket selection precomputation
+- Class: core-capability
+- Status: active
+- Description: One-time script that runs all 24 small_problems with UKL + bw + auto_ecl + 10000 epochs (full-batch), identifies buckets with local error > 0.1, and saves a curated list of up to 10 hard buckets to disk
+- Why it matters: Provides the fixed evaluation set that all benchmark runs compare against
+- Source: user
+- Primary owning slice: M004/TBD
+- Supporting slices: none
+- Validation: unmapped
+- Notes: Uses existing auto_ecl values from problem_ecl_values.csv; validates exact bw solvability per selected bucket
+
+### R040 — Precomputed message caching
+- Class: core-capability
+- Status: active
+- Description: Save exact forward messages, exact backward messages, and approximate backward messages at bw_ecl levels (2^2, 2^3, 2^5, 2^10, 2^15, 2^25) to disk per selected bucket
+- Why it matters: Eliminates expensive message recomputation on every benchmark run
+- Source: user
+- Primary owning slice: M004/TBD
+- Supporting slices: none
+- Validation: unmapped
+- Notes: Config specifies which bw_ecl to use for training; all levels cached for future comparison
+
+### R041 — Time-limited single-bucket training
+- Class: core-capability
+- Status: active
+- Description: Train a single bucket's NN with epoch-boundary timeout (fast=1min, slow=1h per bucket), save NN weights, compute local error at checkpoint epochs
+- Why it matters: Enables fair time-controlled comparison across different configs
+- Source: user
+- Primary owning slice: M004/TBD
+- Supporting slices: none
+- Validation: unmapped
+- Notes: Checkpoints at epoch 10, 20, 50, 100, 500, 1000, 2000, etc. or time-based fallback for slow epochs
+
+### R042 — Multi-GPU parallel execution
+- Class: core-capability
+- Status: active
+- Description: Run benchmark training across multiple GPUs (1 bucket per GPU), cycling through bucket list as GPUs become free
+- Why it matters: 4× speedup on 4-GPU machine; benchmarks complete in practical time
+- Source: user
+- Primary owning slice: M004/TBD
+- Supporting slices: none
+- Validation: unmapped
+- Notes: Default: all 4 GPUs; configurable via --gpus argument
+
+### R043 — Per-bucket benchmark output
+- Class: core-capability
+- Status: active
+- Description: Each benchmark bucket produces a folder with loss-over-epochs and local-error-over-epochs matplotlib PNG plots
+- Why it matters: Visual inspection of learning quality per hard bucket
+- Source: user
+- Primary owning slice: M004/TBD
+- Supporting slices: none
+- Validation: unmapped
+- Notes: Output folder also contains config, timing, and epoch metadata
+
+### R044 — Historical comparison tracking
+- Class: core-capability
+- Status: active
+- Description: JSONL history file records per-run metadata (config, timing, epochs, local errors); comparison chart shows current vs historical best for runs of equal or shorter duration
+- Why it matters: Track whether config changes improve hard-bucket learning quality over time
+- Source: user
+- Primary owning slice: M004/TBD
+- Supporting slices: none
+- Validation: unmapped
+- Notes: Best-ever comparison filtered by duration ≤ current run's duration for fair comparison
+
+### R045 — CLI benchmark entry point
+- Class: core-capability
+- Status: active
+- Description: `python scripts/bucket_benchmark.py <config.yaml> <fast|slow> [--gpus 0,1,2,3]` runs the full benchmark pipeline
+- Why it matters: Single command to run, compare, and record benchmark results
+- Source: user
+- Primary owning slice: M004/TBD
+- Supporting slices: none
+- Validation: unmapped
+- Notes: YAML config processed through prepare_config()
+
 ## Deferred
 
 ### R025 — Config inheritance (base + overrides)
@@ -470,9 +547,16 @@ This file is the explicit capability and coverage contract for the project.
 | R036 | core-capability | active | M003/S02 | none | unmapped |
 | R037 | quality-attribute | active | M003/S01 | none | unmapped |
 | R038 | core-capability | active | M003/S02 | none | unmapped |
+| R039 | core-capability | active | M004/TBD | none | unmapped |
+| R040 | core-capability | active | M004/TBD | none | unmapped |
+| R041 | core-capability | active | M004/TBD | none | unmapped |
+| R042 | core-capability | active | M004/TBD | none | unmapped |
+| R043 | core-capability | active | M004/TBD | none | unmapped |
+| R044 | core-capability | active | M004/TBD | none | unmapped |
+| R045 | core-capability | active | M004/TBD | none | unmapped |
 ## Coverage Summary
 
-- Active requirements: 30
+- Active requirements: 37
 - Mapped to slices: 30
 - Validated: 24
-- Unmapped active requirements: 0
+- Unmapped active requirements: 7 (R039–R045, pending M004 planning)
