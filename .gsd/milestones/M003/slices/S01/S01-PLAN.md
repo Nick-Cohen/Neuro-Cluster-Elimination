@@ -47,7 +47,7 @@
   - Verify: `python -m pytest tests/test_neurobe_mode.py -v` — tests exist and fail with ImportError/AttributeError (not syntax errors)
   - Done when: All 4 test classes are syntactically valid and importable; they fail because the implementations don't exist yet
 
-- [ ] **T02: Implement DataPreprocessor minmax_01 mode and neurobe_weighted_mse loss** `est:1h`
+- [x] **T02: Implement DataPreprocessor minmax_01 mode and neurobe_weighted_mse loss** `est:1h`
   - Why: The normalization pipeline and loss function are the highest-risk coupled pair — the loss depends on preprocessor stats (ln_min, ln_max, sum_ln), and getting the log-base conversion wrong is silent. Building them together ensures the interface is correct.
   - Files: `nce/data/data_preprocessor.py`, `nce/neural_networks/losses.py`, `nce/neural_networks/train.py`
   - Do: Add `normalization_mode` param to DataPreprocessor.__init__. When `'minmax_01'`: compute `ln_min`, `ln_max`, `sum_ln` in `_initialize_normalizing_constant`; `normalize()` returns `(y_ln - ln_min) / (ln_max - ln_min)` with epsilon guard; `undo_normalization()` computes `(ln_min + output * (ln_max - ln_min)) / ln10`. Add `neurobe_weighted_mse` in losses.py. Register in `_get_loss_fn` dispatch with closure capturing preprocessor stats.

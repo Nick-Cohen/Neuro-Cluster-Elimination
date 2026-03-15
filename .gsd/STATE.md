@@ -11,10 +11,10 @@
 - 🔄 **M003:** NeuroBE Reproduction Mode
 
 ## Recent Decisions
-- None recorded
+- neurobe_weighted_mse signature omits bw_hat positional arg; Trainer closure handles interface mismatch
 
 ## Blockers
 - None
 
 ## Next Action
-Execute T02: Implement DataPreprocessor minmax_01 mode and neurobe_weighted_mse loss in slice S01.
+Execute T03: Add Net activation config and neurobe,3 hidden sizes mode in slice S01.

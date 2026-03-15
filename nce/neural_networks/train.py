@@ -929,6 +929,8 @@ class Trainer:
 
         use_bw_approx = self.config.get('use_bw_approx', False)
 
+        normalization_mode = self.config.get('normalization_mode', 'logspace_mean')
+
         # Create preprocessor with deferred normalization (y=None)
         # The normalizing constant will be computed on first load() call
         data_preprocessor = DataPreprocessor(
@@ -936,7 +938,8 @@ class Trainer:
             bw=None,
             lower_dim=self.lower_dim,
             device=self.config['device'],
-            use_bw_approx=use_bw_approx
+            use_bw_approx=use_bw_approx,
+            normalization_mode=normalization_mode,
         )
 
         return sg, data_preprocessor, DataLoader(self.bucket, sample_generator=sg, data_preprocessor=data_preprocessor)
@@ -1061,6 +1064,16 @@ class Trainer:
             return l1c
         elif loss_fn_name == "huber_gil1c":
             return huber_gil1c
+        elif loss_fn_name == "neurobe_weighted_mse":
+            # Closure reads preprocessor stats at call time (after initialization)
+            def _neurobe_weighted_mse(outputs, targets, bw_hat=None):
+                return neurobe_weighted_mse(
+                    outputs, targets, bw_hat,
+                    ln_min=self.data_preprocessor.ln_min,
+                    ln_max=self.data_preprocessor.ln_max,
+                    sum_ln=self.data_preprocessor.sum_ln,
+                )
+            return _neurobe_weighted_mse
         elif loss_fn_name == "weighted_logspace_mse":
             return weighted_logspace_mse
         elif loss_fn_name == "weighted_logspace_mse_pedigree":
