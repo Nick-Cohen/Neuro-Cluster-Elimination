@@ -52,7 +52,7 @@ This milestone is complete only when all are true:
 
 ## Slices
 
-- [ ] **S01: NeuroBE Training Mode** `risk:high` `depends:[]`
+- [x] **S01: NeuroBE Training Mode** `risk:high` `depends:[]`
   > After this: A hand-built test problem trains with min-max [0,1] normalization, patience-based early stopping, ReLU activation, and neurobe_mode config preset — verified by `pytest tests/` including normalization round-trip and early stopping tests.
 - [ ] **S02: ECL Tuning & Comparison Experiments** `risk:medium` `depends:[S01]`
   > After this: All 15 binary-domain problems have been run through NCE neurobe_mode with matched NN counts, and a combined comparison table shows results alongside NeuroBE C++ ground truth.
