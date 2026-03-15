@@ -270,6 +270,74 @@ This file is the explicit capability and coverage contract for the project.
 - Validation: M002
 - Notes: Convention/structure, not a feature
 
+## Active
+
+### R033 — NeuroBE min-max [0,1] target normalization mode
+- Class: core-capability
+- Status: active
+- Description: Min-max normalization of training targets to [0,1] range matching NeuroBE's `samples_to_data()`, with corresponding denormalization at inference via `ln_min + nn_out * (ln_max - ln_min)`
+- Why it matters: Required to faithfully reproduce NeuroBE's training pipeline; different normalization produces different convergence behavior
+- Source: user
+- Primary owning slice: M003/S01
+- Supporting slices: none
+- Validation: unmapped
+- Notes: Must coexist with existing log-space mean normalization as a config option
+
+### R034 — NeuroBE patience-2 early stopping
+- Class: core-capability
+- Status: active
+- Description: Early stopping that halts training after 2 consecutive non-improving epochs on validation loss, matching NeuroBE's `stop_iter=2` behavior
+- Why it matters: NeuroBE's early stopping is simpler than NCE's current 3-consecutive-increases logic; must match for faithful reproduction
+- Source: user
+- Primary owning slice: M003/S01
+- Supporting slices: none
+- Validation: unmapped
+- Notes: NeuroBE uses IS-weighted validation MSE for the loss comparison when s_method="is"
+
+### R035 — NeuroBE reproduction config preset
+- Class: core-capability
+- Status: active
+- Description: A `neurobe_mode` config flag that sets batch_size=256, weighted MSE loss, no backward messages, lr=0.001, min-max normalization, and patience-2 early stopping
+- Why it matters: Single flag to switch NCE into NeuroBE-faithful mode for direct comparison experiments
+- Source: user
+- Primary owning slice: M003/S01
+- Supporting slices: none
+- Validation: unmapped
+- Notes: Individual settings should also be independently configurable
+
+### R036 — Matched NN counts via ecl tuning
+- Class: core-capability
+- Status: active
+- Description: Per-problem ecl values that produce the same number of NN-trained buckets as NeuroBE's width-based dispatch for the 15 working binary-domain problems
+- Why it matters: Apples-to-apples comparison requires the same buckets to be NN-trained in both codebases
+- Source: user
+- Primary owning slice: M003/S02
+- Supporting slices: none
+- Validation: unmapped
+- Notes: NeuroBE used iB=25, width_problem=MaxWidth-1 per problem
+
+### R037 — Normalization round-trip test
+- Class: quality-attribute
+- Status: active
+- Description: Tests verify that min-max [0,1] normalize → train → denormalize produces correct output values (round-trip correctness)
+- Why it matters: User explicitly requested tests to verify the normalization pipeline works end-to-end
+- Source: user
+- Primary owning slice: M003/S01
+- Supporting slices: none
+- Validation: unmapped
+- Notes: Should use existing test fixtures and PATTERN.md conventions
+
+### R038 — Combined NeuroBE comparison results table
+- Class: core-capability
+- Status: active
+- Description: Run 15 binary-domain problems through NCE neurobe_mode and produce a combined comparison table with NeuroBE C++ results
+- Why it matters: The whole point — direct comparison to validate the reproduction
+- Source: user
+- Primary owning slice: M003/S02
+- Supporting slices: none
+- Validation: unmapped
+- Notes: Table should include log_Z, error, abs_error, time, NNs for both codebases
+
 ## Deferred
 
 ### R025 — Config inheritance (base + overrides)
@@ -396,9 +464,15 @@ This file is the explicit capability and coverage contract for the project.
 | R030 | anti-feature | out-of-scope | none | none | n/a |
 | R031 | anti-feature | out-of-scope | none | none | n/a |
 | R032 | anti-feature | out-of-scope | none | none | n/a |
+| R033 | core-capability | active | M003/S01 | none | unmapped |
+| R034 | core-capability | active | M003/S01 | none | unmapped |
+| R035 | core-capability | active | M003/S01 | none | unmapped |
+| R036 | core-capability | active | M003/S02 | none | unmapped |
+| R037 | quality-attribute | active | M003/S01 | none | unmapped |
+| R038 | core-capability | active | M003/S02 | none | unmapped |
 ## Coverage Summary
 
-- Active requirements: 24
-- Mapped to slices: 24
+- Active requirements: 30
+- Mapped to slices: 30
 - Validated: 24
 - Unmapped active requirements: 0
