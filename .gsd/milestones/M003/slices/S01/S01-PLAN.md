@@ -54,7 +54,7 @@
   - Verify: `python -m pytest tests/test_neurobe_mode.py::TestNormalizationRoundTrip tests/test_neurobe_mode.py::TestNeurobeWeightedMSE -v` — both pass
   - Done when: Round-trip test passes within 1e-6 tolerance; loss function output matches hand-computed expected value
 
-- [ ] **T03: Add Net activation config and neurobe,3 hidden sizes mode** `est:30m`
+- [x] **T03: Add Net activation config and neurobe,3 hidden sizes mode** `est:30m`
   - Why: NeuroBE uses ReLU (not Tanh) and computes hidden dim as `scope_size * var_dim` (not `ceil(log2(message_size)) * var_dim`). Both are small, isolated changes needed for faithful reproduction.
   - Files: `nce/neural_networks/net.py`, `nce/inference/bucket.py`, `nce/config_schema.py`
   - Do: In Net.__init__, read `activation` from config (default `'tanh'`), use `nn.ReLU()` when `'relu'`. In bucket.py, add `neurobe,{b}` hidden sizes path: `h = len(get_message_scope()) * b`. Add `activation` field to nn section and `normalization_mode`, `neurobe_early_stopping`, `neurobe_stop_iter`, `neurobe_mode`, `use_amp` fields to config schema NESTED_SECTIONS.

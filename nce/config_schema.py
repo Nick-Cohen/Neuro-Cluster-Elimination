@@ -39,6 +39,7 @@ NESTED_SECTIONS = OrderedDict([
         'approximation_method':    _field('approximation_method', default='nn'),
         'dope_factors':            _field('dope_factors', default=False),
         'device':                  _field('device', default='cuda'),
+        'neurobe_mode':            _field('neurobe_mode', default=False),
     }),
     ('nn', {
         'hidden_sizes':              _field('hidden_sizes', default=[]),
@@ -56,6 +57,7 @@ NESTED_SECTIONS = OrderedDict([
         'dt_random_seed':            _field('dt_random_seed', default=None),
         'dt_convergence_threshold':  _field('dt_convergence_threshold', default=None),
         'quantization_states':       _field('quantization_states', default=None),
+        'activation':                _field('activation', default='tanh'),
     }),
     ('training', {
         'num_epochs':                    _field('num_epochs', default=_REQUIRED),
@@ -93,6 +95,10 @@ NESTED_SECTIONS = OrderedDict([
         'nbe_plateau_window':            _field('nbe_plateau_window', default=25),
         'nbe_plateau_min_improvement':   _field('nbe_plateau_min_improvement', default=0.01),
         'scaled_mse':                    _field('scaled_mse', default=None),
+        'normalization_mode':            _field('normalization_mode', default='logspace_mean'),
+        'neurobe_early_stopping':        _field('neurobe_early_stopping', default=False),
+        'neurobe_stop_iter':             _field('neurobe_stop_iter', default=2),
+        'use_amp':                       _field('use_amp', default=True),
     }),
     ('sampling', {
         'sampling_scheme':   _field('sampling_scheme', default='uniform'),

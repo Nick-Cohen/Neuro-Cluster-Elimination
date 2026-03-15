@@ -206,8 +206,17 @@ class FastBucket:
             else:
                 hidden_sizes = self.config.get('hidden_sizes')
 
-                # Handle "nbe" or "nbe,{b}" string format for hidden sizes
-                if isinstance(hidden_sizes, str) and hidden_sizes.startswith('nbe'):
+                # Handle "nbe,{b}" or "neurobe,{b}" string format for hidden sizes
+                if isinstance(hidden_sizes, str) and hidden_sizes.startswith('neurobe'):
+                    # neurobe mode: h = scope_size * b (scope = number of variables in message)
+                    if ',' in hidden_sizes:
+                        b = int(hidden_sizes.split(',')[1])
+                    else:
+                        b = 1
+                    scope_size = len(self.get_message_scope())
+                    h = scope_size * b
+                    hidden_sizes = [h, h]
+                elif isinstance(hidden_sizes, str) and hidden_sizes.startswith('nbe'):
                     import math
                     # Parse the multiplier b (default 1)
                     if ',' in hidden_sizes:
