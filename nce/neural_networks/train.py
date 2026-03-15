@@ -207,7 +207,10 @@ class Trainer:
             num_batches_per_set = init_set_size // batch_size
             stratify = self.config.get('stratify_samples', False)
             init_batches = self.dataloader.load_batches(batch_size, num_batches_per_set, stratify_samples=stratify)
-        print(f"Initialized normalizing constant from training data: {self.data_preprocessor.normalizing_constant:.4f}")
+        if self.data_preprocessor.normalizing_constant is not None:
+            print(f"Initialized normalizing constant from training data: {self.data_preprocessor.normalizing_constant:.4f}")
+        elif self.data_preprocessor.normalization_mode == 'minmax_01':
+            print(f"Initialized minmax_01 normalization: ln_min={self.data_preprocessor.ln_min:.4f}, ln_max={self.data_preprocessor.ln_max:.4f}")
         if self.data_preprocessor.bw_normalizing_constant is not None:
             print(f"  bw_normalizing_constant (bw at argmax(y+bw)): {self.data_preprocessor.bw_normalizing_constant:.4f}")
 
@@ -1113,9 +1116,11 @@ class Trainer:
             return huber_gil1c
         elif loss_fn_name == "neurobe_weighted_mse":
             # Closure reads preprocessor stats at call time (after initialization)
+            # neurobe_weighted_mse signature: (outputs, targets, ln_min, ln_max, sum_ln)
+            # bw_hat is unused — neurobe_weighted_mse doesn't use backward messages
             def _neurobe_weighted_mse(outputs, targets, bw_hat=None):
                 return neurobe_weighted_mse(
-                    outputs, targets, bw_hat,
+                    outputs, targets,
                     ln_min=self.data_preprocessor.ln_min,
                     ln_max=self.data_preprocessor.ln_max,
                     sum_ln=self.data_preprocessor.sum_ln,

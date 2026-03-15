@@ -274,58 +274,58 @@ This file is the explicit capability and coverage contract for the project.
 
 ### R033 — NeuroBE min-max [0,1] target normalization mode
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: Min-max normalization of training targets to [0,1] range matching NeuroBE's `samples_to_data()`, with corresponding denormalization at inference via `ln_min + nn_out * (ln_max - ln_min)`
 - Why it matters: Required to faithfully reproduce NeuroBE's training pipeline; different normalization produces different convergence behavior
 - Source: user
 - Primary owning slice: M003/S01
 - Supporting slices: none
-- Validation: unmapped
-- Notes: Must coexist with existing log-space mean normalization as a config option
+- Validation: M003
+- Notes: DataPreprocessor normalization_mode='minmax_01'; coexists with existing logspace_mean mode
 
 ### R034 — NeuroBE patience-2 early stopping
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: Early stopping that halts training after 2 consecutive non-improving epochs on validation loss, matching NeuroBE's `stop_iter=2` behavior
 - Why it matters: NeuroBE's early stopping is simpler than NCE's current 3-consecutive-increases logic; must match for faithful reproduction
 - Source: user
 - Primary owning slice: M003/S01
 - Supporting slices: none
-- Validation: unmapped
-- Notes: NeuroBE uses IS-weighted validation MSE for the loss comparison when s_method="is"
+- Validation: M003
+- Notes: count > stop_iter=2 means 3 non-improving epochs trigger stop; exercised in BN_1 (stopped at epoch 145)
 
 ### R035 — NeuroBE reproduction config preset
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: A `neurobe_mode` config flag that sets batch_size=256, weighted MSE loss, no backward messages, lr=0.001, min-max normalization, and patience-2 early stopping
 - Why it matters: Single flag to switch NCE into NeuroBE-faithful mode for direct comparison experiments
 - Source: user
 - Primary owning slice: M003/S01
 - Supporting slices: none
-- Validation: unmapped
-- Notes: Individual settings should also be independently configurable
+- Validation: M003
+- Notes: NEUROBE_DEFAULTS dict with 20 keys; individual settings independently configurable via set-if-absent pattern
 
 ### R036 — Matched NN counts via ecl tuning
 - Class: core-capability
-- Status: active
+- Status: validated
 - Description: Per-problem ecl values that produce the same number of NN-trained buckets as NeuroBE's width-based dispatch for the 15 working binary-domain problems
 - Why it matters: Apples-to-apples comparison requires the same buckets to be NN-trained in both codebases
 - Source: user
 - Primary owning slice: M003/S02
 - Supporting slices: none
-- Validation: unmapped
-- Notes: NeuroBE used iB=25, width_problem=MaxWidth-1 per problem
+- Validation: M003
+- Notes: ecl = 2^width_problem - 1; verified by scripts/verify_nn_counts.py (all 15 MATCH)
 
 ### R037 — Normalization round-trip test
 - Class: quality-attribute
-- Status: active
+- Status: validated
 - Description: Tests verify that min-max [0,1] normalize → train → denormalize produces correct output values (round-trip correctness)
 - Why it matters: User explicitly requested tests to verify the normalization pipeline works end-to-end
 - Source: user
 - Primary owning slice: M003/S01
 - Supporting slices: none
-- Validation: unmapped
-- Notes: Should use existing test fixtures and PATTERN.md conventions
+- Validation: M003
+- Notes: test_round_trip_known_values verifies normalize → denormalize with known ln values; degenerate case also tested
 
 ### R038 — Combined NeuroBE comparison results table
 - Class: core-capability
@@ -337,6 +337,83 @@ This file is the explicit capability and coverage contract for the project.
 - Supporting slices: none
 - Validation: unmapped
 - Notes: Table should include log_Z, error, abs_error, time, NNs for both codebases
+
+### R039 — Hard bucket selection precomputation
+- Class: core-capability
+- Status: active
+- Description: One-time script that runs all 24 small_problems with UKL + bw + auto_ecl + 10000 epochs (full-batch), identifies buckets with local error > 0.1, and saves a curated list of up to 10 hard buckets to disk
+- Why it matters: Provides the fixed evaluation set that all benchmark runs compare against
+- Source: user
+- Primary owning slice: M004/TBD
+- Supporting slices: none
+- Validation: unmapped
+- Notes: Uses existing auto_ecl values from problem_ecl_values.csv; validates exact bw solvability per selected bucket
+
+### R040 — Precomputed message caching
+- Class: core-capability
+- Status: active
+- Description: Save exact forward messages, exact backward messages, and approximate backward messages at bw_ecl levels (2^2, 2^3, 2^5, 2^10, 2^15, 2^25) to disk per selected bucket
+- Why it matters: Eliminates expensive message recomputation on every benchmark run
+- Source: user
+- Primary owning slice: M004/TBD
+- Supporting slices: none
+- Validation: unmapped
+- Notes: Config specifies which bw_ecl to use for training; all levels cached for future comparison
+
+### R041 — Time-limited single-bucket training
+- Class: core-capability
+- Status: active
+- Description: Train a single bucket's NN with epoch-boundary timeout (fast=1min, slow=1h per bucket), save NN weights, compute local error at checkpoint epochs
+- Why it matters: Enables fair time-controlled comparison across different configs
+- Source: user
+- Primary owning slice: M004/TBD
+- Supporting slices: none
+- Validation: unmapped
+- Notes: Checkpoints at epoch 10, 20, 50, 100, 500, 1000, 2000, etc. or time-based fallback for slow epochs
+
+### R042 — Multi-GPU parallel execution
+- Class: core-capability
+- Status: active
+- Description: Run benchmark training across multiple GPUs (1 bucket per GPU), cycling through bucket list as GPUs become free
+- Why it matters: 4× speedup on 4-GPU machine; benchmarks complete in practical time
+- Source: user
+- Primary owning slice: M004/TBD
+- Supporting slices: none
+- Validation: unmapped
+- Notes: Default: all 4 GPUs; configurable via --gpus argument
+
+### R043 — Per-bucket benchmark output
+- Class: core-capability
+- Status: active
+- Description: Each benchmark bucket produces a folder with loss-over-epochs and local-error-over-epochs matplotlib PNG plots
+- Why it matters: Visual inspection of learning quality per hard bucket
+- Source: user
+- Primary owning slice: M004/TBD
+- Supporting slices: none
+- Validation: unmapped
+- Notes: Output folder also contains config, timing, and epoch metadata
+
+### R044 — Historical comparison tracking
+- Class: core-capability
+- Status: active
+- Description: JSONL history file records per-run metadata (config, timing, epochs, local errors); comparison chart shows current vs historical best for runs of equal or shorter duration
+- Why it matters: Track whether config changes improve hard-bucket learning quality over time
+- Source: user
+- Primary owning slice: M004/TBD
+- Supporting slices: none
+- Validation: unmapped
+- Notes: Best-ever comparison filtered by duration ≤ current run's duration for fair comparison
+
+### R045 — CLI benchmark entry point
+- Class: core-capability
+- Status: active
+- Description: `python scripts/bucket_benchmark.py <config.yaml> <fast|slow> [--gpus 0,1,2,3]` runs the full benchmark pipeline
+- Why it matters: Single command to run, compare, and record benchmark results
+- Source: user
+- Primary owning slice: M004/TBD
+- Supporting slices: none
+- Validation: unmapped
+- Notes: YAML config processed through prepare_config()
 
 ## Deferred
 
@@ -464,15 +541,22 @@ This file is the explicit capability and coverage contract for the project.
 | R030 | anti-feature | out-of-scope | none | none | n/a |
 | R031 | anti-feature | out-of-scope | none | none | n/a |
 | R032 | anti-feature | out-of-scope | none | none | n/a |
-| R033 | core-capability | active | M003/S01 | none | unmapped |
-| R034 | core-capability | active | M003/S01 | none | unmapped |
-| R035 | core-capability | active | M003/S01 | none | unmapped |
-| R036 | core-capability | active | M003/S02 | none | unmapped |
-| R037 | quality-attribute | active | M003/S01 | none | unmapped |
+| R033 | core-capability | validated | M003/S01 | none | M003 |
+| R034 | core-capability | validated | M003/S01 | none | M003 |
+| R035 | core-capability | validated | M003/S01 | none | M003 |
+| R036 | core-capability | validated | M003/S02 | none | M003 |
+| R037 | quality-attribute | validated | M003/S01 | none | M003 |
 | R038 | core-capability | active | M003/S02 | none | unmapped |
+| R039 | core-capability | active | M004/TBD | none | unmapped |
+| R040 | core-capability | active | M004/TBD | none | unmapped |
+| R041 | core-capability | active | M004/TBD | none | unmapped |
+| R042 | core-capability | active | M004/TBD | none | unmapped |
+| R043 | core-capability | active | M004/TBD | none | unmapped |
+| R044 | core-capability | active | M004/TBD | none | unmapped |
+| R045 | core-capability | active | M004/TBD | none | unmapped |
 ## Coverage Summary
 
-- Active requirements: 30
+- Active requirements: 37
 - Mapped to slices: 30
-- Validated: 24
-- Unmapped active requirements: 0
+- Validated: 29
+- Unmapped active requirements: 7 (R039–R045, pending M004 planning)

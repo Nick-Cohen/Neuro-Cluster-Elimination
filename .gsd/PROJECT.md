@@ -13,8 +13,9 @@ Running a tweaked experiment should be as simple as editing a config file and ex
 - **v1.0 complete:** YAML config parsing, multi-GPU distribution, timestamped output folders, auto-plotting with symlog axes and multi-run averaging — all 15 v1.0 requirements validated.
 - **M001 complete:** Config restructured into 6 nested sections with validation, backward compat for flat configs, state preservation with loss curves, visualization module, structured JSONL logging, and regression test — all 17 requirements validated.
 - **M002 complete:** pytest-based test suite covering exact inference correctness, NN training, convergence, and loss function robustness — 125 tests pass in ~30s, all 24 requirements validated.
+- **M003 complete:** NeuroBE reproduction mode — `neurobe_mode: true` config preset expands to 20 NeuroBE-faithful defaults, min-max [0,1] normalization, patience-based early stopping, neurobe_weighted_mse loss, ReLU activation. All 15 binary-domain NN counts match NeuroBE. 134 tests pass (9 new neurobe-mode tests). Comparison experiment completed on CUDA; R038 (comparison table) pending experiment results finalization.
 - **30 quick tasks completed:** Bug fixes, benchmark experiments (WMSE vs UKL across 24 problems), algorithm evaluation, plotting tools, model cache setup.
-- **Codebase:** Three-layer architecture (inference, neural_networks, sampling) in `nce/`. Experiment runner in `notebooks/_1-2026/`. Benchmark problem sets in `nce/benchmark_problems/`. Test suite in `tests/`.
+- **Codebase:** Three-layer architecture (inference, neural_networks, sampling) in `nce/`. Experiment runner in `notebooks/_1-2026/`. Benchmark problem sets in `nce/benchmark_problems/` (small_problems + neurobe_binary). Test suite in `tests/` (134 tests).
 
 ## Architecture / Key Patterns
 
@@ -28,7 +29,8 @@ Running a tweaked experiment should be as simple as editing a config file and ex
 - **Training logging:** `nce/training_logger.py` — JSONL events via `nce.training` logger namespace (isolated from root logger suppression).
 - **Device management:** Factors and buckets must be on consistent devices (CUDA/CPU)
 - **Bucket lifecycle:** Buckets created during init, consumed during elimination, deleted after — training metadata captured into `per_bucket_training_log` before deletion
-- **Test suite:** `tests/` with pytest — hand-built factor fixtures (binary chain, ternary chain, star graph) with known partition functions, complete NN training config fixture, parametrized loss function robustness tests. `tests/PATTERN.md` documents how to add regression tests.
+- **NeuroBE reproduction mode:** `neurobe_mode: true` in config expands via NEUROBE_DEFAULTS (20 keys, set-if-absent). Includes minmax_01 normalization in DataPreprocessor, neurobe_weighted_mse loss, patience-based early stopping, ReLU activation, neurobe,{b} hidden sizes. `neurobe_binary` BenchmarkSet provides 15 binary-domain problems with matched ecl values.
+- **Test suite:** `tests/` with pytest — hand-built factor fixtures (binary chain, ternary chain, star graph) with known partition functions, complete NN training config fixture, parametrized loss function robustness tests, neurobe-mode normalization/stopping/config tests. `tests/PATTERN.md` documents how to add regression tests.
 
 ## Capability Contract
 
@@ -38,4 +40,5 @@ See `.gsd/REQUIREMENTS.md` for the explicit capability contract, requirement sta
 
 - [x] M001: Config & Visualization — Clean configs, state preservation, standalone plotting, regression verification
 - [x] M002: Test Suite — Correctness, functional, convergence, and robustness tests with extensible failure-mode pattern
-- [ ] M003: NeuroBE Reproduction Mode — Faithful reproduction of NeuroBE algorithm in NCE for direct comparison on 15 binary-domain problems
+- [x] M003: NeuroBE Reproduction Mode — neurobe_mode config preset, min-max normalization, patience early stopping, 15-problem benchmark module, all NN counts matched. R038 pending experiment results.
+- [ ] M004: Single-Bucket Learning Benchmark — Reusable benchmark harness evaluating NN learning quality on hard buckets with historical comparison
