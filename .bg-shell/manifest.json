@@ -1,14 +1,1 @@
-[
-  {
-    "id": "af3efaf4",
-    "label": "neurobe-full",
-    "command": "cd /home/cohenn1/NCE && source venv/bin/activate && python scripts/run_neurobe_experiments.py 2>&1",
-    "cwd": "/home/cohenn1/NCE",
-    "startedAt": 1773614153714,
-    "processType": "build",
-    "group": "neurobe",
-    "readyPattern": null,
-    "readyPort": null,
-    "pid": 3291718
-  }
-]
+[]
