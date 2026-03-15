@@ -42,7 +42,7 @@
 
 ## Tasks
 
-- [ ] **T01: Fix root-variable loading and build neurobe benchmark config module** `est:45m`
+- [x] **T01: Fix root-variable loading and build neurobe benchmark config module** `est:45m`
   - Why: Root-variable bug in `_load_from_uai` blocks all 15 models from loading. The neurobe benchmark config module (with per-problem ecl values from NeuroBE CSV) is the foundation for all experiments. NN count verification (R036) must pass before burning GPU hours.
   - Files: `nce/inference/graphical_model.py`, `nce/benchmark_problems/neurobe_binary.py`, `nce/benchmark_problems/__init__.py`, `scripts/verify_nn_counts.py`
   - Do: (1) Fix `_load_from_uai` to prefer `elim_order` param over `.vo` file when elim_order is provided — don't pass `order_file` to `uai_to_GM` when we already have an elim_order. (2) Build `neurobe_binary.py` following nbe_sanity_check pattern: 15 model keys, per-problem ecl values from NeuroBE CSV (`ecl = 2^wp - 1`), `num_samples='nbe,0.1'`, `neurobe_mode=True`, iB=25. (3) Export from `__init__.py`. (4) Write `scripts/verify_nn_counts.py` that loads all 15 models, calls `get_large_message_buckets(iB=25, ecl=ecl)`, and asserts NN count matches NeuroBE for every problem.

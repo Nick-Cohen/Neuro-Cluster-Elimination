@@ -148,8 +148,12 @@ class FastGM:
         # Load the UAI file
         ord_file = uai_file + ".vo"
         evid_file = uai_file + ".evid"
-        #check if evid file exists
-        gm_model = uai_to_GM(uai_file=uai_file,     order_file=ord_file, elim_order=elim_order)
+        # Prefer elim_order (all n vars, from .ord.elim) over .vo file (n-1 vars,
+        # skips root).  Only fall back to .vo when no explicit order is given.
+        if elim_order is not None:
+            gm_model = uai_to_GM(uai_file=uai_file, elim_order=elim_order)
+        else:
+            gm_model = uai_to_GM(uai_file=uai_file, order_file=ord_file, elim_order=elim_order)
         if os.path.exists(evid_file):
             evid = readEvidence14(evid_file)
             gm_model.condition(evid)

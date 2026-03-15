@@ -17,4 +17,4 @@
 - None
 
 ## Next Action
-Execute T01: Fix root-variable loading and build neurobe benchmark config module in slice S02.
+Execute T02: Run neurobe_mode experiments on all 15 problems in slice S02.
