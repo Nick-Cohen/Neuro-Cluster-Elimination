@@ -56,7 +56,7 @@
   - Verify: CSV exists with 15 rows. No problems failed. Each row has log_Z, NNs, and time values.
   - Done when: All 15 problems have completed inference and results are saved to CSV.
 
-- [ ] **T03: Build combined comparison table and verify results** `est:30m`
+- [x] **T03: Build combined comparison table and verify results** `est:30m`
   - Why: The deliverable is the side-by-side comparison (R038). This task parses NCE results alongside NeuroBE CSV into the final comparison format and verifies NN counts match.
   - Files: `scripts/build_comparison_table.py`, `notebooks/March-2025/neurobe_comparison_table.csv`
   - Do: (1) Write `scripts/build_comparison_table.py` that reads NCE results CSV and NeuroBE `binary_domain_results.csv`, joins on problem name, produces combined table with columns: Problem, NCE_log_Z, NeuroBE_log_Z, NCE_NNs, NeuroBE_NNs, NCE_time_hrs, NeuroBE_time_hrs. Prints formatted table to stdout. Saves as CSV. (2) Verify NN counts match for all 15 problems (assert NCE_NNs == NeuroBE_NNs). (3) Run existing test suite to confirm nothing broke.

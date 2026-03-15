@@ -2,7 +2,7 @@
 
 **Active Milestone:** M003 — NeuroBE Reproduction Mode
 **Active Slice:** S02 — ECL Tuning & Comparison Experiments
-**Phase:** executing
+**Phase:** summarizing
 **Requirements Status:** 7 active · 17 validated · 4 deferred · 4 out of scope
 
 ## Milestone Registry
@@ -15,7 +15,7 @@
 - None recorded
 
 ## Blockers
-- T03 partially complete: comparison script built and tested, but 15-problem experiment still running on CUDA (PID 3293937). T02's original run produced stale all-failed CSV; re-launched in T03. Need experiment to complete before final verification.
+- None
 
 ## Next Action
-Resume T03: Wait for experiment (PID 3293937) to complete, then run `python scripts/build_comparison_table.py` to verify all 15 NN counts match and produce final comparison table. See T03-SUMMARY.md resume notes.
+All tasks done in S02. Write slice summary and complete slice.
