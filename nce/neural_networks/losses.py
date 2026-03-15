@@ -2,6 +2,32 @@ import torch
 import torch.nn as nn
 import math
 
+def neurobe_weighted_mse(outputs, targets, ln_min, ln_max, sum_ln):
+    """NeuroBE weighted MSE loss operating on [0,1]-normalized targets.
+
+    Weights are importance sampling weights derived from the normalization stats:
+        w = targets * (ln_max - ln_min) / sum_ln
+    Loss:
+        mean(w * (outputs - targets)^2)
+
+    Args:
+        outputs: NN predictions, [0,1]-normalized
+        targets: True values, [0,1]-normalized
+        ln_min: Minimum value in natural log space (from DataPreprocessor)
+        ln_max: Maximum value in natural log space (from DataPreprocessor)
+        sum_ln: Sum of (y_ln - ln_min) over training data (from DataPreprocessor)
+
+    Returns:
+        Scalar loss tensor
+    """
+    epsilon = 1e-10
+    ln_range = ln_max - ln_min
+    safe_sum_ln = sum_ln if abs(sum_ln) > epsilon else epsilon
+    w = targets * ln_range / safe_sum_ln
+    loss = (w * (outputs - targets) ** 2).mean()
+    return loss
+
+
 def expected_softmax_kl(outputs, targets, sigma_f=0, sigma_g=0, rho=0, num_bw_samples=100, seed=None):
     # set random seed
     batch_size = outputs.numel()

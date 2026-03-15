@@ -41,11 +41,18 @@ class Net(nn.Module):
         if self.bias_only:
             hidden_sizes = []  # Treat as linear model, then freeze weights
 
+        # Configurable activation function (default: tanh for backward compat)
+        activation_name = nn_config.get('activation', 'tanh')
+        if activation_name == 'relu':
+            activation_cls = nn.ReLU
+        else:
+            activation_cls = nn.Tanh
+
         layers = []
         prev_dim = input_size
         for hidden_dim in hidden_sizes:
             layers.append(nn.Linear(prev_dim, hidden_dim))
-            layers.append(nn.Tanh())
+            layers.append(activation_cls())
             prev_dim = hidden_dim
 
         layers.append(nn.Linear(prev_dim, 1))

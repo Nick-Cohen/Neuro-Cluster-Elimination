@@ -26,7 +26,7 @@ class DataPreprocessor:
         use_bw_approx: If True, use bw-aware normalization
     """
     def __init__(self, y: torch.Tensor = None, bw: torch.Tensor = None, lower_dim: bool = True,
-                 device=None, use_bw_approx: bool = False) -> None:
+                 device=None, use_bw_approx: bool = False, normalization_mode: str = 'logspace_mean') -> None:
         self.y = y
         self.bw = bw
         if device is None:
@@ -35,6 +35,7 @@ class DataPreprocessor:
             self.device = device
         self.lower_dim = lower_dim
         self.use_bw_approx = use_bw_approx
+        self.normalization_mode = normalization_mode
 
         # Normalizing constant (in natural log space) - computed lazily
         self.normalizing_constant = None
@@ -46,6 +47,12 @@ class DataPreprocessor:
         # CRITICAL: This must be computed ONCE from all training data and used for ALL batches
         # Using per-batch max causes gradient inconsistency and training divergence
         self.global_max_targets = None
+
+        # minmax_01 mode attributes (populated by _initialize_normalizing_constant)
+        self.ln_min = None
+        self.ln_max = None
+        self.sum_ln = None
+        self.ln_range = None
 
         # Initialize normalizing constant from provided samples if available
         if y is not None:
@@ -78,6 +85,17 @@ class DataPreprocessor:
 
         # Convert to natural log space
         y_ln = y_vals * ln10
+
+        if self.normalization_mode == 'minmax_01':
+            self.ln_min = y_ln.min().item()
+            self.ln_max = y_ln.max().item()
+            self.ln_range = max(self.ln_max - self.ln_min, 1e-10)
+            # sum_ln = sum(y_ln_i - ln_min) for IS weights in loss function
+            self.sum_ln = (y_ln - self.ln_min).sum().item()
+            if self.ln_max == self.ln_min:
+                print(f"[DataPreprocessor minmax_01] WARNING: all targets identical (ln_max == ln_min), using epsilon guard")
+            print(f"[DataPreprocessor minmax_01] ln_min={self.ln_min:.4f}, ln_max={self.ln_max:.4f}, sum_ln={self.sum_ln:.4f}")
+            return
 
         if self.use_bw_approx and bw_vals is not None:
             # WITH bw: normalize by logsumexp(y + bw) - logsumexp(bw)
@@ -126,10 +144,19 @@ class DataPreprocessor:
             normalized_bw is converted to natural log but NOT centered (used as-is by loss functions).
         """
         # Lazy initialization: compute normalizing constant on first call
-        if self.normalizing_constant is None:
+        if self.normalization_mode == 'minmax_01':
+            if self.ln_min is None:
+                self._initialize_normalizing_constant(y_vals, bw_vals)
+        elif self.normalizing_constant is None:
             self._initialize_normalizing_constant(y_vals, bw_vals)
 
         ln10 = torch.log(torch.tensor(10.0)).to(self.device)
+
+        # minmax_01 mode: normalize to [0, 1] range in natural log space
+        if self.normalization_mode == 'minmax_01':
+            y_ln = y_vals * ln10
+            y_normalized = (y_ln - self.ln_min) / self.ln_range
+            return y_normalized, None
 
         # Convert message to natural log space and subtract normalizing constant
         y_ln = y_vals * ln10
@@ -157,12 +184,19 @@ class DataPreprocessor:
         """Convert normalized outputs back to log10 space.
 
         Args:
-            outputs: Normalized outputs from neural network (natural log space, centered)
+            outputs: Normalized outputs from neural network.
+                     For logspace_mean: natural log space, centered.
+                     For minmax_01: [0,1] normalized values.
 
         Returns:
             Values in log10 space
         """
         ln10 = torch.log(torch.tensor(10.0)).to(outputs.device)
+
+        if self.normalization_mode == 'minmax_01':
+            # Undo: y_ln = ln_min + outputs * ln_range, then convert to log10
+            y_ln = self.ln_min + outputs * self.ln_range
+            return y_ln / ln10
 
         # Add back normalizing constant
         outputs = outputs + self.normalizing_constant

@@ -1,7 +1,7 @@
 # GSD State
 
 **Active Milestone:** M003 — NeuroBE Reproduction Mode
-**Active Slice:** S01 — NeuroBE Training Mode
+**Active Slice:** S02 — ECL Tuning & Comparison Experiments
 **Phase:** planning
 **Requirements Status:** 7 active · 17 validated · 4 deferred · 4 out of scope
 
@@ -17,4 +17,4 @@
 - None
 
 ## Next Action
-Plan slice S01 (NeuroBE Training Mode).
+Plan slice S02 (ECL Tuning & Comparison Experiments).

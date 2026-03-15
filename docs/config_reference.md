@@ -88,6 +88,7 @@ and neural network approximation.
 | `approximation_method` | `approximation_method` | `str` | `'nn'` | Which approximation method to use for large buckets. See [Approximation Method Values](#approximation-method-values). |
 | `dope_factors` | `dope_factors` | `bool` | `False` | Replace `-inf` values in factor tensors with a finite floor (`-5`). Prevents numerical issues from zero-probability entries in the original model. |
 | `device` | `device` | `str` | `'cuda'` | PyTorch device for tensor computation. `'cuda'` for GPU, `'cpu'` for CPU. |
+| `neurobe_mode` | `neurobe_mode` | `bool` | `False` | Master flag for NeuroBE-faithful training mode. When enabled, activates NeuroBE-specific defaults (min-max normalization, weighted MSE loss, ReLU activation, patience-based early stopping). |
 
 ## NN Section
 
@@ -110,6 +111,7 @@ Neural network architecture and configuration. These fields are only relevant wh
 | `dt_random_seed` | `dt_random_seed` | `int` \| `None` | `None` | Random seed for decision tree training reproducibility. |
 | `dt_convergence_threshold` | `dt_convergence_threshold` | `float` \| `None` | `None` | Stop decision tree optimization when the maximum change in predictions falls below this threshold. |
 | `quantization_states` | `quantization_states` | `int` \| `None` | `None` | Number of quantization states for decision tree input discretization. |
+| `activation` | `activation` | `str` | `'tanh'` | Activation function for hidden layers. `'tanh'` for Tanh (default), `'relu'` for ReLU. NeuroBE uses ReLU. |
 
 ### hidden_sizes
 
@@ -121,6 +123,7 @@ The `hidden_sizes` field accepts multiple forms:
 | `[32, 32]` | Two hidden layers with 32 units each, Tanh activation. |
 | `'bias_only'` | Learn only a single bias term. All weights frozen to zero. |
 | `'nbe,<b>'` | NeuroBE-style adaptive sizing: two hidden layers of size `b * ceil(log2(message_size))`. Default `b=1` if omitted (i.e., `'nbe'`). |
+| `'neurobe,<b>'` | NeuroBE-faithful adaptive sizing: two hidden layers of size `b * scope_size` (number of variables in message scope). Default `b=1` if omitted. Differs from `nbe` by using scope size instead of log2(message_size). |
 
 ## Training Section
 
@@ -158,6 +161,10 @@ early stopping, and phase-2 training.
 | `nbe_plateau_window` | `nbe_plateau_window` | `int` | `25` | Window size for NeuroBE plateau detection (currently unused in active code). |
 | `nbe_plateau_min_improvement` | `nbe_plateau_min_improvement` | `float` | `0.01` | Minimum improvement within the plateau window (currently unused in active code). |
 | `scaled_mse` | `scaled_mse` | `float` \| `None` | `None` | Scaling parameter for the `scaled_mse` loss function. When the `scaled_mse` loss is used, forward/backward statistics are incorporated to scale the MSE in linear space. |
+| `normalization_mode` | `normalization_mode` | `str` | `'logspace_mean'` | Data normalization mode for the DataPreprocessor. `'logspace_mean'` subtracts the log-space mean (default NCE behavior). `'minmax_01'` applies min-max normalization to [0,1] range (NeuroBE-faithful). |
+| `neurobe_early_stopping` | `neurobe_early_stopping` | `bool` | `False` | Enable NeuroBE-style patience-based early stopping. Distinct from `nbe_early_stopping` (which uses plateau detection). Stops training after `neurobe_stop_iter` consecutive non-improving epochs. |
+| `neurobe_stop_iter` | `neurobe_stop_iter` | `int` | `2` | Number of consecutive non-improving epochs before NeuroBE early stopping triggers. Only used when `neurobe_early_stopping=True`. |
+| `use_amp` | `use_amp` | `bool` | `True` | Enable automatic mixed precision (AMP) during training. Uses `torch.cuda.amp` for faster computation on supported GPUs. |
 
 ### batch_size
 

@@ -39,6 +39,7 @@ NESTED_SECTIONS = OrderedDict([
         'approximation_method':    _field('approximation_method', default='nn'),
         'dope_factors':            _field('dope_factors', default=False),
         'device':                  _field('device', default='cuda'),
+        'neurobe_mode':            _field('neurobe_mode', default=False),
     }),
     ('nn', {
         'hidden_sizes':              _field('hidden_sizes', default=[]),
@@ -56,6 +57,7 @@ NESTED_SECTIONS = OrderedDict([
         'dt_random_seed':            _field('dt_random_seed', default=None),
         'dt_convergence_threshold':  _field('dt_convergence_threshold', default=None),
         'quantization_states':       _field('quantization_states', default=None),
+        'activation':                _field('activation', default='tanh'),
     }),
     ('training', {
         'num_epochs':                    _field('num_epochs', default=_REQUIRED),
@@ -93,6 +95,10 @@ NESTED_SECTIONS = OrderedDict([
         'nbe_plateau_window':            _field('nbe_plateau_window', default=25),
         'nbe_plateau_min_improvement':   _field('nbe_plateau_min_improvement', default=0.01),
         'scaled_mse':                    _field('scaled_mse', default=None),
+        'normalization_mode':            _field('normalization_mode', default='logspace_mean'),
+        'neurobe_early_stopping':        _field('neurobe_early_stopping', default=False),
+        'neurobe_stop_iter':             _field('neurobe_stop_iter', default=2),
+        'use_amp':                       _field('use_amp', default=True),
     }),
     ('sampling', {
         'sampling_scheme':   _field('sampling_scheme', default='uniform'),
@@ -128,6 +134,34 @@ NESTED_SECTIONS = OrderedDict([
 ])
 
 SECTION_NAMES = set(NESTED_SECTIONS.keys())
+
+
+# ===================================================================
+# NeuroBE mode defaults — applied when neurobe_mode=True
+# ===================================================================
+# These are the NeuroBE-faithful training defaults. When neurobe_mode
+# is True in the config, each key is set ONLY if not already present
+# (explicit user overrides win).
+
+NEUROBE_DEFAULTS = {
+    'normalization_mode': 'minmax_01',
+    'loss_fn': 'neurobe_weighted_mse',
+    'batch_size': 256,
+    'lr': 0.001,
+    'num_epochs': 500,
+    'neurobe_early_stopping': True,
+    'neurobe_stop_iter': 2,
+    'use_bw_approx': False,
+    'populate_bw_factors': False,
+    'activation': 'relu',
+    'use_amp': False,
+    'hidden_sizes': 'neurobe,3',
+    'skip_early_stopping': True,
+    'nbe_early_stopping': False,
+    'lower_dim': True,
+    'sampling_scheme': 'all',
+    'iB': 25,
+}
 
 
 # ===================================================================
@@ -412,10 +446,18 @@ def prepare_config(config_dict, strict=False):
         # Nested config path: validate sections, then flatten
         validate_nested_config(config)
         flat = flatten_config(config)
-        flat = _validate_flat_config(flat, strict=strict)
     else:
-        # Flat config path: resolve aliases, then validate
+        # Flat config path: resolve aliases
         flat = _resolve_aliases(config)
-        flat = _validate_flat_config(flat, strict=strict)
+
+    # neurobe_mode expansion: fill in NEUROBE_DEFAULTS for any key
+    # not already set by the user. User overrides win.
+    # Runs before validation so expanded defaults satisfy required-field checks.
+    if flat.get('neurobe_mode'):
+        for key, default_value in NEUROBE_DEFAULTS.items():
+            if key not in flat:
+                flat[key] = default_value
+
+    flat = _validate_flat_config(flat, strict=strict)
 
     return flat

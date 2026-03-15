@@ -255,6 +255,82 @@ def nn_training_config():
 
 
 # ===========================================================================
+# NeuroBE training config — raw dict for neurobe-mode NN training.
+# NOT passed through prepare_config because neurobe-specific fields
+# (normalization_mode, neurobe_early_stopping, etc.) aren't registered yet.
+# Built directly to match NEUROBE_DEFAULTS from S01-RESEARCH.
+# ===========================================================================
+@pytest.fixture
+def neurobe_training_config():
+    """Raw config dict for NeuroBE-mode CPU training on small problems.
+
+    Based on nn_training_config with neurobe-mode overrides:
+    normalization_mode='minmax_01', loss_fn='neurobe_weighted_mse',
+    neurobe_early_stopping=True, neurobe_stop_iter=2, activation='relu',
+    use_amp=False, hidden_sizes='neurobe,3', sampling_scheme='all',
+    lower_dim=True, skip_early_stopping=True, nbe_early_stopping=False.
+
+    Not validated through prepare_config since neurobe fields don't exist
+    in the schema yet — will be validated once T04 adds them.
+    """
+    return {
+        # inference
+        'device': 'cpu',
+        'ecl': 4,
+        'iB': 2,
+        'approximation_method': 'nn',
+        'dope_factors': False,
+        # nn — neurobe overrides
+        'hidden_sizes': 'neurobe,3',
+        'activation': 'relu',
+        'use_linspace_bias': False,
+        'use_memorizer': False,
+        # training — neurobe overrides
+        'num_epochs': 50,
+        'num_epochs2': 0,
+        'loss_fn': 'neurobe_weighted_mse',
+        'optimizer': 'adam',
+        'lr': 0.001,
+        'lr_decay': 1.0,
+        'momentum': 0.9,
+        'batch_size': 256,
+        'patience': 20,
+        'min_lr': 1e-8,
+        'seed': 42,
+        'skip_early_stopping': True,
+        'nbe_early_stopping': False,
+        'nbe_warmup_epochs': 0,
+        'inverse_time_decay_constant': 100,
+        'use_amp': False,
+        # neurobe-specific early stopping
+        'neurobe_early_stopping': True,
+        'neurobe_stop_iter': 2,
+        # normalization
+        'normalization_mode': 'minmax_01',
+        # sampling
+        'sampling_scheme': 'all',
+        'num_samples': 256,
+        'set_size': None,
+        'val_set': True,
+        'stratify_samples': False,
+        'lower_dim': True,
+        # backward — disabled for neurobe
+        'use_bw_approx': False,
+        'populate_bw_factors': False,
+        'bw_ecl': None,
+        'backward_iB': 20,
+        'fdb': False,
+        # output
+        'display_intermediate': False,
+        'track_errors': False,
+        'plot_messages': False,
+        'debug': False,
+        'gather_message_stats': False,
+        'traced_losses': [],
+    }
+
+
+# ===========================================================================
 # Hand-built factor problem fixtures
 # ===========================================================================
 
