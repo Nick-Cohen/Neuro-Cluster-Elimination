@@ -18,4 +18,4 @@
 - None
 
 ## Next Action
-Execute T01: Build train_single_bucket() core with custom training loop in slice S02.
+Execute T02: Add plot generation and metrics output in slice S02.

@@ -47,7 +47,7 @@
 
 ## Tasks
 
-- [ ] **T01: Build train_single_bucket() core with custom training loop** `est:2h`
+- [x] **T01: Build train_single_bucket() core with custom training loop** `est:2h`
   - Why: The algorithmic core of the slice — loads .pt data, reconstructs live FastGM/bucket, creates Net/Trainer infrastructure, runs custom epoch loop with time-limit and error tracking. Everything else builds on this.
   - Files: `nce/benchmark/__init__.py`, `nce/benchmark/training.py`
   - Do: Create `nce/benchmark/` module. Implement `train_single_bucket(bucket_pt_path, nn_config, time_limit_seconds, output_dir, device)` with: (1) load .pt and extract schema fields, (2) look up problem by problem_key in small_problems, (3) reconstruct FastGM via eliminate_variables(up_to=bucket_var, exact=True), (4) create Net and Trainer for setup only (SampleGenerator, DataLoader, DataPreprocessor, loss_fn), (5) load training data via dataloader.load_all(), (6) precompute exact_contribution from preloaded exact_fw/exact_bw, (7) custom epoch loop with: train_epoch → record loss → checkpoint error via FactorNN.to_exact() → check time limit. Config must go through prepare_config(). Set error_tracking=False in config to prevent Trainer from computing exact messages inline. Enforce sampling_scheme='all'. Return result dict. No plotting in this task.

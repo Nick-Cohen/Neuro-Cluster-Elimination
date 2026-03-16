@@ -1,14 +1,1 @@
-[
-  {
-    "id": "71814a91",
-    "label": "hard-bucket-selection",
-    "command": "cd /home/cohenn1/NCE && source venv/bin/activate && python scripts/select_hard_buckets.py --threshold 0.1 --gpus 0,1,2,3 2>&1",
-    "cwd": "/home/cohenn1/NCE",
-    "startedAt": 1773620691575,
-    "processType": "generic",
-    "group": "selection-pipeline",
-    "readyPattern": null,
-    "readyPort": null,
-    "pid": 3305374
-  }
-]
+[]
