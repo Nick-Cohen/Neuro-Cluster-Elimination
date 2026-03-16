@@ -1,8 +1,8 @@
 # GSD State
 
 **Active Milestone:** M004 — Single-Bucket Learning Benchmark
-**Active Slice:** S02 — Single-Bucket Training Harness with Plots
-**Phase:** complete
+**Active Slice:** S03 — Multi-GPU CLI, History Tracking & Comparison
+**Phase:** planning
 **Requirements Status:** 7 active · 17 validated · 4 deferred · 4 out of scope
 
 ## Milestone Registry
@@ -12,10 +12,10 @@
 - 🔄 **M004:** Single-Bucket Learning Benchmark
 
 ## Recent Decisions
-- Config construction for benchmark verification uses full default config as base (not minimal dict) because Trainer.__init__ requires many fields that prepare_config(strict=False) doesn't populate
+- None recorded
 
 ## Blockers
 - None
 
 ## Next Action
-S02 complete (all 3 tasks done). Reassess roadmap and begin S03.
+Plan slice S03 (Multi-GPU CLI, History Tracking & Comparison).

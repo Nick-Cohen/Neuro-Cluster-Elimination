@@ -52,7 +52,7 @@ This milestone is complete only when all are true:
 
 - [x] **S01: Hard Bucket Selection & Precomputation** `risk:high` `depends:[]`
   > After this: `python scripts/select_hard_buckets.py` runs all 24 small_problems across 4 GPUs, identifies hard buckets (local error > 0.1), and saves per-bucket `.pt` files containing factor tensors, exact forward/backward messages, and metadata to `data/hard_buckets/`. The cached bucket list and precomputed messages are on disk, ready for benchmark training.
-- [ ] **S02: Single-Bucket Training Harness with Plots** `risk:medium` `depends:[S01]`
+- [x] **S02: Single-Bucket Training Harness with Plots** `risk:medium` `depends:[S01]`
   > After this: A training harness loads a precomputed bucket from `.pt` cache, trains its NN with a time limit (epoch-boundary timeout), tracks loss and local error at checkpoint epochs, and produces per-bucket output folders with loss-over-epochs and local-error-over-epochs PNG plots. Runnable as `python scripts/bucket_benchmark.py config.yaml fast` on a single GPU.
 - [ ] **S03: Multi-GPU CLI, History Tracking & Comparison** `risk:low` `depends:[S01, S02]`
   > After this: `python scripts/bucket_benchmark.py config.yaml fast --gpus 0,1,2,3` distributes training across 4 GPUs (1 bucket per GPU), appends run metadata to a JSONL history file, and produces a comparison chart of this run's local errors vs the historical best for runs of equal or shorter duration. Full user-visible milestone outcome delivered.
