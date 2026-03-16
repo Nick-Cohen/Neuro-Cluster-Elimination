@@ -1,7 +1,7 @@
 # GSD State
 
 **Active Milestone:** M004 — Single-Bucket Learning Benchmark
-**Active Slice:** S01 — Hard Bucket Selection & Precomputation
+**Active Slice:** S02 — Single-Bucket Training Harness with Plots
 **Phase:** planning
 **Requirements Status:** 7 active · 17 validated · 4 deferred · 4 out of scope
 
@@ -18,4 +18,4 @@
 - None
 
 ## Next Action
-Plan slice S01 (Hard Bucket Selection & Precomputation).
+Plan slice S02 (Single-Bucket Training Harness with Plots).
