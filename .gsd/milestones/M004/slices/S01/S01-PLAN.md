@@ -42,7 +42,7 @@
 
 ## Tasks
 
-- [ ] **T01: Write Phase 1 worker and Phase 2 precomputation scripts** `est:2h`
+- [x] **T01: Write Phase 1 worker and Phase 2 precomputation scripts** `est:2h`
   - Why: The worker is the subprocess entry point that runs one problem through error-tracked training. The coordinator spawns workers across GPUs, merges results, identifies hard buckets, and runs Phase 2 precomputation. The verification script proves the output is correct. All three scripts are tightly coupled by data format and must be designed together.
   - Files: `scripts/select_hard_buckets_worker.py`, `scripts/select_hard_buckets.py`, `scripts/verify_hard_buckets.py`
   - Do: (1) Worker: takes `--problem-index`, `--output-path` args; loads small_problems model/config at that index; overrides config with `error_tracking=True`, `bw_ecl=ecl`, `loss_fn='unnormalized_kl'`, `sampling_scheme='all'`, `num_epochs=10000`; runs `FastGM.eliminate_variables(all=True)`; writes `error_tracking_data` to JSON output file. (2) Coordinator: parses `--threshold` (default 0.1), `--gpus` (default '0,1,2,3'), `--output-dir` (default 'data/hard_buckets'); spawns workers round-robin across GPUs; waits for completion; merges results; identifies hard buckets; runs Phase 2 precomputation (exact upstream elimination + exact_fw + exact_bw + torch.save); writes `bucket_list.json` manifest and `selection_results.json`. (3) Verification: loads each .pt file, checks keys match schema, tensor shapes are consistent with metadata, loads manifest and cross-checks.

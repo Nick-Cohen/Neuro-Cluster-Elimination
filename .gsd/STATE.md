@@ -18,4 +18,4 @@
 - None
 
 ## Next Action
-Execute T01: Write Phase 1 worker and Phase 2 precomputation scripts in slice S01.
+Execute T02: Run full selection pipeline on 4 GPUs and verify results in slice S01.
