@@ -1,7 +1,7 @@
 # GSD State
 
 **Active Milestone:** M004 — Single-Bucket Learning Benchmark
-**Active Slice:** S02 — Single-Bucket Training Harness with Plots
+**Active Slice:** S03 — Multi-GPU CLI, History Tracking & Comparison
 **Phase:** planning
 **Requirements Status:** 7 active · 17 validated · 4 deferred · 4 out of scope
 
@@ -18,4 +18,4 @@
 - None
 
 ## Next Action
-Plan slice S02 (Single-Bucket Training Harness with Plots).
+Plan slice S03 (Multi-GPU CLI, History Tracking & Comparison).
