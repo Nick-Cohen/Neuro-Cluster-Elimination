@@ -106,7 +106,8 @@ class FastBucket:
                 else:
                     epsilon = 0.25  # default from NeuroBE Config.h
                 nbe_result = self.get_nbe_num_samples(epsilon)
-                self.config['num_samples'] = nbe_result['total']
+                self.config['num_samples'] = nbe_result['n_train']
+                self.config['neurobe_val_samples'] = nbe_result['n_val']
                 print(f"Bucket {self.label}: NBE num_samples (eps={epsilon}): total={nbe_result['total']}, train={nbe_result['n_train']}, val={nbe_result['n_val']}")
 
             # Create a dummy net for initialization (needed for Trainer/dataloader)
@@ -114,7 +115,8 @@ class FastBucket:
             t = Trainer(net=net, bucket=self, stats=self.stats)
 
             # Generate validation set first (for normalization and plotting)
-            nbe_val_size = max(1, self.config['num_samples'] // 9)
+            # Use neurobe_val_samples if set (from NeuroBE pseudo-dimension 80/20 split)
+            nbe_val_size = self.config.get('neurobe_val_samples') or max(1, self.config['num_samples'] // 9)
             t.nbe_val_set = t._generate_validation_set_nbe(nbe_val_size)
             print(f"Validation set generated for normalization: {len(t.nbe_val_set[0]['x'])} samples")
 
@@ -236,7 +238,8 @@ class FastBucket:
                 else:
                     epsilon = 0.25  # default from NeuroBE Config.h
                 nbe_result = self.get_nbe_num_samples(epsilon)
-                self.config['num_samples'] = nbe_result['total']
+                self.config['num_samples'] = nbe_result['n_train']
+                self.config['neurobe_val_samples'] = nbe_result['n_val']
                 print(f"Bucket {self.label}: NBE num_samples (eps={epsilon}): total={nbe_result['total']}, train={nbe_result['n_train']}, val={nbe_result['n_val']}")
 
             net = Net(self, hidden_sizes=hidden_sizes)
@@ -595,7 +598,8 @@ class FastBucket:
         trainer = Trainer(net=net, bucket=self, stats=self.stats)
 
         # Generate validation set first (for normalization and plotting)
-        nbe_val_size = max(1, self.config['num_samples'] // 9)
+        # Use neurobe_val_samples if set (from NeuroBE pseudo-dimension 80/20 split)
+        nbe_val_size = self.config.get('neurobe_val_samples') or max(1, self.config['num_samples'] // 9)
         trainer.nbe_val_set = trainer._generate_validation_set_nbe(nbe_val_size)
         print(f"Validation set generated for normalization: {len(trainer.nbe_val_set[0]['x'])} samples")
 

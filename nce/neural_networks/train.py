@@ -233,7 +233,9 @@ class Trainer:
         if self.dataloader.sample_generator.sampling_scheme == 'all':
             nbe_val_set = self.dataloader.load_all()
         else:
-            nbe_val_size = max(1, self.config['num_samples'] // 9)
+            # Use neurobe_val_samples if set (from NeuroBE pseudo-dimension 80/20 split),
+            # otherwise fall back to num_samples // 9
+            nbe_val_size = self.config.get('neurobe_val_samples') or max(1, self.config['num_samples'] // 9)
             nbe_val_set = self._generate_validation_set_nbe(nbe_val_size)
         self.nbe_val_set = nbe_val_set  # Store for later use (plotting, etc.)
 

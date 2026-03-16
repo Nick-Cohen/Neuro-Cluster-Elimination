@@ -160,7 +160,7 @@ NEUROBE_DEFAULTS = {
     'skip_early_stopping': True,
     'nbe_early_stopping': False,
     'lower_dim': True,
-    'sampling_scheme': 'all',
+    'sampling_scheme': 'uniform',
     'iB': 25,
     'debug': False,
     'traced_losses': [],
