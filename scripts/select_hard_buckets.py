@@ -28,77 +28,107 @@ NUM_PROBLEMS = 24  # small_problems has exactly 24 models
 
 # ─── Phase 1: Selection ──────────────────────────────────────────────────────
 
+def _spawn_worker(problem_index, gpu_id, tmp_dir, threshold):
+    """Spawn a single worker subprocess on the specified GPU. Returns (problem_index, gpu_id, proc, output_path)."""
+    output_path = os.path.join(tmp_dir, f'problem_{problem_index}.json')
+
+    env = os.environ.copy()
+    env['CUDA_VISIBLE_DEVICES'] = str(gpu_id)
+
+    cmd = [
+        sys.executable,
+        'scripts/select_hard_buckets_worker.py',
+        '--problem-index', str(problem_index),
+        '--output-path', output_path,
+        '--threshold', str(threshold),
+    ]
+
+    proc = subprocess.Popen(
+        cmd,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    return (problem_index, gpu_id, proc, output_path)
+
+
 def run_phase1(gpus, output_dir, threshold):
-    """Spawn workers across GPUs, merge results, identify hard buckets."""
+    """Spawn workers across GPUs (max 1 per GPU), merge results, identify hard buckets."""
     print(f"\n{'='*60}")
     print(f"Phase 1: Selection run ({NUM_PROBLEMS} problems across {len(gpus)} GPUs)")
+    print(f"  Running at most 1 worker per GPU to avoid OOM")
     print(f"{'='*60}\n")
 
     # Create temp dir for individual worker output files
     tmp_dir = tempfile.mkdtemp(prefix='hard_bucket_selection_')
     print(f"Worker output dir: {tmp_dir}")
 
-    # Spawn workers with round-robin GPU assignment
-    workers = []  # list of (problem_index, gpu_id, proc, output_path)
-    for i in range(NUM_PROBLEMS):
-        gpu_id = gpus[i % len(gpus)]
-        output_path = os.path.join(tmp_dir, f'problem_{i}.json')
+    # Build round-robin GPU assignment for all problems
+    problem_gpu = [(i, gpus[i % len(gpus)]) for i in range(NUM_PROBLEMS)]
 
-        env = os.environ.copy()
-        env['CUDA_VISIBLE_DEVICES'] = str(gpu_id)
+    # Group problems by GPU to run sequentially within each GPU
+    from collections import deque
+    gpu_queues = {g: deque() for g in gpus}
+    for i, g in problem_gpu:
+        gpu_queues[g].append(i)
 
-        cmd = [
-            sys.executable,
-            'scripts/select_hard_buckets_worker.py',
-            '--problem-index', str(i),
-            '--output-path', output_path,
-            '--threshold', str(threshold),
-        ]
-
-        proc = subprocess.Popen(
-            cmd,
-            env=env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        workers.append((i, gpu_id, proc, output_path))
-        print(f"  Spawned problem {i} on GPU {gpu_id} (PID {proc.pid})")
-
-    # Wait for all workers with progress reporting
-    print(f"\nWaiting for {NUM_PROBLEMS} workers...")
-    completed = set()
+    # Track all finished workers for merging
+    finished = {}  # problem_index -> output_path
     failed = []
-    while len(completed) < NUM_PROBLEMS:
-        for i, gpu_id, proc, output_path in workers:
-            if i in completed:
-                continue
+    active = {}  # gpu_id -> (problem_index, gpu_id, proc, output_path)
+
+    # Start one worker per GPU
+    for g in gpus:
+        if gpu_queues[g]:
+            pidx = gpu_queues[g].popleft()
+            w = _spawn_worker(pidx, g, tmp_dir, threshold)
+            active[g] = w
+            print(f"  Spawned problem {pidx} on GPU {g} (PID {w[2].pid})")
+
+    print(f"\nRunning {NUM_PROBLEMS} problems (max {len(gpus)} concurrent)...")
+
+    while active:
+        for g in list(active.keys()):
+            pidx, gpu_id, proc, output_path = active[g]
             retcode = proc.poll()
             if retcode is not None:
-                completed.add(i)
+                # Worker finished
                 stdout_text = proc.stdout.read()
                 stderr_text = proc.stderr.read()
                 if stdout_text.strip():
                     print(f"  {stdout_text.strip()}")
                 if retcode != 0:
-                    failed.append(i)
-                    print(f"  [Problem {i}] FAILED (exit {retcode}) on GPU {gpu_id}")
+                    failed.append(pidx)
+                    print(f"  [Problem {pidx}] FAILED (exit {retcode}) on GPU {gpu_id}")
                     if stderr_text.strip():
-                        # Print last 10 lines of stderr
                         lines = stderr_text.strip().split('\n')
                         for line in lines[-10:]:
                             print(f"    stderr: {line}")
-        if len(completed) < NUM_PROBLEMS:
+                finished[pidx] = output_path
+
+                # Launch next problem for this GPU if any remain
+                if gpu_queues[g]:
+                    next_pidx = gpu_queues[g].popleft()
+                    w = _spawn_worker(next_pidx, g, tmp_dir, threshold)
+                    active[g] = w
+                    print(f"  Spawned problem {next_pidx} on GPU {g} (PID {w[2].pid})")
+                else:
+                    del active[g]
+
+        if active:
             time.sleep(5)
 
-    print(f"\nPhase 1 complete: {NUM_PROBLEMS - len(failed)}/{NUM_PROBLEMS} succeeded, {len(failed)} failed")
+    total_done = len(finished)
+    print(f"\nPhase 1 complete: {total_done - len(failed)}/{total_done} succeeded, {len(failed)} failed")
 
     if failed:
-        print(f"  Failed problem indices: {failed}")
+        print(f"  Failed problem indices: {sorted(failed)}")
 
-    # Merge worker results
+    # Merge worker results in problem order
     all_results = []
-    for i, _, _, output_path in workers:
+    for i in range(NUM_PROBLEMS):
+        output_path = os.path.join(tmp_dir, f'problem_{i}.json')
         if os.path.exists(output_path):
             with open(output_path) as f:
                 result = json.load(f)
