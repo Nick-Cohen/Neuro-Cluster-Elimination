@@ -14,8 +14,9 @@ Running a tweaked experiment should be as simple as editing a config file and ex
 - **M001 complete:** Config restructured into 6 nested sections with validation, backward compat for flat configs, state preservation with loss curves, visualization module, structured JSONL logging, and regression test — all 17 requirements validated.
 - **M002 complete:** pytest-based test suite covering exact inference correctness, NN training, convergence, and loss function robustness — 125 tests pass in ~30s, all 24 requirements validated.
 - **M003 complete:** NeuroBE reproduction mode — `neurobe_mode: true` config preset expands to 20 NeuroBE-faithful defaults, min-max [0,1] normalization, patience-based early stopping, neurobe_weighted_mse loss, ReLU activation. All 15 binary-domain NN counts match NeuroBE. 134 tests pass (9 new neurobe-mode tests). Comparison experiment completed on CUDA; R038 (comparison table) pending experiment results finalization.
+- **M004 S01 complete:** Hard bucket selection pipeline built and running. 3 scripts (worker, coordinator, verification) implement two-phase pipeline: Phase 1 trains all 24 small_problems with error tracking across 4 GPUs; Phase 2 precomputes exact messages and caches to .pt files. 4 hard buckets identified at threshold 0.1 (or_chain_10 ×2, grid10x10, BN_2). Pipeline completing autonomously for remaining problems.
 - **30 quick tasks completed:** Bug fixes, benchmark experiments (WMSE vs UKL across 24 problems), algorithm evaluation, plotting tools, model cache setup.
-- **Codebase:** Three-layer architecture (inference, neural_networks, sampling) in `nce/`. Experiment runner in `notebooks/_1-2026/`. Benchmark problem sets in `nce/benchmark_problems/` (small_problems + neurobe_binary). Test suite in `tests/` (134 tests).
+- **Codebase:** Three-layer architecture (inference, neural_networks, sampling) in `nce/`. Experiment runner in `notebooks/_1-2026/`. Benchmark problem sets in `nce/benchmark_problems/` (small_problems + neurobe_binary). Test suite in `tests/` (134 tests). Hard bucket selection scripts in `scripts/`.
 
 ## Architecture / Key Patterns
 
