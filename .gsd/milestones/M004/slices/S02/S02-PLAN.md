@@ -54,7 +54,7 @@
   - Verify: `python -c "from nce.benchmark.training import train_single_bucket; print('import ok')"` succeeds
   - Done when: Module imports cleanly, function signature matches spec, all coupling points (Trainer init, SampleGenerator, DataLoader, FactorNN.to_exact) are wired correctly
 
-- [ ] **T02: Add plot generation and metrics output** `est:1h`
+- [x] **T02: Add plot generation and metrics output** `est:1h`
   - Why: Completes the output layer — loss.png, local_error.png, and metrics.json per bucket. Makes training results inspectable without code.
   - Files: `nce/benchmark/plots.py`, `nce/benchmark/training.py`
   - Do: Create `nce/benchmark/plots.py` with `plot_loss_curve(losses, output_path)` and `plot_local_error_curve(error_tracking_data, output_path)`. Follow matplotlib.use("Agg") pattern from visualization/learning_curves.py. Wire into `train_single_bucket()` as the final stage before return. Add metrics.json writing with config_hash (hashlib.md5 of sorted config items), bucket metadata, timing, full error tracking data. Create output_dir/{bucket_id}/ folder structure. Handle partial completion (write what we have if time limit hit).

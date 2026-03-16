@@ -18,4 +18,4 @@
 - None
 
 ## Next Action
-Execute T02: Add plot generation and metrics output in slice S02.
+Execute T03: End-to-end verification script in slice S02.

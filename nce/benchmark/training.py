@@ -13,7 +13,11 @@ doesn't need.
 """
 
 import copy
+import hashlib
+import json
+import os
 import time
+from datetime import datetime, timezone
 
 import torch
 
@@ -24,6 +28,8 @@ from nce.inference.factor_nn import FactorNN
 from nce.inference.graphical_model import FastGM
 from nce.neural_networks.net import Net
 from nce.neural_networks.train import Trainer, get_error_tracking_epochs
+
+from nce.benchmark.plots import plot_loss_curve, plot_local_error_curve
 
 
 # ---------------------------------------------------------------------------
@@ -96,6 +102,67 @@ def _find_problem(problem_key):
         f"Problem key '{problem_key}' not found in small_problems. "
         f"Available: {[m.modelfile for m in small_problems.problems]}"
     )
+
+
+def _json_default(obj):
+    """JSON serializer for types not natively serializable."""
+    if isinstance(obj, torch.Tensor):
+        return obj.item() if obj.numel() == 1 else obj.tolist()
+    if isinstance(obj, (set, frozenset)):
+        return list(obj)
+    return str(obj)
+
+
+def _write_metrics(result, nn_config, bucket_data, output_path):
+    """Write structured metrics JSON for a training run.
+
+    Args:
+        result: The result dict from the training loop.
+        nn_config: The config dict that was used.
+        bucket_data: The loaded bucket data dict (with metadata).
+        output_path: File path for the output JSON.
+
+    Returns:
+        The output_path that was written.
+    """
+    metadata = bucket_data['metadata']
+
+    # Config hash for reproducibility tracking
+    config_str = json.dumps(
+        sorted(nn_config.items(), key=lambda x: str(x[0])),
+        default=str,
+    )
+    config_hash = hashlib.md5(config_str.encode()).hexdigest()
+
+    # Convert error_tracking_data tuples to serializable lists
+    error_tracking = [
+        list(t) for t in result.get('error_tracking_data', [])
+    ]
+    losses = [
+        list(t) for t in result.get('losses', [])
+    ]
+
+    metrics = {
+        'epochs_completed': result.get('epochs_completed', 0),
+        'final_loss': result.get('final_loss'),
+        'final_local_error': result.get('final_local_error'),
+        'error_tracking': error_tracking,
+        'losses': losses,
+        'wall_time': result.get('wall_time'),
+        'config_hash': config_hash,
+        'bucket_metadata': {
+            'problem_key': metadata.get('problem_key'),
+            'bucket_label': metadata.get('bucket_label'),
+            'auto_ecl': metadata.get('auto_ecl'),
+            'selection_error': metadata.get('selection_error'),
+        },
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+    }
+
+    with open(output_path, 'w') as f:
+        json.dump(metrics, f, indent=2, default=_json_default)
+
+    return output_path
 
 
 def _reconstruct_bucket(problem_idx, bucket_label, nn_config, device):
@@ -322,9 +389,9 @@ def train_single_bucket(bucket_pt_path, nn_config, time_limit_seconds,
           f"final_local_error={final_local_error}")
 
     # -----------------------------------------------------------------------
-    # 12. Build and return result dict
+    # 12. Build result dict
     # -----------------------------------------------------------------------
-    return {
+    result = {
         'epochs_completed': epochs_completed,
         'final_loss': final_loss,
         'final_local_error': final_local_error,
@@ -334,3 +401,46 @@ def train_single_bucket(bucket_pt_path, nn_config, time_limit_seconds,
         'bucket_id': bucket_id,
         'config_used': config,
     }
+
+    # -----------------------------------------------------------------------
+    # 13. Output stage: plots + metrics
+    # -----------------------------------------------------------------------
+    bucket_output_dir = os.path.join(output_dir, bucket_id)
+    os.makedirs(bucket_output_dir, exist_ok=True)
+    print(f"[BenchmarkTraining] Saving outputs to {bucket_output_dir}/")
+
+    loss_plot_path = os.path.join(bucket_output_dir, 'loss.png')
+    error_plot_path = os.path.join(bucket_output_dir, 'local_error.png')
+    metrics_path = os.path.join(bucket_output_dir, 'metrics.json')
+
+    # Loss plot (best-effort — write metrics even if plots fail)
+    try:
+        if losses:
+            plot_loss_curve(
+                losses, loss_plot_path,
+                title=f"Training Loss — bucket {bucket_label}",
+            )
+            result['loss_plot_path'] = loss_plot_path
+    except Exception as e:
+        print(f"[BenchmarkTraining] WARNING: loss plot failed: {e}")
+
+    # Local error plot (best-effort)
+    try:
+        if error_tracking_data:
+            plot_local_error_curve(
+                error_tracking_data, error_plot_path,
+                title=f"Local Error — bucket {bucket_label}",
+            )
+            result['error_plot_path'] = error_plot_path
+    except Exception as e:
+        print(f"[BenchmarkTraining] WARNING: error plot failed: {e}")
+
+    # Metrics JSON (always written)
+    try:
+        _write_metrics(result, config, bucket_data, metrics_path)
+        result['metrics_path'] = metrics_path
+    except Exception as e:
+        print(f"[BenchmarkTraining] WARNING: metrics write failed: {e}")
+
+    result['output_dir'] = bucket_output_dir
+    return result
