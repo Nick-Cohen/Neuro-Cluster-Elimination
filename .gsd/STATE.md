@@ -2,7 +2,8 @@
 
 **Active Milestone:** M004 — Single-Bucket Learning Benchmark
 **Active Slice:** S01 — Hard Bucket Selection & Precomputation
-**Phase:** planning
+**Phase:** executing
+**Active Task:** T01
 **Requirements Status:** 7 active · 17 validated · 4 deferred · 4 out of scope
 
 ## Milestone Registry
@@ -12,10 +13,11 @@
 - 🔄 **M004:** Single-Bucket Learning Benchmark
 
 ## Recent Decisions
-- None recorded
+- D044: Script-based verification for S01 (not pytest)
+- D045: Two-task split — scripts first, execution second
 
 ## Blockers
 - None
 
 ## Next Action
-Plan slice S01 (Hard Bucket Selection & Precomputation).
+Execute T01: Write Phase 1 worker and Phase 2 precomputation scripts.
