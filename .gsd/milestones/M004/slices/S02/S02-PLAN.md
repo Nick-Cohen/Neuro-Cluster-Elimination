@@ -61,7 +61,7 @@
   - Verify: Import `from nce.benchmark.plots import plot_loss_curve, plot_local_error_curve` succeeds; functions accept expected arguments
   - Done when: Plot functions produce valid PNG files from test data; metrics.json written with all expected keys
 
-- [ ] **T03: End-to-end verification script** `est:1.5h`
+- [x] **T03: End-to-end verification script** `est:1.5h`
   - Why: Proves the full pipeline works with real data. The objective stopping condition for the slice.
   - Files: `scripts/verify_benchmark_training.py`
   - Do: Write script that: (1) checks for real .pt files in data/hard_buckets/; if found, uses the first one; if not, generates a synthetic .pt from smokers_20 (problem 0) by running a quick exact elimination and saving in S01's schema, (2) calls train_single_bucket() with a 30-second time limit and a simple config (UKL, hidden_sizes=[3,3], lr=0.01), (3) validates output: checks loss.png, local_error.png, metrics.json exist and are non-empty, parses metrics.json and asserts expected keys, checks epochs_completed > 0 and error_tracking_data is non-empty. Run the script on GPU.
