@@ -49,7 +49,7 @@
   - Verify: `python scripts/verify_hard_buckets.py` exits 0 after a successful selection run
   - Done when: All three scripts exist, are syntactically valid (`python -c "import ast; ast.parse(open('scripts/select_hard_buckets.py').read())"`), and the verification script can validate a mock .pt file created in a quick smoke test
 
-- [ ] **T02: Run full selection pipeline on 4 GPUs and verify results** `est:6h`
+- [x] **T02: Run full selection pipeline on 4 GPUs and verify results** `est:6h`
   - Why: The actual execution retires the three key risks (Trainer coupling, selection cost, hard bucket availability) and produces the cached data that S02 depends on. This is the operational proof.
   - Files: `data/hard_buckets/*.pt`, `data/hard_buckets/bucket_list.json`, `data/hard_buckets/selection_results.json`
   - Do: (1) Pre-flight: check `nvidia-smi` for 4 GPUs available, kill stale python processes. (2) Run `python scripts/select_hard_buckets.py --threshold 0.1 --gpus 0,1,2,3` in background (no timeout — estimated 2–6 hours). (3) Monitor via bg_shell digest. (4) On completion: run `python scripts/verify_hard_buckets.py`. (5) If < 3 hard buckets found at 0.1, re-run with `--threshold 0.05` and note in summary. (6) Ping Discord with results summary.
