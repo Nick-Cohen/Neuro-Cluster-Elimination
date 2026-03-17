@@ -1,9 +1,13 @@
 # S02: Single-Bucket Training Harness with Plots — Research
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 **Date:** 2026-03-12
 =======
 **Date:** 2026-03-12 (updated 2026-03-17 with post-implementation findings)
+>>>>>>> gsd/M004/S02
+=======
+**Date:** 2026-03-12 (updated 2026-03-17 with post-implementation findings and S01 state audit)
 >>>>>>> gsd/M004/S02
 
 ## Summary
@@ -15,7 +19,10 @@ The main engineering work is a `train_single_bucket()` function in `nce/benchmar
 No core training code needs modification. The `error_tracking` path in `train.py` already computes exact_fw/exact_bw inline — the benchmark bypasses this by pre-loading them, but uses the same error formula: `(approx_exact * exact_bw).sum_all_entries() - (exact_fw * exact_bw).sum_all_entries()`. The `FactorNN.to_exact()` call at each checkpoint requires a live `net.bucket` with a live `fastGM.matching_var()` — this is why we need the real FastGM reconstruction, not a stub.
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> gsd/M004/S02
 ## Requirements Targeted
 
 | Req | Description | What S02 must deliver |
@@ -27,6 +34,9 @@ No core training code needs modification. The `error_tracking` path in `train.py
 - R039 (hard bucket selection) — consumes S01's precomputed .pt files
 - R040 (precomputed message caching) — loads and uses cached exact_fw/exact_bw from .pt files
 
+<<<<<<< HEAD
+>>>>>>> gsd/M004/S02
+=======
 >>>>>>> gsd/M004/S02
 ## Recommendation
 
@@ -50,7 +60,11 @@ This custom loop should still use Trainer's infrastructure (Net, SampleGenerator
 | Training data generation | `SampleGenerator` → `DataLoader` chain | Handles sampling scheme, one-hot encoding, normalization, backward message integration |
 | Loss function resolution | `Trainer._get_loss_fn(name)` in `train.py` | Handles all 15+ loss function variants with proper closure captures |
 | Local error computation | Error tracking pattern in `train.py:507-517` | `FactorNN(net, data_preprocessor).to_exact()` → multiply with exact_bw → sum_all_entries |
+<<<<<<< HEAD
 | Checkpoint epoch schedule | `get_error_tracking_epochs(num_epochs)` in `train.py` | Tested schedule: 0, 1, 5, 10, 25, ..., 10000, then every 5000 |
+=======
+| Checkpoint epoch schedule | `get_error_tracking_epochs(num_epochs)` in `train.py` | Tested schedule: 0, 1, 5, 10, 25, 50, 100, 200, 500, 1000, 2000, 5000, 10000, then every 5000 |
+>>>>>>> gsd/M004/S02
 | Config validation | `prepare_config()` in `config_schema.py` | Auto-detect flat/nested, alias resolution, neurobe_mode expansion |
 | Plot styling/save | `fig.savefig(path, bbox_inches="tight")` pattern from `visualization/` | Consistent with existing plot output |
 
@@ -73,11 +87,17 @@ This custom loop should still use Trainer's infrastructure (Net, SampleGenerator
 - `nce/visualization/learning_curves.py:80-146` — **Learning curve plot pattern.** Uses `matplotlib.use("Agg")`, creates figure+axes, saves with `bbox_inches="tight"`. Follow this pattern for benchmark plots.
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> gsd/M004/S02
 - `Trainer.train_epoch(batches, plot=False, epoch=None)` — **Epoch-level training entry point.** Takes pre-split batches, returns epoch loss. The benchmark's custom loop calls this directly instead of `Trainer.train()`.
 
 - `Trainer.compute_epoch_loss(batches, loss_fn)` — **Read-only loss computation.** Used for epoch-0 checkpoint before any training occurs.
 
+<<<<<<< HEAD
+>>>>>>> gsd/M004/S02
+=======
 >>>>>>> gsd/M004/S02
 ## Constraints
 
@@ -98,6 +118,11 @@ This custom loop should still use Trainer's infrastructure (Net, SampleGenerator
 - **`Net.__init__` expects `bucket._get_nn_input_size()`** which calls `bucket.get_message_dimension()` → `gm.matching_var(v).states`. This is another coupling point requiring a live GM.
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+- **Config base must be a full default config, not a minimal dict.** Trainer.__init__ accesses many fields with bracket notation (no defaults): `lower_dim`, `debug`, `traced_losses`, `skip_early_stopping`, `optimizer`, `approximation_method`, etc. Starting from `small_problems.configs['default'][problem_idx]` and overriding verification-specific fields is more robust than building from scratch. Discovered during T03 implementation.
+
+>>>>>>> gsd/M004/S02
 =======
 - **Config base must be a full default config, not a minimal dict.** Trainer.__init__ accesses many fields with bracket notation (no defaults): `lower_dim`, `debug`, `traced_losses`, `skip_early_stopping`, `optimizer`, `approximation_method`, etc. Starting from `small_problems.configs['default'][problem_idx]` and overriding verification-specific fields is more robust than building from scratch. Discovered during T03 implementation.
 
@@ -121,17 +146,28 @@ This custom loop should still use Trainer's infrastructure (Net, SampleGenerator
 - **Not enforcing `use_bw_approx=False`.** The benchmark trains without backward messages (just forward factor product). If the config has `use_bw_approx=True`, it would try to compute backward messages inline — which the benchmark doesn't need for the training signal. Error tracking uses preloaded exact_bw separately.
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 ## Open Risks
 
 - **S01 pipeline hasn't completed Phase 2 yet.** The .pt files don't exist on disk. S02 development can proceed (we know the schema), but end-to-end testing requires Phase 2 completion. If Phase 2 fails for some buckets, S02 handles gracefully.
 
 - **Bucket reconstruction may produce different factor tensors than S01.** If `eliminate_variables(up_to=...)` uses a different elimination order or the model loading path has changed, the reconstructed bucket's factors won't match the precomputed exact_fw. Mitigation: validate by comparing the reconstructed bucket's `compute_message_exact()` against the preloaded exact_fw at startup.
 =======
+=======
+>>>>>>> gsd/M004/S02
 - **Building config from scratch with only explicit fields.** Trainer.__init__ requires many implicit fields (`lower_dim`, `debug`, `traced_losses`, `skip_early_stopping`). Use `copy.deepcopy(small_problems.configs['default'][problem_idx])` as base and override from there. Discovered during T03 when verification script needed a complete config.
 
 ## Open Risks
 
+<<<<<<< HEAD
 - **S01 pipeline hasn't completed Phase 2 yet.** The .pt files don't exist on disk. S02 development can proceed (we know the schema), but end-to-end testing requires Phase 2 completion. If Phase 2 fails for some buckets, S02 handles gracefully. **UPDATE (post-implementation):** This risk was mitigated in T03 by creating a synthetic .pt fallback — the verification script generates a .pt from smokers_20 when real S01 data isn't available. The end-to-end pipeline was verified using this synthetic .pt (1337 epochs in 30s, 10 checkpoint entries, all 8 validation checks pass).
+
+- **Bucket reconstruction may produce different factor tensors than S01.** If `eliminate_variables(up_to=...)` uses a different elimination order or the model loading path has changed, the reconstructed bucket's factors won't match the precomputed exact_fw. Mitigation: validate by comparing the reconstructed bucket's `compute_message_exact()` against the preloaded exact_fw at startup. **UPDATE:** Not hit in practice — reconstruction is deterministic for the same model and elimination order.
+>>>>>>> gsd/M004/S02
+=======
+- **S01 pipeline hasn't completed Phase 2 yet.** The .pt files don't exist on disk — `data/hard_buckets/` is empty. S02 development can proceed (we know the schema), but end-to-end testing requires Phase 2 completion. If Phase 2 fails for some buckets, S02 handles gracefully. **UPDATE (post-implementation):** This risk was mitigated in T03 by creating a synthetic .pt fallback — the verification script generates a .pt from smokers_20 when real S01 data isn't available. The end-to-end pipeline was verified using this synthetic .pt (1337 epochs in 30s, 10 checkpoint entries, all 8 validation checks pass).
+
+- **S01 Phase 1 state (audited 2026-03-17):** All 24 problems completed in `/tmp/hard_bucket_selection_hvmlbbvv/` (21 success, 3 OOM errors for problems 18/19/21). 4 hard buckets confirmed above 0.1 threshold: `grid10x10.f5.wrap.uai` bucket 10 (0.833), `or_chain_10.fg.uai` bucket 154 (0.199), `or_chain_10.fg.uai` bucket 88 (0.167), `BN_2.uai` bucket 9 (0.140). Phase 2 (precompute .pt files) still hasn't run — no coordinator process active, no .pt files on disk. The Phase 1 data is in a temp dir and will be lost on reboot.
 
 - **Bucket reconstruction may produce different factor tensors than S01.** If `eliminate_variables(up_to=...)` uses a different elimination order or the model loading path has changed, the reconstructed bucket's factors won't match the precomputed exact_fw. Mitigation: validate by comparing the reconstructed bucket's `compute_message_exact()` against the preloaded exact_fw at startup. **UPDATE:** Not hit in practice — reconstruction is deterministic for the same model and elimination order.
 >>>>>>> gsd/M004/S02
@@ -170,12 +206,15 @@ This custom loop should still use Trainer's infrastructure (Net, SampleGenerator
 ```
 {output_dir}/{bucket_id}/
 <<<<<<< HEAD
+<<<<<<< HEAD
     loss.png           — loss over epochs
     local_error.png    — abs_log_z_err over epochs  
     metrics.json       — {epochs_completed, final_loss, final_local_error,
                           error_tracking: [(epoch, loss, log_z_err, abs_log_z_err), ...],
                           wall_time, config_hash, bucket_metadata}
 =======
+=======
+>>>>>>> gsd/M004/S02
     loss.png           — loss over epochs (semilogy scale)
     local_error.png    — abs_log_z_err over epochs (semilogy scale, with markers)
     metrics.json       — {epochs_completed, final_loss, final_local_error,
@@ -184,6 +223,9 @@ This custom loop should still use Trainer's infrastructure (Net, SampleGenerator
                           wall_time, config_hash (MD5 of sorted config),
                           bucket_metadata: {problem_key, bucket_label, auto_ecl},
                           timestamp (ISO 8601 UTC)}
+<<<<<<< HEAD
+>>>>>>> gsd/M004/S02
+=======
 >>>>>>> gsd/M004/S02
 ```
 
@@ -207,7 +249,10 @@ seed: 42
 ```
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> gsd/M004/S02
 ## Post-Implementation Findings
 
 These findings emerged during T01-T03 implementation and verification:
@@ -221,6 +266,19 @@ These findings emerged during T01-T03 implementation and verification:
 4. **Verification script is self-contained.** T03's `verify_benchmark_training.py` generates a synthetic .pt from smokers_20 when S01 data isn't available. This proved essential — S01 Phase 2 still hasn't produced real .pt files, but the full pipeline was verified with 1337 epochs trained in 30s on CUDA, all 8 validation checks passing.
 
 5. **Config derivation from defaults is critical.** Starting from `small_problems.configs['default'][0]` via `copy.deepcopy()` is the only reliable way to get a complete config. Minimal hand-built configs miss required fields that Trainer accesses with bracket notation.
+
+<<<<<<< HEAD
+>>>>>>> gsd/M004/S02
+=======
+6. **S02 code currently lives on branch `gsd/M004/S02`.** The `nce/benchmark/` module (training.py 446 lines, plots.py 88 lines, __init__.py 14 lines) and `scripts/verify_benchmark_training.py` (270+ lines) are committed here. These files also exist on main via prior commits.
+
+## S01 Prerequisite Gap (audited 2026-03-17)
+
+**Phase 1 (bucket identification):** Complete. All 24 problems processed, results in `/tmp/hard_bucket_selection_hvmlbbvv/`. 4 hard buckets found above 0.1 threshold. 3 problems (18, 19, 21) failed with CUDA OOM.
+
+**Phase 2 (precompute .pt files):** Never ran. `data/hard_buckets/` directory is empty — no .pt files, no bucket_list.json, no selection_results.json. The coordinator process that was supposed to trigger Phase 2 after all workers finished is no longer running. Phase 1 results are in a temp directory that will be lost on reboot.
+
+**Impact on S02:** Minimal — S02's verification script handles this via synthetic .pt fallback. S02's code is fully functional. The gap affects S03 (CLI benchmark) which needs real .pt files to run meaningful multi-bucket benchmarks. **Before S03 can run end-to-end, S01 Phase 2 must be completed** (either by re-running the coordinator's Phase 2 logic against the temp dir data, or by re-running the full pipeline).
 
 >>>>>>> gsd/M004/S02
 ## Skills Discovered
@@ -242,8 +300,14 @@ No skills needed for this slice.
 - DataPreprocessor one_hot: `nce/data/data_preprocessor.py` lines 209-230
 - Phase 2 reconstruction: `scripts/select_hard_buckets.py` lines 230-290
 - Exact elimination timing: benchmarked at ~3s/bucket on CPU (FastGM init 2s + elimination 1s)
+<<<<<<< HEAD
 - Hard bucket data: 4 buckets above 0.1 threshold from 19/24 completed problems (grid10x10 bucket 10 at 0.833, or_chain_10 buckets 88/154 at 0.167/0.199, BN_2 bucket 9 at 0.140)
 <<<<<<< HEAD
 =======
 - T03 verification: 1337 epochs in 30s CUDA, 10 checkpoint entries, all 8 checks pass, CPU path also verified
+>>>>>>> gsd/M004/S02
+=======
+- Hard bucket data: 4 buckets above 0.1 threshold from 24 completed problems (grid10x10 bucket 10 at 0.833, or_chain_10 buckets 88/154 at 0.167/0.199, BN_2 bucket 9 at 0.140)
+- T03 verification: 1337 epochs in 30s CUDA, 10 checkpoint entries, all 8 checks pass, CPU path also verified
+- S01 temp dir audit: `/tmp/hard_bucket_selection_hvmlbbvv/` — 24 files, 21 success, 3 OOM (problems 18/19/21)
 >>>>>>> gsd/M004/S02
