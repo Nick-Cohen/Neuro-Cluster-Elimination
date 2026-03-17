@@ -1,6 +1,10 @@
 # S02: Single-Bucket Training Harness with Plots — Research
 
+<<<<<<< HEAD
 **Date:** 2026-03-12
+=======
+**Date:** 2026-03-12 (updated 2026-03-17 with post-implementation findings)
+>>>>>>> gsd/M004/S02
 
 ## Summary
 
@@ -10,6 +14,20 @@ The main engineering work is a `train_single_bucket()` function in `nce/benchmar
 
 No core training code needs modification. The `error_tracking` path in `train.py` already computes exact_fw/exact_bw inline — the benchmark bypasses this by pre-loading them, but uses the same error formula: `(approx_exact * exact_bw).sum_all_entries() - (exact_fw * exact_bw).sum_all_entries()`. The `FactorNN.to_exact()` call at each checkpoint requires a live `net.bucket` with a live `fastGM.matching_var()` — this is why we need the real FastGM reconstruction, not a stub.
 
+<<<<<<< HEAD
+=======
+## Requirements Targeted
+
+| Req | Description | What S02 must deliver |
+|-----|-------------|----------------------|
+| R041 | Time-limited single-bucket training | `train_single_bucket()` with epoch-boundary timeout (fast=1min, slow=1h), checkpoint error tracking, NN weight saving |
+| R043 | Per-bucket benchmark output | Per-bucket output folder with `loss.png`, `local_error.png`, and `metrics.json` |
+
+**Partially supports:**
+- R039 (hard bucket selection) — consumes S01's precomputed .pt files
+- R040 (precomputed message caching) — loads and uses cached exact_fw/exact_bw from .pt files
+
+>>>>>>> gsd/M004/S02
 ## Recommendation
 
 Build `nce/benchmark/training.py` as the core module with a single public function `train_single_bucket(bucket_pt_path, config, time_limit_seconds, output_dir, device)`. This function owns the full lifecycle: load → reconstruct → train → track → plot → save metrics. Keep it self-contained — no subprocesses or multi-GPU logic (that's S03's job).
@@ -54,6 +72,13 @@ This custom loop should still use Trainer's infrastructure (Net, SampleGenerator
 
 - `nce/visualization/learning_curves.py:80-146` — **Learning curve plot pattern.** Uses `matplotlib.use("Agg")`, creates figure+axes, saves with `bbox_inches="tight"`. Follow this pattern for benchmark plots.
 
+<<<<<<< HEAD
+=======
+- `Trainer.train_epoch(batches, plot=False, epoch=None)` — **Epoch-level training entry point.** Takes pre-split batches, returns epoch loss. The benchmark's custom loop calls this directly instead of `Trainer.train()`.
+
+- `Trainer.compute_epoch_loss(batches, loss_fn)` — **Read-only loss computation.** Used for epoch-0 checkpoint before any training occurs.
+
+>>>>>>> gsd/M004/S02
 ## Constraints
 
 - **Trainer cannot be used as-is for time-limited training.** `Trainer.train()` is monolithic (600+ lines) and doesn't support external time-limit injection. The benchmark needs its own epoch loop that mirrors the relevant parts.
@@ -72,6 +97,11 @@ This custom loop should still use Trainer's infrastructure (Net, SampleGenerator
 
 - **`Net.__init__` expects `bucket._get_nn_input_size()`** which calls `bucket.get_message_dimension()` → `gm.matching_var(v).states`. This is another coupling point requiring a live GM.
 
+<<<<<<< HEAD
+=======
+- **Config base must be a full default config, not a minimal dict.** Trainer.__init__ accesses many fields with bracket notation (no defaults): `lower_dim`, `debug`, `traced_losses`, `skip_early_stopping`, `optimizer`, `approximation_method`, etc. Starting from `small_problems.configs['default'][problem_idx]` and overriding verification-specific fields is more robust than building from scratch. Discovered during T03 implementation.
+
+>>>>>>> gsd/M004/S02
 ## Common Pitfalls
 
 - **Trying to build a FastGM stub.** The coupling depth (Trainer → SampleGenerator → DataLoader → DataPreprocessor → FactorNN → Net → FastBucket → FastGM → Var) is 8 levels deep. Every layer accesses `gm.matching_var()` for domain sizes. A stub that satisfies all these would be as complex as the real thing. Use `eliminate_variables(up_to=...)` instead.
@@ -90,11 +120,21 @@ This custom loop should still use Trainer's infrastructure (Net, SampleGenerator
 
 - **Not enforcing `use_bw_approx=False`.** The benchmark trains without backward messages (just forward factor product). If the config has `use_bw_approx=True`, it would try to compute backward messages inline — which the benchmark doesn't need for the training signal. Error tracking uses preloaded exact_bw separately.
 
+<<<<<<< HEAD
 ## Open Risks
 
 - **S01 pipeline hasn't completed Phase 2 yet.** The .pt files don't exist on disk. S02 development can proceed (we know the schema), but end-to-end testing requires Phase 2 completion. If Phase 2 fails for some buckets, S02 handles gracefully.
 
 - **Bucket reconstruction may produce different factor tensors than S01.** If `eliminate_variables(up_to=...)` uses a different elimination order or the model loading path has changed, the reconstructed bucket's factors won't match the precomputed exact_fw. Mitigation: validate by comparing the reconstructed bucket's `compute_message_exact()` against the preloaded exact_fw at startup.
+=======
+- **Building config from scratch with only explicit fields.** Trainer.__init__ requires many implicit fields (`lower_dim`, `debug`, `traced_losses`, `skip_early_stopping`). Use `copy.deepcopy(small_problems.configs['default'][problem_idx])` as base and override from there. Discovered during T03 when verification script needed a complete config.
+
+## Open Risks
+
+- **S01 pipeline hasn't completed Phase 2 yet.** The .pt files don't exist on disk. S02 development can proceed (we know the schema), but end-to-end testing requires Phase 2 completion. If Phase 2 fails for some buckets, S02 handles gracefully. **UPDATE (post-implementation):** This risk was mitigated in T03 by creating a synthetic .pt fallback — the verification script generates a .pt from smokers_20 when real S01 data isn't available. The end-to-end pipeline was verified using this synthetic .pt (1337 epochs in 30s, 10 checkpoint entries, all 8 validation checks pass).
+
+- **Bucket reconstruction may produce different factor tensors than S01.** If `eliminate_variables(up_to=...)` uses a different elimination order or the model loading path has changed, the reconstructed bucket's factors won't match the precomputed exact_fw. Mitigation: validate by comparing the reconstructed bucket's `compute_message_exact()` against the preloaded exact_fw at startup. **UPDATE:** Not hit in practice — reconstruction is deterministic for the same model and elimination order.
+>>>>>>> gsd/M004/S02
 
 - **Large message_size at checkpoints.** `FactorNN.to_exact()` materializes the full message tensor. For the hard buckets identified (max auto_ecl ~2^24 for grid10x10), this is 2^24 entries × 4 bytes = 64MB — fits in GPU memory. But if a hard bucket has scope width approaching 24 binary variables, the materialized tensor could be large. Check at load time.
 
@@ -129,11 +169,22 @@ This custom loop should still use Trainer's infrastructure (Net, SampleGenerator
 
 ```
 {output_dir}/{bucket_id}/
+<<<<<<< HEAD
     loss.png           — loss over epochs
     local_error.png    — abs_log_z_err over epochs  
     metrics.json       — {epochs_completed, final_loss, final_local_error,
                           error_tracking: [(epoch, loss, log_z_err, abs_log_z_err), ...],
                           wall_time, config_hash, bucket_metadata}
+=======
+    loss.png           — loss over epochs (semilogy scale)
+    local_error.png    — abs_log_z_err over epochs (semilogy scale, with markers)
+    metrics.json       — {epochs_completed, final_loss, final_local_error,
+                          error_tracking: [(epoch, loss, log_z_err, abs_log_z_err), ...],
+                          losses: [(epoch, loss), ...],
+                          wall_time, config_hash (MD5 of sorted config),
+                          bucket_metadata: {problem_key, bucket_label, auto_ecl},
+                          timestamp (ISO 8601 UTC)}
+>>>>>>> gsd/M004/S02
 ```
 
 ### Config YAML format for benchmark
@@ -155,6 +206,23 @@ seed: 42
 # ... etc
 ```
 
+<<<<<<< HEAD
+=======
+## Post-Implementation Findings
+
+These findings emerged during T01-T03 implementation and verification:
+
+1. **Trainer used for setup, not training.** Trainer.__init__ chain is the only reliable way to create a properly-configured SampleGenerator/DataLoader/DataPreprocessor. The custom epoch loop calls `trainer.train_epoch(batches)` and `trainer.compute_epoch_loss(batches, loss_fn)` — Trainer methods, but invoked from the benchmark's own control loop, not from `Trainer.train()`.
+
+2. **Scheduler stepping works.** The custom loop checks `trainer.use_scheduler` and steps `trainer.scheduler` if present. This preserves learning rate scheduling without needing Trainer.train()'s scheduler integration.
+
+3. **Best-effort output pattern.** Each output step (loss plot, error plot, metrics JSON) is wrapped in try/except so one failure doesn't prevent others. The return dict only includes `loss_plot_path`, `error_plot_path`, `metrics_path` keys when the corresponding output succeeded.
+
+4. **Verification script is self-contained.** T03's `verify_benchmark_training.py` generates a synthetic .pt from smokers_20 when S01 data isn't available. This proved essential — S01 Phase 2 still hasn't produced real .pt files, but the full pipeline was verified with 1337 epochs trained in 30s on CUDA, all 8 validation checks passing.
+
+5. **Config derivation from defaults is critical.** Starting from `small_problems.configs['default'][0]` via `copy.deepcopy()` is the only reliable way to get a complete config. Minimal hand-built configs miss required fields that Trainer accesses with bracket notation.
+
+>>>>>>> gsd/M004/S02
 ## Skills Discovered
 
 | Technology | Skill | Status |
@@ -175,3 +243,7 @@ No skills needed for this slice.
 - Phase 2 reconstruction: `scripts/select_hard_buckets.py` lines 230-290
 - Exact elimination timing: benchmarked at ~3s/bucket on CPU (FastGM init 2s + elimination 1s)
 - Hard bucket data: 4 buckets above 0.1 threshold from 19/24 completed problems (grid10x10 bucket 10 at 0.833, or_chain_10 buckets 88/154 at 0.167/0.199, BN_2 bucket 9 at 0.140)
+<<<<<<< HEAD
+=======
+- T03 verification: 1337 epochs in 30s CUDA, 10 checkpoint entries, all 8 checks pass, CPU path also verified
+>>>>>>> gsd/M004/S02
