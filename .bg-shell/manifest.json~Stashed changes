@@ -1,0 +1,14 @@
+[
+  {
+    "id": "f007279f",
+    "label": "neurobe-15-problems",
+    "command": "cd /home/cohenn1/NCE && source venv/bin/activate && CUDA_VISIBLE_DEVICES=0 python scripts/run_neurobe_experiments.py 2>&1",
+    "cwd": "/home/cohenn1/NCE",
+    "startedAt": 1773768948225,
+    "processType": "generic",
+    "group": "m003",
+    "readyPattern": null,
+    "readyPort": null,
+    "pid": 3686904
+  }
+]

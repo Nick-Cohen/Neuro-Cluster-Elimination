@@ -1,0 +1,76 @@
+# ── Ignore everything by default, then whitelist ──
+*
+
+# ── Whitelist: files to include in the repo ──
+!.gitignore
+!README.md
+!requirements.txt
+!setup.py
+
+# ── Whitelist: nce package (core source code) ──
+!nce/
+!nce/**/
+!nce/**/*.py
+
+# Exclude data/model files inside nce/
+nce/problems/
+nce/data/*.pt
+nce/data/*.pkl
+nce/data/*.npy
+
+# ── Whitelist: example configs ──
+!configs/
+!configs/**/*.py
+
+# ── Exclude everything else (explicit for clarity) ──
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+build/
+dist/
+venv/
+.venv/
+.gsd/
+.claude/
+.knowledge/
+.planning/
+.model_cache/
+.bg-shell/
+.pytest_cache/
+.vscode/
+notebooks/
+scripts/
+tests/
+docs/
+data/
+graphs/
+prompts/
+claude_files/
+nak_and_ind_sets/
+NCE-Data/
+nce_package_files/
+small_problems_uai/
+CLAUDE.md
+lab_notebook.txt
+todo.txt
+notes.txt
+*.pkl
+*.zip
+*.log
+*.sh
+*.txt
+!requirements.txt
+echo
+Exit\ code:\ 
+EXIT_CODE=
+prompt-*.txt
+copy_nn_files.sh
+package_files.sh
+data.zip
+Clean-NeuroBE
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~

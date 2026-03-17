@@ -1,0 +1,231 @@
+2026-03-16
+- Migrated pyGMs.neuro dependency out of NCE
+  - Only function actually used from neuro.py was `uai_to_GM` (and `get_order`)
+  - Moved both to: nce/utils/uai_io.py
+  - Updated imports in: nce/inference/graphical_model.py, nce/inference/message_gradient_factors.py
+  - `from pyGMs.neuro import *` → `from nce.utils.uai_io import uai_to_GM`
+  - benchmark_problems/__init__.py now gracefully degrades if pyGMs.data.catalog or requests unavailable
+  - 134 existing tests pass, no regressions
+  - Clean-room install verified: fresh venv, stock pyGMs from PyPI (0.3.4), all core imports and operations work
+- Created requirements.txt and README.md for GitHub
+  - requirements.txt: torch>=2.0, numpy>=1.24,<2.0, pyGMs>=0.1.1, matplotlib>=3.1, scikit-learn>=1.0, tqdm>=4.60, sortedcontainers>=2.0
+  - README.md: algorithm overview, install guide, quick start examples, config reference, project structure
+  - Note: numpy<2.0 required because torch 2.0.1+cu117 was compiled against numpy 1.x
+  - Note: sortedcontainers needed because pyGMs uses it but doesn't declare it as a dependency
+  - Install instructions (verified working from clean venv):
+    python -m venv venv && source venv/bin/activate
+    pip install torch --index-url https://download.pytorch.org/whl/cu118
+    pip install -r requirements.txt
+    pip install -e .
+- GitHub repo cleanup
+  - Reverted push of 136 commits (contained .gsd/, CLAUDE.md, auto-commit messages)
+  - GitHub main back to 4791f7d; all local branches/code intact
+  - Files to push: nce/, configs/, requirements.txt, README.md, setup.py
+  - Files to NOT push: .gsd/, CLAUDE.md, notebooks/, scripts/, data/, lab_notebook.txt, problems/
+
+2026-03-10
+- Quick task 20: Update benchmark WMSE/UKL graphs with per-problem error plots
+  - Created visualize_updated.py (220 lines) for WMSE vs UKL benchmark result analysis
+  - Produces 24 PNG bar charts (12 clean problems x 2 scale types: linear + symlog)
+  - Per-problem title: iB_2, num_trained, num_epochs; exact color spec: Red/Orange/Gold/Green/Blue
+  - 96-row summary CSV (all completed experiments) with 13 columns including abs_err, err, width, etc.
+  - Confirmed track_errors=False in all experiments (default config, not overridden by benchmark runner)
+  - Output: results/updated_graphs_and_table/; 24 failed experiments (deer_rescaled models) excluded
+...............
+2026-03-09
+- Quick task 18: Create grid10x10.f10 UKL experiment workflow
+  - run_grid10x10_ukl.py: full 42-field config, UKL loss, ecl=1024, 500 epochs, CUDA
+  - analyze_results.py: loads pickle, produces plots and tables, regenerates CSV
+  - Experiment ran successfully: 6 NN buckets, err=13.49 (log10), 85s on CUDA
+  - Fixed per-bucket data collection bug: fastgm.buckets empty after elimination
+    Added per_bucket_training_log to FastGM/bucket.py to persist data during inference
+  - Fixed offline model access: copied grid10x10.f10.uai from UAI dir, generated .ord file
+  - Outputs: CSV (12 cols), pickle, logz_comparison.png, bucket_epochs_histogram.png
+- Quick task 17: Write comprehensive experiment execution guide
+  - Created docs/experiment_execution_guide.md (723 lines)
+  - Covers full lifecycle: pre-flight, config fidelity, runtime estimation, subprocess architecture, monitoring, error handling, post-experiment reporting
+  - Addresses all 7 errors from retrospective_nbe_experiment_errors.md as numbered pitfalls with detection steps
+  - References WMSE vs UKL benchmark and NBE full experiment as reference implementations
+  - Includes quick reference card for runtime use and timing table with real measured data
+  - References CLAUDE.md rules without duplicating (DRY)
+...............
+2026-03-06
+- Created run_benchmark.py for WMSE vs UKL benchmark (5 configs x 24 problems x 5000 epochs = 120 experiments)
+- Fixed model cache symlinks: pyGMs catalog expected files in subdirs (bn/, objdetect/, etc.) but they were in cache root
+- Launched benchmark across 4 TITAN RTX GPUs, estimated ~2-3 hours
+- Script uses subprocess spawning for GPU isolation, round-robin distribution (30 waves of 4 jobs)
+- Both verification scripts pass (99 config checks, 5 batch/sampling tests)
+...............
+2026-03-05
+- Quick task 12: Run full NBE experiment on all 5 nbe_sanity_check problems (500 epochs)
+  - Added FastBucket.epochs_trained and FastBucket.trained_hidden_sizes after t.train() in bucket.py
+  - Created nbe_full_experiment.py with subprocess isolation and 10-min/problem timeout
+  - All 5 problems timed out: 500-epoch NN training requires >10min/problem even with 18+ CPU cores
+  - Key finding: pedigree13 was still training its first NN bucket after 25 min wall clock; grid10x10 also timed
+  - epochs_trained attribute works correctly; future experiments need longer timeouts or fewer epochs
+...............
+- Quick task 13: Design benchmark experiment comparing WMSE vs UKL losses
+  - 5 configurations: WMSE(no-bw), UKL(no-bw), UKL(bw=8), UKL(bw=ecl), UKL(bw=2^30)
+  - 24 problems from small_problems, 120 total experiments
+  - Documented 10 open questions (batch_size='all' workaround, per-problem bw_ecl, etc.)
+  - Created verification scripts: config correctness (99 checks PASS), full-data training (5 tests PASS)
+  - Key decision: batch_size=10000000 instead of 'all' to avoid worker.py changes
+...............
+- Quick task 11: Fix hidden sizes script to capture bucket widths during elimination
+  - Bug: old script read widths pre-elimination (max 4), all buckets appeared "exact"
+  - Fix: used config['custom_hidden_sizes'] callback (called inside compute_message_nn during elimination)
+  - Result: 33 NN-eligible buckets, induced widths 10-21, h range 10-21 for grid10x10.f5.wrap
+  - Callback captures {label, width, ec, msg_size, hidden_sizes} and returns hidden_sizes for training
+- Quick task 10: Log per-bucket hidden sizes for grid10x10.f5.wrap with NBE config
+  - Script nbe_log_hidden_sizes.py created and run; output to nbe_eval_results/grid10x10_hidden_sizes.txt
+  - Result: 0 NN-eligible buckets for grid10x10 (max bucket width=4, iB=10, ecl=512)
+  - Confirms sparse graph structure — all 100 buckets qualify for exact computation
+- Fixed 4 critical NBE config bugs preventing NN training:
+  1. ecl hardcoded 2^22 → 2^iB per model (pedigree/grid40/rbm=2^20, grid20/grid10=2^10)
+  2. approximation_method 'wmb' → 'nn' (was using WMB fallback, not neural nets)
+  3. set_size=50000 → None (defaults to num_samples; train.py handles None)
+  4. num_trained double-counted in process_bucket + bucket.py (removed duplicate)
+- Phase 1 full (grid10x10, 500 epochs): log Z=154.29, exact=169.41, err=15.12, 26 NN buckets, 428s
+- rbm_20 has 0 NN-eligible buckets (width=20=iB=20) - need lower iB from Nick
+- Pinged Nick re: rbm_20 iB question
+  - Bug fixed: model.X -> model.num_vars in 3 pre-smoke scripts
+  - Bug fixed: FactorNN.tensor is None (lazy), script fixed to use type/labels/is_nn
+- Fixed 6 NBE config bugs in nbe_sanity_check.py:
+  - loss_fn: 'weighted_mse' -> 'weighted_logspace_mse' (correct registered name)
+  - backward_iB: hardcoded 10 -> matches per-model iB
+  - dope_factors: False -> True (prevents -inf NaN)
+  - num_epochs: 10000 -> 500, lr: 0.01 -> 0.001 (NeuroBE Config.h values)
+  - backward_ecl: 2**22 -> None (irrelevant for NBE)
+- Rewrote NBE evaluation plan with Phase 0a (exact baseline) and Phase 0b (single bucket NN test)
+  - Corrected API usage: get_log_partition_function() not run(), matching_var() for int-to-Var
+  - Simplified Phase 3 output table, fixed hidden_sizes explanation
+- Created 3 pre-smoke test scripts: phase0a_exact, phase0b_single_bucket, practice_1epoch
+  - Verified FastGM constructor auto-calls dope_factors() when config flag is True
+...............
+2026-03-04
+- Implemented NeuroBE num_samples function (compute_nbe_num_samples) on FastBucket
+  - Formula: nSamples = floor((pd + ln(1000)) / epsilon), pd = temp * ln(temp/l)
+  - Added 'nbe,<epsilon>' config string resolution in compute_message_nn
+  - Updated nbe_sanity_check: 5 models (added grid10x10.f5.wrap), per-model epsilon/iB
+  - Config defaults: loss_fn='weighted_mse', skip_early_stopping=False, use_bw_approx=False
+  - Test on rbm_20 width-20 bucket (var 28): total=24056 samples at eps=0.1
+- Created small_problems benchmark set (24 unique models from probs12_4 iB10+iB15, deduplicated)
+  - ECL values set from auto_ecl in problem_ecl_values.csv
+  - Config template from full_algorithm_12_4_bwecl.py (nn model, hidden_sizes=[3,3])
+  - Added set_bw_ecl() helper for bulk bw_ecl updates across all problems
+  - Test file: notebooks/_3-2026/claude_experiments/test_small_problems.py
+- Researched NeuroBE sample allocation algorithm from paper + code
+  - Documented algorithm at docs/neurobe_sample_allocation_algorithm.md
+  - Extracted epsilon values per benchmark at docs/neurobe_epsilon_values.md
+...............
+2026-03-03
+- Created nce.benchmark_problems module for named benchmark problem sets via pyGMs catalog
+  - neuro_be_sanity_check: pedigree13 (1077 vars), grid40x40.f10 (1600), grid20x20.f10 (400), rbm_20 (40)
+  - catalog_utils.py handles pedigree index patching, default .model_cache path
+  - Wrote docs/creating_benchmark_sets.md with step-by-step guide for adding new sets
+  - Updated CLAUDE.md with Benchmark Problems section
+- Rewrote QuantizationSolver (nce/neural_networks/quantization.py) with recursive binary splitting
+  - Replaced DP+D&C algorithm with simpler greedy recursive binary split heuristic
+  - segment_value uses logsumexp(f+b) - logsumexp(b) for numerically stable UKL optimal value
+  - segment_ukl_loss computes unnormalized KL divergence per segment
+  - k=1 base case, k=2 linear scan over all split points, k>2 recursive halving
+  - Verified on grid10x10.f5.wrap: K=8 on 16-element message, total_cost=0.0065, visual match confirmed
+  - Public quantize_message() API unchanged
+- Created test script: notebooks/March-2026/claude_experiments/test_quantization.py (gitignored)
+- Awaiting human checkpoint verify on quantization_grid10x10_K8.png
+- Created experiment_bw_ecl_quick.py: auto-determines minimum ECL per problem for >1 NN
+  - For each problem, finds the ECL where only 2-7 NNs need training (vs. 9-58 with original ECL)
+  - Significantly reduces training time while still exercising backward weighting
+  - ECL ranges: 2^14 to 2^24 depending on problem (vs. fixed 2^10 or 2^15 in original)
+- Added optional neuroBE config sets to benchmark_problems module (quick task 3)
+  - neuro_be_sanity_check_configs: dict keyed by catalogue key with per-model neuroBE params
+  - neuro_be_sanity_check_configs_list: ordered list for zip() with models
+  - pedigree13/rbm_20 use nbe,3; grids use nbe,1 for hidden_sizes
+  - Test script: notebooks/March-2026/test_benchmark_configs.py (all 4 models PASS)
+- Restructured benchmark_problems: renamed neuro_be_sanity_check to nbe_sanity_check (quick task 4)
+  - Created BenchmarkSet class with .problems and .configs['nbe'] attributes
+  - Fully populated config dicts with all 42 fields from reference get_config() template
+  - Single import: from nce.benchmark_problems import nbe_sanity_check
+  - Updated CLAUDE.md, docs/creating_benchmark_sets.md, test_benchmark_configs.py
+- Launched full experiment: 360 work items (30 problems x 4 bw_ecl x 3 runs) on GPUs 1,2,3
+  - bw_ecl values: 0 (no bw), 2^4, forward_ecl, 2^30
+- First results validated: smokers_20.uai (no bw) Z_error = 0.015, 0.105, 0.107 across 3 runs
+  - ~8900 sec/run (vs ~10000 sec original with 9 NNs → ~10% faster with only 2 NNs)
+  - Per-bucket: ~90 min (524k samples) + ~45 min (262k samples) = ~135 min total training
+...............
+2026-03-02
+- Committed all dead code cleanup changes: 95 files changed, 5,321 insertions, 14,324 deletions
+  - Deleted old duplicate top-level dirs (NCE/, data/, inference/, neural_networks/, sampling/, utils/)
+  - Removed dead files within nce/ (nn_factors.py, utils.py, message_trainer.py, message_gradient.py, factor_qdecision_tree.py)
+  - Added previously untracked source files (message_gradient_factors.py, linear_mse_solver.py, quantization.py, backward_sensitivity.py, pygms_conversion.py, pygms_wmb_interface.py)
+  - Cleaned up unused imports and dead code paths in active modules
+- Executed Phase 3 (Needs Decision) of refactoring plan: 8 items
+  - CM-04: Removed if True:/if False: debug blocks in sample_generator.py, graphical_model.py, train.py (4 locations)
+  - CM-05: Removed ~89 commented-out print/dprint statements across 7 files (background agent)
+  - EF-01: Fixed 3 bare except: clauses → except Exception: with proper re-raise (factor.py, graphical_model.py, message_gradient_factors.py)
+  - EF-03: Removed swallowed exception (try/except: 1+1) in message_gradient_factors.py
+  - NM-02: Removed scope/vars aliases from FastFactor, consolidated to .labels only
+  - OR-01: Removed unused shuffle_batches function and import
+  - ST-01/ST-03: Removed _make_dataloader_old, compute_gradient_values_old, DataPreprocessor_old (~564 lines)
+  - ST-02: Added nce_package_files/ to .gitignore (stale snapshot directory)
+- ~2,067 additional lines removed in this phase
+- All 31 Python files compile successfully
+...............
+- Executed Phase 2 (Verify Before Applying) of refactoring plan: 5 items
+  - DC-09: Deleted nce/inference/nn_factors.py (70 lines) and removed import from __init__.py
+  - NM-01: Fixed __all__ export list in nce/inference/__init__.py (removed non-existent symbol, added actual exports)
+  - CM-01: Removed commented-out get_message_gradient method from graphical_model.py (~26 lines)
+  - CM-02: Removed commented-out get_message_stats and graph_message_stats_old from graphical_model.py (~350 lines)
+  - ST-04: Removed broken create_data_loaders function from data_loader.py and __init__.py (~42 lines)
+- Verified all imports and compilation pass after changes
+- ~490 additional lines of dead/commented code removed
+...............
+2026-03-01 (session 3)
+- Executed Phase 1 (Safe Auto-Apply) of refactoring plan: 17 items across 6 categories
+  - Deleted 8 dead files: utils.py, message_trainer.py, fastElim.py (1283 lines),
+    factor_qdecision_tree.py (220 lines), NN_Train_copy.py (867 lines), dt2.py (698 lines),
+    message_gradient.py (131 lines), train_old.py (363 lines)
+  - Removed unreachable code after return in FactorNN.eliminate() (DC-10)
+  - Removed populate_gradient_factors_old() from message_gradient_factors.py (DC-14)
+  - Removed _old methods from data_loader.py and sample_generator.py (DC-12, DC-13)
+  - Removed duplicate nn_to_FastFactor from FastFactor class (DC-11)
+  - Fixed wildcard import: `from typing import *` -> `from typing import List, Tuple` (NM-04)
+  - Removed _flag0 unused variable from train.py (NM-03)
+  - Removed 5 debug "got here" print statements (EF-02)
+  - Removed 3 empty stubs: retrain(), check_tensor_size(), check_memory_usage() (OR-02, OR-03)
+  - Removed version markers and commented-out code in factor_nn.py (CM-03)
+  - Removed unused `time` import from factor.py
+- Verified all imports and compilation pass after changes
+- ~3,900 lines of dead code removed total
+...............
+2026-03-01 (session 2)
+- Produced comprehensive refactoring plan: 33 proposed changes across 6 categories
+  - 14 DEAD_CODE items (~4,200 lines removable)
+  - 5 COMMENTS items (commented-out code blocks, debug prints)
+  - 4 NAMING items (__all__ fix, attribute aliases, wildcard imports)
+  - 3 EFFICIENCY items (bare except clauses, swallowed exceptions)
+  - 4 STRUCTURE items (old training path consolidation, nce_package_files)
+  - 3 ORGANIZATION items (stubs, utility placement)
+  - Output: .claude/ai-ops/refactoring-plan.md
+- Extended knowledge graph with 2 new patterns:
+  - data-normalization: normalizing constant pipeline
+  - one-hot-encoding: lower-dim vs full encoding modes
+- Verified all P1 dead code findings against actual codebase
+- Discovered additional issues: broken create_data_loaders function, _flag0 unused variable,
+  __all__ referencing non-existent symbol, 731 print statements across codebase
+...............
+2026-03-01 (session 1)
+- Completed full codebase trace: mapped all 30+ modules, 10+ classes, and their relationships
+  - Output: .claude/ai-ops/state/codebase-trace.md
+- Identified dead code: 6 completely dead files, 3 superseded modules, 5+ dead code blocks in active files
+  - ~3500-4000 lines of dead code identified
+  - Key dead files: fastElim.py, NN_Train_copy.py, dt2.py, train_old.py, message_gradient.py, factor_qdecision_tree.py
+  - Empty files: utils.py, message_trainer.py
+  - Output: .claude/ai-ops/state/dead-code-report.md
+- Built knowledge graph with 8 concept entries and 2 pattern entries:
+  - Concepts: variable-elimination, weighted-mini-bucket, backward-messages, unnormalized-kl-divergence,
+    factor-operations, neural-network-factors, loss-functions, sample-generation, cluster-elimination, quantization
+  - Patterns: log-space-convention, three-layer-architecture
+  - Updated _index.md and _context.md
+- Marked 3 P1 checklist items as done
+...............
