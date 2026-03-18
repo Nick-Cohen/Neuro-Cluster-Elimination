@@ -1,6 +1,6 @@
 # S02: Single-Bucket Training Harness with Plots — Research
 
-**Date:** 2026-03-12 (updated 2026-03-17 with post-implementation findings and S01 state audit)
+**Date:** 2026-03-12 (updated 2026-03-17 with post-implementation findings and S01 state audit; re-verified 2026-03-17 21:37 PDT — all code on disk matches research, S01 Phase 2 gap unchanged)
 
 ## Summary
 
@@ -199,7 +199,7 @@ These findings emerged during T01-T03 implementation and verification:
 
 **Phase 1 (bucket identification):** Complete. All 24 problems processed, results in `/tmp/hard_bucket_selection_hvmlbbvv/`. 4 hard buckets found above 0.1 threshold. 3 problems (18, 19, 21) failed with CUDA OOM.
 
-**Phase 2 (precompute .pt files):** Never ran. `data/hard_buckets/` directory is empty — no .pt files, no bucket_list.json, no selection_results.json. The coordinator process that was supposed to trigger Phase 2 after all workers finished is no longer running. Phase 1 results are in a temp directory that will be lost on reboot.
+**Phase 2 (precompute .pt files):** Never ran. `data/hard_buckets/` directory is empty — no .pt files, no bucket_list.json, no selection_results.json. The coordinator process that was supposed to trigger Phase 2 after all workers finished is no longer running. Phase 1 results are still present in `/tmp/hard_bucket_selection_hvmlbbvv/` (24 files, all readable as of 2026-03-17 21:37 PDT) but will be lost on reboot.
 
 **Impact on S02:** Minimal — S02's verification script handles this via synthetic .pt fallback. S02's code is fully functional. The gap affects S03 (CLI benchmark) which needs real .pt files to run meaningful multi-bucket benchmarks. **Before S03 can run end-to-end, S01 Phase 2 must be completed** (either by re-running the coordinator's Phase 2 logic against the temp dir data, or by re-running the full pipeline).
 
