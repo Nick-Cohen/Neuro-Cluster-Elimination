@@ -1,3 +1,14 @@
+2026-03-18
+- Quick task 25: Fix gsd CLI command not working from terminal
+  - Updated gsd-pi from 2.31.2 to 2.32.0 (npm install -g gsd-pi@latest)
+  - Root cause: gsd takes 47-52s to start on Ubuntu 20.04 due to jiti TypeScript
+    compilation of 438 extension files; jiti fsCache at /tmp/jiti/ (227 files) is used
+    but reading/executing all cached modules still takes ~45s
+  - gsd is NOT hanging - it completes successfully with timeout 90
+  - Workarounds: timeout 90 gsd --print, or claude --print (instant startup)
+  - GLIBC 2.31 < 2.33 means native addon can't load, but Proxy fallback works for
+    plain text prompts (native JSON parser only used for tool_use delta events)
+...............
 2026-03-10
 - Quick task 20: Update benchmark WMSE/UKL graphs with per-problem error plots
   - Created visualize_updated.py (220 lines) for WMSE vs UKL benchmark result analysis

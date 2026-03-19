@@ -85,6 +85,7 @@ Recent decisions affecting current work:
 - pyGMs catalog model.file expects files in subdirs (bn/, objdetect/) but cache root has flat files; need symlinks for offline access (quick-15)
 - fastgm.buckets is empty after get_log_partition_function() -- buckets deleted post-elimination; use fastgm.per_bucket_training_log (now populated by bucket.py during compute_message_nn) (quick-18)
 - grid10x10.f10.uai available offline at /home/cohenn1/UAI/Submissions/IBIA-PR-V2/test-results/1200/; copy to .model_cache/grids/; generate .ord via pyGMs.eliminationOrder('minfill') (quick-18)
+- gsd --print is not hung — it takes 47-52 seconds on Ubuntu 20.04 due to jiti TypeScript compilation of 438 extension files; use timeout 90 or claude --print as fast alternative (quick-25)
 
 ### Pending Todos
 
@@ -129,11 +130,12 @@ None.
 | 029 | Create grouped bar chart comparing paper WMB/NeuroBE errors vs our WMB for 4 overlapping problems | 2026-03-10 | 5453c6f | [22-create-chart-comparing-sanity-check-neur](./quick/22-create-chart-comparing-sanity-check-neur/) |
 | 030 | Create .uai.vo (SDBE format) and .uai.evid files for all 24 small_problems benchmark models | 2026-03-10 | 133a16b | [23-create-uai-uai-vo-and-uai-evid-files-for](./quick/23-create-uai-uai-vo-and-uai-evid-files-for/) |
 | 031 | Export all GSD 1.0 planning artifacts to single file for GSD 2.0 migration | 2026-03-12 | 7366504 | [24-export-gsd-planning-artifacts-for-gsd-2-](./quick/24-export-gsd-planning-artifacts-for-gsd-2-/) |
+| 032 | Fix gsd CLI command not working from terminal: updated to v2.32.0, diagnosed 47-52s jiti startup overhead | 2026-03-18 | 33d52cc | [25-fix-gsd-command-not-working-from-termina](./quick/25-fix-gsd-command-not-working-from-termina/) |
 
 ## Session Continuity
 
-Last session: 2026-03-12
-Stopped at: Quick task 24 complete — GSD export created at .planning/GSD_EXPORT.md, ready for GSD 2.0 migration
+Last session: 2026-03-18
+Stopped at: Quick task 25 complete — gsd v2.32.0 working (47-52s startup); use timeout 90 or claude --print; see 25-SUMMARY.md
 Resume file: None
 
 ---
