@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-10)
 Phase: Phase 5 (Config Restructure) — Not started
 Plan: —
 Status: Roadmap defined, ready to plan Phase 5
-Last activity: 2026-03-12 — Completed quick task 24: Export GSD planning artifacts for GSD 2.0 migration
+Last activity: 2026-03-19 - Completed quick task 25: Fix GSD command not working from terminal
 
 Progress: [          ] 0% (v1.1)
 
