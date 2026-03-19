@@ -1,3 +1,13 @@
+2026-03-19
+- Quick task 26: Fix gsd-pi text module crash on GLIBC 2.31 (Native function not available)
+  - Root cause: gsd-pi text/index.js had no JS fallbacks unlike json-parse and xxhash modules
+  - Key insight: typeof-based detection fails because native.js Proxy returns arrow fn for ALL props
+  - Fix: try/catch detection (native.visibleWidth("", 3) in try block) correctly detects availability
+  - Added JS fallbacks for all 6 functions: visibleWidth, sanitizeText, wrapTextWithAnsi,
+    truncateToWidth, sliceWithWidth, extractSegments
+  - Created scripts/patch-gsd-text-fallback.sh: self-contained, idempotent, auto-detects install path
+  - gsd --print now exits with code 0 on Ubuntu 20.04 (GLIBC 2.31)
+...............
 2026-03-18
 - Quick task 25: Fix gsd CLI command not working from terminal
   - Updated gsd-pi from 2.31.2 to 2.32.0 (npm install -g gsd-pi@latest)

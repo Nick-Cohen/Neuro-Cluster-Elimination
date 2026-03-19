@@ -86,6 +86,7 @@ Recent decisions affecting current work:
 - fastgm.buckets is empty after get_log_partition_function() -- buckets deleted post-elimination; use fastgm.per_bucket_training_log (now populated by bucket.py during compute_message_nn) (quick-18)
 - grid10x10.f10.uai available offline at /home/cohenn1/UAI/Submissions/IBIA-PR-V2/test-results/1200/; copy to .model_cache/grids/; generate .ord via pyGMs.eliminationOrder('minfill') (quick-18)
 - gsd --print is not hung — it takes 47-52 seconds on Ubuntu 20.04 due to jiti TypeScript compilation of 438 extension files; use timeout 90 or claude --print as fast alternative (quick-25)
+- gsd-pi text module native detection must use try/catch (not typeof) because the Proxy in native.js returns arrow functions for ALL property accesses; patched text/index.js with JS fallbacks for all 6 functions; scripts/patch-gsd-text-fallback.sh reapplies after upgrades (quick-26)
 
 ### Pending Todos
 
@@ -131,11 +132,12 @@ None.
 | 030 | Create .uai.vo (SDBE format) and .uai.evid files for all 24 small_problems benchmark models | 2026-03-10 | 133a16b | [23-create-uai-uai-vo-and-uai-evid-files-for](./quick/23-create-uai-uai-vo-and-uai-evid-files-for/) |
 | 031 | Export all GSD 1.0 planning artifacts to single file for GSD 2.0 migration | 2026-03-12 | 7366504 | [24-export-gsd-planning-artifacts-for-gsd-2-](./quick/24-export-gsd-planning-artifacts-for-gsd-2-/) |
 | 032 | Fix gsd CLI command not working from terminal: updated to v2.32.0, diagnosed 47-52s jiti startup overhead | 2026-03-18 | 33d52cc | [25-fix-gsd-command-not-working-from-termina](./quick/25-fix-gsd-command-not-working-from-termina/) |
+| 033 | Fix gsd-pi text module crash on GLIBC 2.31: added JS fallbacks for all 6 text functions with try/catch detection | 2026-03-19 | 356a802 | [26-fix-gsd-cli-native-function-crash-on-lin](./quick/26-fix-gsd-cli-native-function-crash-on-lin/) |
 
 ## Session Continuity
 
-Last session: 2026-03-18
-Stopped at: Quick task 25 complete — gsd v2.32.0 working (47-52s startup); use timeout 90 or claude --print; see 25-SUMMARY.md
+Last session: 2026-03-19
+Stopped at: Quick task 26 complete — gsd text fallback patch applied; scripts/patch-gsd-text-fallback.sh created for post-upgrade reapplication; see 26-SUMMARY.md
 Resume file: None
 
 ---
