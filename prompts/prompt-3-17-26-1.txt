@@ -1,0 +1,11 @@
+When the single message training tests are completed we want to run the following experiments:
+
+We want to run NeuroBE mode (but not with the early stopping criteria) for the 1 hour version.
+
+Then we similarly want to run the UKL loss (also no early stopping criteria) for the 1 hour version.
+
+We also want to run the UKL loss and NeuroBE mode both with the NeuroBE mode early stopping.
+
+Note that the config for the NeuroBE mode has been specified previously, but for this UKL test we want to only match the batch size, sample generation, and architecture, not the target normalization or anything like that.
+
+Things to verify success: the one hour tests without early stopping indeed commence training for one hour, and not a different amount of time. The graphs produced have visible metrics of losses that generally decrease over time. etc.

@@ -1,0 +1,10 @@
+gsd 2.x no longer runs on the deep reasoning server. So I need for all experiments requiring the GPUs (anything remotely large) to ssh into deepreaoning first:
+
+ssh deepreaoning
+
+So if you are controlling a terminal:
+
+ssh deepreasoning
+python run_experiment.py
+
+This should work. But I want you to make sure you update your documentation to make this workflow completely seemless and never cause errors. Maybe make a hook that every time python files are run you double check that you are ssh'ed in from the terminal? I'm not sure how to best accomplish it.

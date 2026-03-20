@@ -1,0 +1,127 @@
+{
+  "config": {
+    "device": "cuda",
+    "hidden_sizes": [
+      20
+    ],
+    "optimizer": "adam",
+    "lr": 0.001,
+    "lr_decay": 1,
+    "momentum": 0.9,
+    "inverse_time_decay_constant": 10,
+    "patience": 1,
+    "min_lr": 1e-08,
+    "num_epochs": 50,
+    "num_epochs2": 0,
+    "nbe_early_stopping": false,
+    "skip_early_stopping": true,
+    "sampling_scheme": "all",
+    "batch_size": 128,
+    "set_size": 100000,
+    "num_samples": 1000,
+    "loss_fn": "logspace_mse_fdb",
+    "traced_losses": [],
+    "val_set": "all",
+    "fdb": false,
+    "use_bw_approx": true,
+    "populate_bw_factors": false,
+    "ecl": 262143,
+    "iB": 100,
+    "approximation_method": "nn",
+    "bw_ecl": 1073741824,
+    "backward_iB": 100,
+    "use_linspace_bias": false,
+    "use_memorizer": false,
+    "display_intermediate": false,
+    "track_errors": false,
+    "plot_messages": false,
+    "debug": false,
+    "lower_dim": false,
+    "dope_factors": false,
+    "gather_message_stats": false,
+    "stratify_samples": false,
+    "seed": 42
+  },
+  "results": [
+    {
+      "bucket_id": "grid10x10_f5_wrap_uai__10",
+      "success": true,
+      "epochs": 4,
+      "time": 65.08,
+      "final_loss": "219.7451",
+      "final_error": "7.635803"
+    },
+    {
+      "bucket_id": "or_chain_10_fg_uai__154",
+      "success": true,
+      "epochs": 15,
+      "time": 61.0,
+      "final_loss": "NaN",
+      "final_error": "nan"
+    },
+    {
+      "bucket_id": "or_chain_10_fg_uai__88",
+      "success": true,
+      "epochs": 16,
+      "time": 63.53,
+      "final_loss": "NaN",
+      "final_error": "nan"
+    },
+    {
+      "bucket_id": "29_wcsp_uai__75",
+      "success": true,
+      "epochs": 2,
+      "time": 63.34,
+      "final_loss": "0.0167",
+      "final_error": "0.041861"
+    },
+    {
+      "bucket_id": "404_wcsp_uai__49",
+      "success": true,
+      "epochs": 1,
+      "time": 68.09,
+      "final_loss": "255.1481",
+      "final_error": "0.019924"
+    },
+    {
+      "bucket_id": "or_chain_10_fg_uai__60",
+      "success": true,
+      "epochs": 15,
+      "time": 63.46,
+      "final_loss": "NaN",
+      "final_error": "nan"
+    },
+    {
+      "bucket_id": "BN_8_uai__50",
+      "success": true,
+      "epochs": 1,
+      "time": 122.73,
+      "final_loss": "266.1956",
+      "final_error": "0.099623"
+    },
+    {
+      "bucket_id": "29_wcsp_uai__54",
+      "success": true,
+      "epochs": 1,
+      "time": 117.36,
+      "final_loss": "239.2197",
+      "final_error": "0.140038"
+    },
+    {
+      "bucket_id": "BN_11_uai__58",
+      "success": true,
+      "epochs": 30,
+      "time": 60.63,
+      "final_loss": "0.0505",
+      "final_error": "0.086756"
+    },
+    {
+      "bucket_id": "BN_9_uai__12",
+      "success": true,
+      "epochs": 1,
+      "time": 128.41,
+      "final_loss": "253.7768",
+      "final_error": "0.445361"
+    }
+  ]
+}

@@ -16,6 +16,62 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 NCE is a Python package implementing neural network-based inference for graphical models. It combines variable elimination with neural network approximations to perform approximate inference on probabilistic graphical models (PGMs), particularly using Weighted Mini-Bucket elimination (WMB).
 
+## GPU Execution Requirements
+
+**ALL GPU experiments must run on the `deepreasoning` server.**
+
+GSD 2.x runs locally on `circinus-6`, but GPU resources are on `deepreasoning`. Any experiment requiring CUDA must execute remotely.
+
+**Full documentation:** See `scripts/README.md` for complete guide with examples and troubleshooting.
+
+### Method 1: Automatic GPU Guard (Recommended for Python scripts)
+
+Add this at the top of any GPU-requiring Python script:
+
+```python
+import sys
+import os
+# Add project root to path if not already there
+sys.path.insert(0, '/home/cohenn1/NCE')
+
+from scripts.gpu_guard import ensure_gpu_server
+ensure_gpu_server()  # Auto-redirects to deepreasoning if not already there
+```
+
+This will automatically re-execute the script on deepreasoning via SSH if run locally.
+
+### Method 2: Manual SSH Wrapper
+
+For ad-hoc execution or when you need explicit control:
+
+```bash
+./scripts/run_on_gpu.sh path/to/experiment.py [args...]
+```
+
+This handles:
+- Syncing code to deepreasoning
+- Executing the script remotely
+- Syncing results back
+
+### Method 3: Direct SSH (Manual)
+
+```bash
+ssh deepreasoning
+cd /home/cohenn1/NCE
+source venv/bin/activate
+python notebooks/March-2026/my_experiment.py
+```
+
+### Pre-Flight Checklist for Experiments
+
+Before running ANY GPU experiment:
+
+1. **Device check:** Verify config specifies `device='cuda'`
+2. **Location check:** If running from GSD/Claude, use Method 1 (gpu_guard) or Method 2 (wrapper)
+3. **Never override `device='cuda'` to `device='cpu'`** without explicit user approval
+
+The gpu_guard will detect when you're not on deepreasoning and handle the SSH redirect automatically.
+
 ## Core Architecture
 
 ### Three-Layer Design

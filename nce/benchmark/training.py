@@ -270,6 +270,16 @@ def train_single_bucket(bucket_pt_path, nn_config, time_limit_seconds,
     config['error_tracking'] = False       # Benchmark handles error tracking externally
     config['sampling_scheme'] = 'all'      # Required for full-assignment training
     config['device'] = device
+    
+    # Disable all early stopping mechanisms (benchmark uses time limit only)
+    config['convex_early_stopping'] = False
+    config['nbe_early_stopping'] = False
+    config['neurobe_early_stopping'] = False
+    config['use_validation_early_stopping'] = False
+    
+    # Add gradient clipping for numerical stability if not already specified
+    if 'grad_clip_norm' not in config:
+        config['grad_clip_norm'] = 1.0
 
     # Pass through prepare_config for validation and alias resolution
     config = prepare_config(config, strict=False)
@@ -284,6 +294,16 @@ def train_single_bucket(bucket_pt_path, nn_config, time_limit_seconds,
           f"(problem_idx={problem_idx}, bucket={bucket_label})...")
     fastgm, bucket = _reconstruct_bucket(problem_idx, bucket_label, config, device)
     print(f"[BenchmarkTraining] Reconstruction complete.")
+
+    # Adaptive learning rate for high-dimensional buckets
+    input_dim = int(bucket.get_message_size())
+    if input_dim > 100000:
+        # Always scale for large buckets, even if lr was specified
+        base_lr = config.get('lr', 0.001)
+        scaled_lr = base_lr / ((input_dim / 100000) ** 0.5)
+        config['lr'] = max(scaled_lr, 1e-6)
+        print(f"[BenchmarkTraining] Large input dim ({input_dim}), "
+              f"scaling lr: {base_lr:.2e} → {config['lr']:.2e}")
 
     # -----------------------------------------------------------------------
     # 5. Create Net and Trainer (for setup only)

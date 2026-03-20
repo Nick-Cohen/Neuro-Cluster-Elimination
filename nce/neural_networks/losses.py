@@ -272,7 +272,9 @@ def logspace_mse_fdb(outputs, targets, bw_hat=None):
     difs = outputs - targets
     sqr_difs = difs ** 2
     avg_sqr_difs = torch.mean(sqr_difs)
-    return avg_sqr_difs
+    # Aggressive clipping to prevent gradient overflow during backprop
+    max_loss = 1e4  # Reduced from 1e6 for numerical stability
+    return torch.clamp(avg_sqr_difs, max=max_loss)
     
 def elp(outputs, targets, bw_hat=None, sigma_f=0, sigma_g=0, rho=0, num_bw_samples=100, seed=None):
     """
