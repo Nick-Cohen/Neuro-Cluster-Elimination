@@ -1,88 +1,16 @@
-{
-  "selection_strategy": "top-10",
-  "selection_date": "2026-03-19T21:13:01.910081",
-  "num_problems": 24,
-  "total_nn_buckets": 66,
-  "buckets": [
-    {
-      "id": "grid10x10_f5_wrap_uai__10",
-      "problem_key": "grid10x10.f5.wrap.uai",
-      "bucket_label": 10,
-      "selection_error": 0.82318115234375,
-      "auto_ecl": 1048575,
-      "file": "grid10x10_f5_wrap_uai__bucket_10.pt"
-    },
-    {
-      "id": "or_chain_10_fg_uai__154",
-      "problem_key": "or_chain_10.fg.uai",
-      "bucket_label": 154,
-      "selection_error": 0.19878482818603516,
-      "auto_ecl": 262143,
-      "file": "or_chain_10_fg_uai__bucket_154.pt"
-    },
-    {
-      "id": "or_chain_10_fg_uai__88",
-      "problem_key": "or_chain_10.fg.uai",
-      "bucket_label": 88,
-      "selection_error": 0.1668863296508789,
-      "auto_ecl": 262143,
-      "file": "or_chain_10_fg_uai__bucket_88.pt"
-    },
-    {
-      "id": "29_wcsp_uai__75",
-      "problem_key": "29.wcsp.uai",
-      "bucket_label": 75,
-      "selection_error": 0.08731889724731445,
-      "auto_ecl": 2097151,
-      "file": "29_wcsp_uai__bucket_75.pt"
-    },
-    {
-      "id": "404_wcsp_uai__49",
-      "problem_key": "404.wcsp.uai",
-      "bucket_label": 49,
-      "selection_error": 0.08612728118896484,
-      "auto_ecl": 4194303,
-      "file": "404_wcsp_uai__bucket_49.pt"
-    },
-    {
-      "id": "or_chain_10_fg_uai__60",
-      "problem_key": "or_chain_10.fg.uai",
-      "bucket_label": 60,
-      "selection_error": 0.08217239379882812,
-      "auto_ecl": 262143,
-      "file": "or_chain_10_fg_uai__bucket_60.pt"
-    },
-    {
-      "id": "BN_8_uai__50",
-      "problem_key": "BN_8.uai",
-      "bucket_label": 50,
-      "selection_error": 0.059076547622680664,
-      "auto_ecl": 8388607,
-      "file": "BN_8_uai__bucket_50.pt"
-    },
-    {
-      "id": "29_wcsp_uai__54",
-      "problem_key": "29.wcsp.uai",
-      "bucket_label": 54,
-      "selection_error": 0.05865478515625,
-      "auto_ecl": 2097151,
-      "file": "29_wcsp_uai__bucket_54.pt"
-    },
-    {
-      "id": "BN_11_uai__58",
-      "problem_key": "BN_11.uai",
-      "bucket_label": 58,
-      "selection_error": 0.05239391326904297,
-      "auto_ecl": 131071,
-      "file": "BN_11_uai__bucket_58.pt"
-    },
-    {
-      "id": "BN_9_uai__12",
-      "problem_key": "BN_9.uai",
-      "bucket_label": 12,
-      "selection_error": 0.0439913272857666,
-      "auto_ecl": 4194303,
-      "file": "BN_9_uai__bucket_12.pt"
-    }
-  ]
-}
+[
+  {
+    "bucket_id": "smokers_20_uai__bucket_400",
+    "file": "smokers_20_bucket_400.pt",
+    "problem_key": "smokers_20.uai",
+    "bucket_label": 400,
+    "selection_error": 0.0
+  },
+  {
+    "bucket_id": "smokers_20_uai__bucket_402",
+    "file": "smokers_20_bucket_402.pt",
+    "problem_key": "smokers_20.uai",
+    "bucket_label": 402,
+    "selection_error": 0.0
+  }
+]
