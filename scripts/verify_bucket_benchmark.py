@@ -579,6 +579,18 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
 
     # -----------------------------------------------------------------------
+    # Backup existing history.jsonl if it exists
+    # -----------------------------------------------------------------------
+    history_path = os.path.join('data', 'hard_buckets', 'history.jsonl')
+    history_backup = None
+    if os.path.isfile(history_path):
+        history_backup = history_path + '.backup'
+        import shutil
+        shutil.copy2(history_path, history_backup)
+        os.remove(history_path)
+        print(f"[Verify] Backed up existing history to {history_backup}")
+
+    # -----------------------------------------------------------------------
     # Step 1: Find or generate .pt files
     # -----------------------------------------------------------------------
     print(f"[Verify] === Step 1: Find or generate .pt files ===")
@@ -676,6 +688,19 @@ def main():
     print()
     print(f"[Verify] Total checks: {len(passed)} passed, {len(failed)} failed")
     print(f"{'='*70}\n")
+
+    # -----------------------------------------------------------------------
+    # Restore history.jsonl backup if it existed
+    # -----------------------------------------------------------------------
+    if history_backup and os.path.isfile(history_backup):
+        import shutil
+        # Merge: append verification runs to backup, then restore
+        with open(history_backup, 'a') as backup_file:
+            with open(history_path) as current_file:
+                for line in current_file:
+                    backup_file.write(line)
+        shutil.move(history_backup, history_path)
+        print(f"[Verify] Restored history.jsonl (merged {2} new entries)\n")
 
     if failed:
         print(f"[Verify] VERIFICATION FAILED — {len(failed)} check(s) failed")
