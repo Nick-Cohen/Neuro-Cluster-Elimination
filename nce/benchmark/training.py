@@ -27,7 +27,7 @@ from nce.inference.factor import FastFactor
 from nce.inference.factor_nn import FactorNN
 from nce.inference.graphical_model import FastGM
 from nce.neural_networks.net import Net
-from nce.neural_networks.train import Trainer, get_error_tracking_epochs
+from nce.neural_networks.train import Trainer, get_error_tracking_epochs, get_scaled_error_tracking_epochs
 
 from nce.benchmark.plots import plot_loss_curve, plot_local_error_curve
 
@@ -283,7 +283,9 @@ def train_single_bucket(bucket_pt_path, nn_config, time_limit_seconds,
     print(f"[BenchmarkTraining] Reconstructing FastGM and bucket "
           f"(problem_idx={problem_idx}, bucket={bucket_label})...")
     fastgm, bucket = _reconstruct_bucket(problem_idx, bucket_label, config, device)
-    print(f"[BenchmarkTraining] Reconstruction complete.")
+    message_size = bucket.get_message_size()
+    print(f"[BenchmarkTraining] Reconstruction complete. "
+          f"message_size={message_size:.0f}")
 
     # -----------------------------------------------------------------------
     # 5. Create Net and Trainer (for setup only)
@@ -314,7 +316,7 @@ def train_single_bucket(bucket_pt_path, nn_config, time_limit_seconds,
     # -----------------------------------------------------------------------
     # 8. Set up checkpoint tracking
     # -----------------------------------------------------------------------
-    checkpoint_epochs = set(get_error_tracking_epochs(num_epochs))
+    checkpoint_epochs = set(get_scaled_error_tracking_epochs(num_epochs, batch_size, message_size))
     error_tracking_data = []
     losses = []
     loss_fn = trainer.loss_fn
