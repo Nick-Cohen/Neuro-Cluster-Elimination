@@ -11,6 +11,7 @@ import torch.optim as optim
 # from torchviz import make_dot
 import matplotlib.pyplot as plt
 import sys
+import math
 from tqdm.notebook import tqdm
 
 def get_error_tracking_epochs(num_epochs):
@@ -37,6 +38,53 @@ def get_error_tracking_epochs(num_epochs):
     if num_epochs not in epochs:
         epochs.append(num_epochs)
     return sorted(set(epochs))
+
+
+def get_scaled_error_tracking_epochs(num_epochs, batch_size, message_size):
+    """
+    Generate checkpoint schedule scaled by batch_size/message_size ratio.
+
+    Cost model:
+    - Training one epoch: O(batch_size) — iterate through batch_size samples
+    - Error tracking at one checkpoint: O(message_size) — evaluate all message_size assignments
+    
+    When batch_size << message_size, error tracking dominates cost. This function scales
+    the checkpoint schedule so that tracking overhead remains proportional to training time.
+    
+    Formula: scaled_epoch = ceil((batch_size / message_size) * base_epoch)
+    
+    Args:
+        num_epochs: Total number of training epochs.
+        batch_size: Number of samples per training batch.
+        message_size: Number of assignments in the message domain.
+        
+    Returns:
+        Sorted list of unique checkpoint epoch numbers, with epoch 0 always included
+        and all values <= num_epochs.
+    """
+    # Get base checkpoint schedule
+    base = get_error_tracking_epochs(num_epochs)
+    
+    # Compute scaling factor
+    scaling_factor = batch_size / message_size
+    
+    # If ratio >= 1.0, tracking is cheap relative to training, no scaling needed
+    if scaling_factor >= 1.0:
+        return base
+    
+    # Scale each non-zero epoch by the ratio
+    scaled = [math.ceil(epoch * scaling_factor) for epoch in base if epoch > 0]
+    
+    # Deduplicate and sort (scaling may cause collisions)
+    scaled = sorted(set(scaled))
+    
+    # Always include epoch 0 (baseline checkpoint)
+    scaled = [0] + scaled
+    
+    # Filter to valid range (scaled epochs may exceed num_epochs)
+    scaled = [e for e in scaled if e <= num_epochs]
+    
+    return scaled
 
 
 def should_use_convex_early_stopping(config):
