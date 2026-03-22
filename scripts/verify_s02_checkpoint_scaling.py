@@ -285,8 +285,11 @@ def main():
     from nce.benchmark_problems.small_problems import small_problems as _sp
     nn_config = copy.deepcopy(_sp.configs['default'][0])
 
-    # Small-batch configuration
-    batch_size = 100
+    # Small-batch configuration with adaptive batch_size
+    # Target scaling_factor around 0.01-0.02 to produce 4-5 checkpoints from base schedule
+    target_scaling_factor = 0.015
+    batch_size = max(100, int(target_scaling_factor * message_size))
+    
     nn_config.update({
         'batch_size': batch_size,
         'num_epochs': 500,
@@ -300,8 +303,9 @@ def main():
         'seed': 42,
     })
 
+    actual_scaling_factor = batch_size / message_size
     print(f"[Verify] Config: batch_size={batch_size}, num_epochs=500")
-    print(f"[Verify] Scaling factor: {batch_size / message_size:.6f}")
+    print(f"[Verify] Scaling factor: {actual_scaling_factor:.6f} (target: {target_scaling_factor})")
     print()
 
     try:
