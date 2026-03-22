@@ -42,12 +42,12 @@ trap cleanup EXIT
 # Helper function to print check results
 check_pass() {
     echo -e "${GREEN}PASS:${NC} $1"
-    ((CHECKS_PASSED++))
+    CHECKS_PASSED=$((CHECKS_PASSED + 1))
 }
 
 check_fail() {
     echo -e "${RED}FAIL:${NC} $1 — $2"
-    ((CHECKS_FAILED++))
+    CHECKS_FAILED=$((CHECKS_FAILED + 1))
 }
 
 check_info() {
@@ -158,16 +158,19 @@ check_info "Step 5: Running benchmark on single bucket"
 
 cd "$NCE_DIR"
 
+# Activate virtual environment
+source "${NCE_DIR}/venv/bin/activate"
+
 # Since bucket_benchmark.py doesn't have --max-buckets flag, we temporarily
 # replace bucket_list.json with our single-bucket version
 BUCKET_LIST_BACKUP="${BUCKET_LIST}.backup_verify"
 cp "$BUCKET_LIST" "$BUCKET_LIST_BACKUP"
 cp "$TEMP_BUCKET_LIST" "$BUCKET_LIST"
 
-check_info "Command: cd ${NCE_DIR} && python scripts/bucket_benchmark.py ${TEMP_CONFIG} fast --gpus 0 --output-dir ${OUTPUT_BASE}/verify_s01"
+check_info "Command: cd ${NCE_DIR} && source venv/bin/activate && python3 scripts/bucket_benchmark.py ${TEMP_CONFIG} fast --gpus 0 --output-dir ${OUTPUT_BASE}/verify_s01"
 
 # Run benchmark (capture output for parsing)
-BENCHMARK_OUTPUT=$(python scripts/bucket_benchmark.py "$TEMP_CONFIG" fast --gpus 0 --output-dir "${OUTPUT_BASE}/verify_s01" 2>&1)
+BENCHMARK_OUTPUT=$(python3 scripts/bucket_benchmark.py "$TEMP_CONFIG" fast --gpus 0 --output-dir "${OUTPUT_BASE}/verify_s01" 2>&1)
 BENCHMARK_EXIT=$?
 
 # Restore original bucket_list.json (also happens in trap, but do it here for clarity)

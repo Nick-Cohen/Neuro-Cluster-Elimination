@@ -82,12 +82,13 @@ sampling:
   num_samples: 100000               # Max samples to generate (ignored when scheme='all')
   set_size: 100000                  # Training set size cap
   val_set: true                     # Create validation set for tracking generalization
+  lower_dim: false                  # Use lower-dimensional sampling (advanced)
 
 backward:
   use_backward_approximation: true  # Enable backward message approximation
-  bw_ib2: 23                        # Backward width threshold (binary domain)
-                                    # Width 23 = buckets wider than 23 binary variables
-                                    # Translates to bw_ecl = 2^23-1 = 8388607
+  bw_ecl: 8388607                   # Backward exact computation limit (2^23-1)
+                                    # Buckets with domain size product > bw_ecl use NN approx
+                                    # For binary domains: width 23 = 2^23-1 = 8388607
                                     # Increase for tighter backward approx (slower)
                                     # Decrease for faster backward pass (looser approx)
   backward_i_bound: 100             # Backward i-bound (limits backward induced width)
@@ -121,8 +122,8 @@ Common modifications for different use cases:
 - Smaller batch sizes train slower but use less GPU memory
 
 **For tighter backward approximation:**
-- Increase `bw_ib2: 25` or `bw_ib2: 27`
-- Higher width thresholds = more exact backward messages = slower but more accurate
+- Increase `bw_ecl: 33554431` (width 25 = 2^25-1) or `bw_ecl: 134217727` (width 27 = 2^27-1)
+- Higher thresholds = more exact backward messages = slower but more accurate
 
 **For larger model capacity:**
 - Increase `hidden_sizes: [64, 64]` or `hidden_sizes: [32, 32, 32]`
