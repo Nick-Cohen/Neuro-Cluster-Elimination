@@ -36,6 +36,7 @@ NESTED_SECTIONS = OrderedDict([
         'ecl':                     _field('ecl', default=0),
         'i_bound':                 _field('iB', default=0),
         'iB':                      _field('iB', default=0),
+        'ib2':                     _field('ib2', default=None),
         'approximation_method':    _field('approximation_method', default='nn'),
         'dope_factors':            _field('dope_factors', default=False),
         'device':                  _field('device', default='cuda'),
@@ -117,6 +118,8 @@ NESTED_SECTIONS = OrderedDict([
         'bw_ecl':                     _field('bw_ecl', default=None),
         'backward_i_bound':           _field('backward_iB', default=None),
         'backward_iB':                _field('backward_iB', default=None),
+        'bw_iB':                      _field('bw_iB', default=None),
+        'bw_ib2':                     _field('bw_ib2', default=None),
         'forward_diff_barrier':       _field('fdb', default=False),
         'fdb':                        _field('fdb', default=False),
     }),
@@ -348,6 +351,63 @@ def flatten_config(nested):
 
 
 # ===================================================================
+# Width parameter conflict validation
+# ===================================================================
+
+def _validate_width_parameter_conflicts(flat):
+    """Check for conflicting width threshold specifications before translation.
+    
+    The new width parameter system (ib2, bw_ib2) is mutually exclusive with
+    the traditional separate specification of iB/ecl or bw_iB/bw_ecl.
+    
+    Users can either:
+    - Use width parameters: ib2 (derives both iB and ecl), bw_ib2 (derives bw_iB and bw_ecl)
+    - Use traditional parameters: iB and/or ecl separately, bw_iB and/or bw_ecl separately
+    
+    But cannot mix width parameters with traditional parameters in the same direction.
+    
+    Args:
+        flat: Flat config dict (aliases already resolved, but not translated).
+    
+    Raises:
+        ValueError: If width parameters are mixed with traditional parameters.
+    """
+    # Forward direction: ib2 is mutually exclusive with iB or ecl
+    has_ib2 = 'ib2' in flat and flat['ib2'] is not None
+    has_iB = 'iB' in flat and flat['iB'] not in (None, 0)
+    has_ecl = 'ecl' in flat and flat['ecl'] not in (None, 0)
+    
+    if has_ib2 and (has_iB or has_ecl):
+        specified = ['ib2']
+        if has_iB:
+            specified.append('iB')
+        if has_ecl:
+            specified.append('ecl')
+        raise ValueError(
+            f"Config specifies both width parameter (ib2) and traditional "
+            f"threshold parameters ({', '.join(specified[1:])}). "
+            f"Use either ib2 (for binary domains) OR iB/ecl (for general domains), not both."
+        )
+    
+    # Backward direction: bw_ib2 is mutually exclusive with bw_iB or bw_ecl
+    has_bw_ib2 = 'bw_ib2' in flat and flat['bw_ib2'] is not None
+    has_bw_iB = 'bw_iB' in flat and flat['bw_iB'] is not None
+    has_bw_ecl = 'bw_ecl' in flat and flat['bw_ecl'] is not None
+    
+    if has_bw_ib2 and (has_bw_iB or has_bw_ecl):
+        specified = ['bw_ib2']
+        if has_bw_iB:
+            specified.append('bw_iB')
+        if has_bw_ecl:
+            specified.append('bw_ecl')
+        raise ValueError(
+            f"Config specifies both width parameter (bw_ib2) and traditional "
+            f"backward threshold parameters ({', '.join(specified[1:])}). "
+            f"Use either bw_ib2 (for binary domains) OR bw_iB/bw_ecl (for general domains), not both."
+        )
+
+
+# ===================================================================
 # Validation: flat config
 # ===================================================================
 
@@ -453,6 +513,22 @@ def prepare_config(config_dict, strict=False):
     else:
         # Flat config path: resolve aliases
         flat = _resolve_aliases(config)
+
+    # Mutual exclusivity validation BEFORE translation
+    # Check that user didn't specify conflicting width parameters
+    _validate_width_parameter_conflicts(flat)
+
+    # Width parameter translation: convert ib2 → iB + ecl, bw_ib2 → bw_iB + bw_ecl
+    # Runs after alias resolution and flattening, after conflict validation.
+    if 'ib2' in flat and flat['ib2'] is not None:
+        flat['iB'] = flat['ib2']
+        flat['ecl'] = (2 ** flat['ib2']) - 1
+        del flat['ib2']
+    
+    if 'bw_ib2' in flat and flat['bw_ib2'] is not None:
+        flat['bw_iB'] = flat['bw_ib2']
+        flat['bw_ecl'] = (2 ** flat['bw_ib2']) - 1
+        del flat['bw_ib2']
 
     # neurobe_mode expansion: fill in NEUROBE_DEFAULTS for any key
     # not already set by the user. User overrides win.
