@@ -137,6 +137,15 @@ NESTED_SECTIONS = OrderedDict([
         'error_tracking':       _field('error_tracking', default=False),
         'compute_local_error':  _field('compute_local_error', default=False),
         'time_sample_gen':      _field('time_sample_gen', default=False),
+        # --- gamma v2 instrumentation (see nce/utils/gamma_trace.py) --------
+        # OFF unless gamma_trace_path is set to a JSONL destination.  When
+        # unset, every hook is a dict .get() returning None and the traced
+        # code path is identical to the untraced one.
+        'gamma_trace_path':       _field('gamma_trace_path', default=None),
+        'gamma_trace_per_factor': _field('gamma_trace_per_factor', default=False),
+        'gamma_trace_sync':       _field('gamma_trace_sync', default=True),
+        'gamma_trace_run_id':     _field('gamma_trace_run_id', default=None),
+        'gamma_trace_strategy':   _field('gamma_trace_strategy', default=None),
         'plot_messages':        _field('plot_messages', default=False),
         'traced_losses':        _field('traced_losses', default=[]),
         'gather_message_stats': _field('gather_message_stats', default=False),

@@ -7,6 +7,7 @@ from nce.inference.graphical_model import FastGM
 from nce.inference.bucket import FastBucket
 from nce.inference.factor import FastFactor
 from nce.inference.message_gradient_factors import get_wmb_message_gradient_factors
+from nce.utils import gamma_trace
 import copy
 
 # Streaming sample-gen block knobs. Bigger blocks -> fewer kernel launches ->
@@ -136,15 +137,18 @@ class SampleGenerator:
         """
         if sampling_scheme is None:
             sampling_scheme = self.sampling_scheme
-        if sampling_scheme == 'uniform':
-            # Set deterministic seed before sampling
-            seed = self._compute_seed(is_validation=is_validation)
-            self._set_seed(seed)
-            return self.sample_uniform(num_samples)
-        elif sampling_scheme == 'all':
-            return self.sample_all()
-        else:
-            raise ValueError(f"Unknown sampling scheme: {sampling_scheme}. Use 'uniform' or 'all'.")
+        # gamma_trace.phase() is a no-op (and performs no cuda sync) unless a
+        # cluster trace is in flight; the seeding below is untouched by it.
+        with gamma_trace.phase('assign'):
+            if sampling_scheme == 'uniform':
+                # Set deterministic seed before sampling
+                seed = self._compute_seed(is_validation=is_validation)
+                self._set_seed(seed)
+                return self.sample_uniform(num_samples)
+            elif sampling_scheme == 'all':
+                return self.sample_all()
+            else:
+                raise ValueError(f"Unknown sampling scheme: {sampling_scheme}. Use 'uniform' or 'all'.")
 
     def sample_all(self) -> torch.Tensor:
         # Generate all possible assignments
@@ -194,7 +198,8 @@ class SampleGenerator:
         factors = self.factors
         if self.gm.config.get('fdb', False):
             return self.bucket.compute_message_exact().tensor.flatten()
-        return self.sample_tensor_product_elimination(self.factors, assignments)
+        with gamma_trace.phase('eval'):
+            return self.sample_tensor_product_elimination(self.factors, assignments)
     
     def compute_backward_values(self, assignments: torch.Tensor, backward_factors=None) -> torch.Tensor:
         """Compute backward message values at sampled assignments.
@@ -219,7 +224,8 @@ class SampleGenerator:
             return None
         # Use sample_tensor_product - no marginalization needed since bw_factors
         # from get_backward_message already only contain message_scope variables
-        return self.sample_tensor_product(factors=factors, assignments=assignments)
+        with gamma_trace.phase('bw'):
+            return self.sample_tensor_product(factors=factors, assignments=assignments)
 
     def sample_tensor_product_elimination(self, factors, assignments) -> torch.Tensor:
         for factor in factors:
@@ -233,24 +239,53 @@ class SampleGenerator:
         dev = self.gm.device
 
         # Resolve FactorNN-with-bw_inv to exact once.
+        # NOTE for gamma tracing: fx is index-aligned with `factors` (==
+        # bucket.factors), so per-factor timings key straight onto the
+        # structure record.  A resolved bw_inv factor is counted as an NN by
+        # bucket.factors but evaluated as a table here, so the count of such
+        # resolutions is recorded and must be checked before attributing cost.
         fx = []
+        _n_resolved = 0
         for f in factors:
             if hasattr(f, 'is_nn') and f.is_nn and hasattr(f, 'bw_inv') and f.bw_inv:
                 f = f.to_exact()
+                _n_resolved += 1
             fx.append(f)
+
+        # Per-factor timing hook.  `_pf` is None unless a gamma trace is in
+        # flight AND gamma_trace_per_factor is set; the loops below are then
+        # byte-identical in their tensor operations and accumulation order to
+        # the untraced ones, differing only by a perf_counter read and a
+        # cuda synchronize between factors.
+        _pf = gamma_trace.per_factor_active()
+        _rec = gamma_trace.active()
+        if _rec is not None:
+            _rec.note(sg_n_nn_resolved_to_exact=_n_resolved)
 
         # --- small clusters: build the full (chunk x 2^#elim) and reduce (fast) ---
         if elim_prod <= 2 ** 18:
             unsummed_shape = tuple(elim_doms)
             a_chunk = max(1, (2 ** _SG_SMALL_LOG2) // max(1, elim_prod))
+            if _rec is not None:
+                _rec.note(sg_path='small', sg_a_chunk=a_chunk, sg_e_chunk=elim_prod,
+                          sg_elim_prod=elim_prod, sg_n_assignments=n,
+                          sg_n_chunks=(n + a_chunk - 1) // max(1, a_chunk))
             outs = []
             for start in range(0, n, a_chunk):
                 ca = assignments[start:start + a_chunk]
                 uv = torch.zeros((len(ca),) + unsummed_shape, device=dev, requires_grad=False)
-                for f in fx:
-                    uv += f._get_slices(assignments=ca, elim_vars=self.elim_vars,
-                                        elim_domain_sizes=self.elim_domain_sizes,
-                                        message_scope=self.message_scope)
+                if _pf is None:
+                    for f in fx:
+                        uv += f._get_slices(assignments=ca, elim_vars=self.elim_vars,
+                                            elim_domain_sizes=self.elim_domain_sizes,
+                                            message_scope=self.message_scope)
+                else:
+                    for _fi, f in enumerate(fx):
+                        _t0 = _pf.tic()
+                        uv += f._get_slices(assignments=ca, elim_vars=self.elim_vars,
+                                            elim_domain_sizes=self.elim_domain_sizes,
+                                            message_scope=self.message_scope)
+                        _pf.toc_factor(_fi, _t0)
                 outs.append(torch.logsumexp(uv * ln10, dim=tuple(range(1, uv.dim()))) / ln10)
             return torch.cat(outs, dim=0)
 
@@ -270,6 +305,11 @@ class SampleGenerator:
         budget = _dyn_streaming_budget(dev, fx, _SG_BLOCK_LOG2)
         a_chunk = max(1, min(_SG_ACHUNK, budget, n))
         e_chunk = max(1, min(budget // a_chunk, elim_prod))
+        if _rec is not None:
+            _rec.note(sg_path='large', sg_a_chunk=a_chunk, sg_e_chunk=e_chunk,
+                      sg_elim_prod=elim_prod, sg_n_assignments=n,
+                      sg_n_chunks=((n + a_chunk - 1) // max(1, a_chunk))
+                                  * ((elim_prod + e_chunk - 1) // max(1, e_chunk)))
         outs = []
         for start in range(0, n, a_chunk):
             ca = assignments[start:start + a_chunk]
@@ -280,9 +320,16 @@ class SampleGenerator:
                 flat = torch.arange(e0, e1, device=dev)
                 coords = (flat.unsqueeze(1) // strides_t) % doms_t   # (B, n_elim_vars)
                 block = torch.zeros((A, e1 - e0), device=dev)
-                for f in fx:
-                    block += f._eval_elim_block(ca, coords, self.elim_vars,
-                                                elim_labels, self.message_scope)
+                if _pf is None:
+                    for f in fx:
+                        block += f._eval_elim_block(ca, coords, self.elim_vars,
+                                                    elim_labels, self.message_scope)
+                else:
+                    for _fi, f in enumerate(fx):
+                        _t0 = _pf.tic()
+                        block += f._eval_elim_block(ca, coords, self.elim_vars,
+                                                    elim_labels, self.message_scope)
+                        _pf.toc_factor(_fi, _t0)
                 blk = torch.logsumexp(block * ln10, dim=1) / ln10     # (A,)
                 acc_lse = torch.logaddexp(acc_lse * ln10, blk * ln10) / ln10
             outs.append(acc_lse)
