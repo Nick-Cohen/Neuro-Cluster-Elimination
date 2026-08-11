@@ -79,6 +79,75 @@ class FactorNN(FastFactor):
         # Create and return the reduced FastFactor
         return FastFactor(reduced_tensor, remaining_labels)
 
+    # ------------------------------------------------------------------
+    # One-hot encoding helpers (perf: single scatter_ instead of one
+    # F.one_hot per variable + an n_labels-way cat + a dtype cast).
+    # The produced matrix is bit-identical to the previous construction.
+    # ------------------------------------------------------------------
+    def _onehot_layout(self, device):
+        """Cached column layout of the flat one-hot input for this factor.
+
+        Returns (offsets, width, lower_dim) where `offsets` is an int64 tensor
+        of shape (n_labels,) such that the column to set for variable i with
+        value v is ``offsets[i] + v``.
+
+        For ``lower_dim`` the block for variable i is (d_i - 1) wide and value
+        0 sets no column at all (that is what ``F.one_hot(v, d)[:, 1:]`` does),
+        so ``offsets[i]`` is pre-decremented by one and value 0 lands exactly
+        on ``offsets[i]``; those entries are re-routed to a dump column at
+        index ``width`` which is dropped after the scatter.
+        """
+        key = (str(device), bool(self.gm.lower_dim))
+        cache = getattr(self, '_onehot_layout_cache', None)
+        if cache is None:
+            cache = {}
+            self._onehot_layout_cache = cache
+        if key not in cache:
+            lower = bool(self.gm.lower_dim)
+            offs, w = [], 0
+            for d in self.domain_sizes:
+                d = int(d)
+                if lower:
+                    offs.append(w - 1)          # value v -> column w + (v - 1)
+                    w += max(d - 1, 0)
+                else:
+                    offs.append(w)
+                    w += d
+            cache[key] = (torch.tensor(offs, dtype=torch.int64, device=device), int(w), lower)
+        return cache[key]
+
+    def _one_hot_from_cols(self, cols, offsets, width, lower, param_dtype, device):
+        """Scatter precomputed column indices into one preallocated float buffer.
+
+        `cols` is (..., n_labels) int64 already offset by `offsets`.
+        """
+        rows = cols.numel() // cols.shape[-1] if cols.dim() > 1 else 1
+        cols = cols.reshape(rows, cols.shape[-1])
+        if lower:
+            # value 0 contributes nothing -> send it to a dump column
+            cols = cols.masked_fill(cols == offsets, width)
+            buf = torch.zeros((rows, width + 1), dtype=param_dtype, device=device)
+            buf.scatter_(1, cols, 1.0)
+            return buf[:, :width]
+        buf = torch.zeros((rows, width), dtype=param_dtype, device=device)
+        buf.scatter_(1, cols, 1.0)
+        return buf
+
+    @staticmethod
+    def _col_src_tensors(col_src, device):
+        """Vectorise the (is_msg, source_col) table into gather/select tensors."""
+        is_msg = torch.tensor([bool(m) for m, _ in col_src], dtype=torch.bool, device=device)
+        msg_src = torch.tensor([s if m else 0 for m, s in col_src], dtype=torch.int64, device=device)
+        elim_src = torch.tensor([0 if m else s for m, s in col_src], dtype=torch.int64, device=device)
+        return is_msg, msg_src, elim_src
+
+    @staticmethod
+    def _gather_cols(src, sel, n_rows, n_labels):
+        """`src[:, sel]`, tolerating a zero-column `src` (nothing selects from it)."""
+        if src.shape[1] == 0:
+            return torch.zeros((n_rows, n_labels), dtype=torch.int64, device=src.device)
+        return src.index_select(1, sel)
+
     def _get_slices(self, assignments, elim_vars, elim_domain_sizes, message_scope):
         """
         Args:
@@ -117,32 +186,28 @@ class FactorNN(FastFactor):
         MAX_QUERY_ROWS = 65536
         chunk_size = max(1, MAX_QUERY_ROWS // max(1, n_elim))
 
+        # Perf: build the one-hot input with a single scatter_ into one
+        # preallocated float buffer, and build the index matrix with a
+        # broadcast torch.where instead of an n_labels-iteration Python loop.
+        # Bit-identical to the previous F.one_hot + cat + .to() construction.
+        dev = self.net.device
+        offsets, oh_width, oh_lower = self._onehot_layout(dev)
+        is_msg_t, msg_src_t, elim_src_t = self._col_src_tensors(col_src, dev)
+        elim_a = all_elim_assignments.to(dev)
+        elim_cols = self._gather_cols(elim_a, elim_src_t, n_elim, n_labels) + offsets
+
         chunks_out = []
         for start in range(0, n_assign, chunk_size):
             end = min(n_assign, start + chunk_size)
-            chunk = assignments[start:end]
+            chunk = assignments[start:end].to(dev)
             chunk_n = end - start
-            dev = chunk.device
-            elim_a = all_elim_assignments.to(dev)
 
-            # Build the (n_elim, chunk_n, n_labels) assignment cube by broadcasting,
-            # WITHOUT a Python loop over elim assignments. The old loop was O(n_elim)
-            # per chunk -> O(n_assign * n_elim^2 / MAX) overall, which made merged
-            # buckets (large 2^#elim) hang for many minutes during sample generation.
+            # (n_elim, chunk_n, n_labels) one-hot column indices by broadcasting.
             # Row ordering (block-major by elim: i_elim*chunk_n + a) is preserved.
-            cube = torch.empty((n_elim, chunk_n, n_labels), dtype=torch.int64, device=dev)
-            for i, (is_msg, src) in enumerate(col_src):
-                if is_msg:
-                    cube[:, :, i] = chunk[:, src].unsqueeze(0).expand(n_elim, chunk_n)
-                else:
-                    cube[:, :, i] = elim_a[:, src].unsqueeze(1).expand(n_elim, chunk_n)
-            nn_assignments = cube.reshape(n_elim * chunk_n, n_labels)
-
-            if self.gm.lower_dim:
-                one_hot = torch.cat([F.one_hot(nn_assignments[:, i], num_classes=self.domain_sizes[i])[:, 1:] for i in range(n_labels)], dim=-1)
-            else:
-                one_hot = torch.cat([F.one_hot(nn_assignments[:, i], num_classes=self.domain_sizes[i]) for i in range(n_labels)], dim=-1)
-            one_hot = one_hot.to(dtype=param_dtype, device=self.net.device)
+            msg_cols = self._gather_cols(chunk, msg_src_t, chunk_n, n_labels) + offsets
+            cols = torch.where(is_msg_t, msg_cols.unsqueeze(0), elim_cols.unsqueeze(1))
+            one_hot = self._one_hot_from_cols(cols, offsets, oh_width, oh_lower,
+                                              param_dtype, dev)
 
             values = self.data_processor.undo_normalization(self.net(one_hot))
             flat = values.view(n_elim, chunk_n).T.detach()
@@ -198,24 +263,19 @@ class FactorNN(FastFactor):
         rows_cap = max(A, int(0.20 * free / max(1, per_row * 4)))   # >= one full B-row (A wide)
         bchunk = max(1, rows_cap // max(1, A))
 
+        # Perf: single scatter_ one-hot + vectorised index build (see _get_slices).
+        offsets, oh_width, oh_lower = self._onehot_layout(dev)
+        is_msg_t, msg_src_t, elim_src_t = self._col_src_tensors(col_src, dev)
+        msg_cols = self._gather_cols(assignments, msg_src_t, A, n_labels) + offsets
+
         out = torch.empty((A, B), device=dev)
         for b0 in range(0, B, bchunk):
             b1 = min(B, b0 + bchunk)
             b = b1 - b0
-            cube = torch.empty((b, A, n_labels), dtype=torch.int64, device=dev)
-            for i, (is_msg, src) in enumerate(col_src):
-                if is_msg:
-                    cube[:, :, i] = assignments[:, src].unsqueeze(0).expand(b, A)
-                else:
-                    cube[:, :, i] = elim_coords[b0:b1, src].unsqueeze(1).expand(b, A)
-            nn_assignments = cube.reshape(b * A, n_labels)
-            if self.gm.lower_dim:
-                one_hot = torch.cat([F.one_hot(nn_assignments[:, i], num_classes=self.domain_sizes[i])[:, 1:]
-                                     for i in range(n_labels)], dim=-1)
-            else:
-                one_hot = torch.cat([F.one_hot(nn_assignments[:, i], num_classes=self.domain_sizes[i])
-                                     for i in range(n_labels)], dim=-1)
-            one_hot = one_hot.to(dtype=param_dtype, device=dev)
+            elim_cols = self._gather_cols(elim_coords[b0:b1], elim_src_t, b, n_labels) + offsets
+            cols = torch.where(is_msg_t, msg_cols.unsqueeze(0), elim_cols.unsqueeze(1))
+            one_hot = self._one_hot_from_cols(cols, offsets, oh_width, oh_lower,
+                                              param_dtype, dev)
             vals = self.data_processor.undo_normalization(self.net(one_hot))
             out[:, b0:b1] = vals.view(b, A).T
         return out.detach()                                      # (A, B)
