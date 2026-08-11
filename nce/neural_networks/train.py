@@ -11,6 +11,8 @@ import torch.optim as optim
 # from torchviz import make_dot
 import matplotlib.pyplot as plt
 import sys
+import math
+import time
 from tqdm.notebook import tqdm
 
 def get_error_tracking_epochs(num_epochs):
@@ -37,6 +39,53 @@ def get_error_tracking_epochs(num_epochs):
     if num_epochs not in epochs:
         epochs.append(num_epochs)
     return sorted(set(epochs))
+
+
+def get_scaled_error_tracking_epochs(num_epochs, batch_size, message_size):
+    """
+    Generate checkpoint schedule scaled by batch_size/message_size ratio.
+
+    Cost model:
+    - Training one epoch: O(batch_size) — iterate through batch_size samples
+    - Error tracking at one checkpoint: O(message_size) — evaluate all message_size assignments
+    
+    When batch_size << message_size, error tracking dominates cost. This function scales
+    the checkpoint schedule so that tracking overhead remains proportional to training time.
+    
+    Formula: scaled_epoch = ceil((batch_size / message_size) * base_epoch)
+    
+    Args:
+        num_epochs: Total number of training epochs.
+        batch_size: Number of samples per training batch.
+        message_size: Number of assignments in the message domain.
+        
+    Returns:
+        Sorted list of unique checkpoint epoch numbers, with epoch 0 always included
+        and all values <= num_epochs.
+    """
+    # Get base checkpoint schedule
+    base = get_error_tracking_epochs(num_epochs)
+    
+    # Compute scaling factor
+    scaling_factor = batch_size / message_size
+    
+    # If ratio >= 1.0, tracking is cheap relative to training, no scaling needed
+    if scaling_factor >= 1.0:
+        return base
+    
+    # Scale each non-zero epoch by the ratio
+    scaled = [math.ceil(epoch * scaling_factor) for epoch in base if epoch > 0]
+    
+    # Deduplicate and sort (scaling may cause collisions)
+    scaled = sorted(set(scaled))
+    
+    # Always include epoch 0 (baseline checkpoint)
+    scaled = [0] + scaled
+    
+    # Filter to valid range (scaled epochs may exceed num_epochs)
+    scaled = [e for e in scaled if e <= num_epochs]
+    
+    return scaled
 
 
 def should_use_convex_early_stopping(config):
@@ -234,7 +283,20 @@ class Trainer:
             nbe_val_set = self.dataloader.load_all()
         else:
             nbe_val_size = max(1, self.config['num_samples'] // 9)
-            nbe_val_set = self._generate_validation_set_nbe(nbe_val_size)
+            if self.config.get('time_sample_gen', False):
+                import time as _time
+                _g0 = _time.time()
+                nbe_val_set = self._generate_validation_set_nbe(nbe_val_size)
+                _gt = _time.time() - _g0
+                b = self.bucket
+                _scope = b.get_message_scope()
+                _states = [v.states for v in b.gm.vars if v.label in set(_scope)]
+                print(f"[GammaTiming] bucket={b.label} T_gen={_gt:.4f} "
+                      f"m={len(nbe_val_set[0]['x'])} r={len(b.factors)} "
+                      f"e={len(b.elim_vars)} k={max(_states) if _states else 2} "
+                      f"w_scope={len(_scope) + len(b.elim_vars)}", flush=True)
+            else:
+                nbe_val_set = self._generate_validation_set_nbe(nbe_val_size)
         self.nbe_val_set = nbe_val_set  # Store for later use (plotting, etc.)
 
         if use_nbe_early_stopping:
@@ -283,13 +345,26 @@ class Trainer:
             print('Warning: set_size is not a multiple of batch_size. Only using ', batch_size * num_batches_per_set, ' samples per set.')
         if num_samples % set_size != 0:
             print('Warning: num_samples is not a multiple of set_size. Only using ', num_sets * batch_size * num_batches_per_set, ' total samples.')
+
+        # Optional `max_steps` budget: override num_epochs so total gradient
+        # steps ≈ max_steps. Lets callers specify a compute budget that's
+        # invariant to bucket size / batch count.
+        max_steps = self.config.get('max_steps')
+        if max_steps is not None and override_epochs < 0:
+            steps_per_epoch = max(1, num_sets * num_batches_per_set)
+            new_num_epochs = max(1, int(max_steps) // steps_per_epoch)
+            print(f"[Trainer] max_steps={max_steps}: overriding num_epochs "
+                  f"{num_epochs} → {new_num_epochs} "
+                  f"(steps_per_epoch={steps_per_epoch})")
+            num_epochs = new_num_epochs
         
         # initial losses------------
         initialize_loss = True
         #---------------------------
         
-        # Try AMP and currently NOT cosine annealing
-        self.scaler = torch.cuda.amp.GradScaler(enabled=True)   # set False if not using AMP
+        # AMP: disabled when use_float64=True (float64 is incompatible with AMP)
+        use_amp = self.config.get('use_amp', True) and not self.config.get('use_float64', False)
+        self.scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
         # self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=num_epochs)
 
         # Main train loop-------------------------------
@@ -356,6 +431,10 @@ class Trainer:
             self.error_tracking_data = []
             error_tracking_epochs = set(get_error_tracking_epochs(num_epochs))
             print(f"[Error Tracking] Checkpoints: {sorted(error_tracking_epochs)}")
+
+        # Time-based training limit (from num_epochs="20m" etc.)
+        training_time_limit = self.config.get('training_time_limit')
+        _training_start_time = time.time() if training_time_limit else None
 
         with tqdm(total=num_progress_steps, desc="Bucket "+str(self.bucket.label) + " training") as pbar:
             for s in range(num_sets):
@@ -572,8 +651,16 @@ class Trainer:
                                         else:
                                             print(f'Epoch {epoch}: Validation loss {val_loss_value:.6e} still high but showing weak improvement. Continuing...')
 
-                    # Standard early stopping for non-validation mode
-                    elif not use_validation_early_stopping and not self.config['skip_early_stopping'] and epoch > 0:
+                    # Standard early stopping for non-validation mode.
+                    # NeuroBE patience-based early stopping (use_neurobe_early_stopping)
+                    # owns termination when active — defer to it instead of the
+                    # absolute-loss threshold below, which is calibrated for UKL
+                    # and fires at epoch 1 for the small-magnitude
+                    # neurobe_weighted_mse loss.
+                    elif (not use_validation_early_stopping
+                          and not use_neurobe_early_stopping
+                          and not self.config['skip_early_stopping']
+                          and epoch > 0):
                         # Check if loss is very low - stop immediately
                         if loss.item() < 0.0001:
                             print(f'Loss {loss.item():.6e} is below 0.0001 threshold. Stopping training at epoch {epoch}.')
@@ -636,11 +723,26 @@ class Trainer:
                             y_val = val_batch['y']
                             # Support both old 'mgh' key and new 'bw' key
                             bw_val = val_batch.get('bw', val_batch.get('mgh'))
-                            outputs_val = self.net(x_val).squeeze()
-                            if bw_val is not None:
-                                nbe_val_loss = self.loss_fn(outputs_val, y_val, bw_val)
+                            # Masked net: evaluate the VALUE head (training-mode forward,
+                            # unmasked) on nonzero targets only -- the eval forward returns
+                            # -inf for masked configs, which would make the val loss -inf.
+                            if getattr(self.net, 'masked_net', False):
+                                was_training = self.net.training
+                                self.net.train()
+                                outputs_val = self.net(x_val).squeeze()
+                                if was_training is False:
+                                    self.net.eval()
+                                fin = torch.isfinite(y_val.reshape(-1))
+                                ov = outputs_val.reshape(-1)[fin]
+                                yv = y_val.reshape(-1)[fin]
+                                bv = bw_val.reshape(-1)[fin] if bw_val is not None else None
+                                nbe_val_loss = self.loss_fn(ov, yv, bv) if bv is not None else self.loss_fn(ov, yv)
                             else:
-                                nbe_val_loss = self.loss_fn(outputs_val, y_val)
+                                outputs_val = self.net(x_val).squeeze()
+                                if bw_val is not None:
+                                    nbe_val_loss = self.loss_fn(outputs_val, y_val, bw_val)
+                                else:
+                                    nbe_val_loss = self.loss_fn(outputs_val, y_val)
                             # Handle case where loss returns per-sample values
                             if nbe_val_loss.dim() > 0:
                                 nbe_val_loss = nbe_val_loss.mean()
@@ -703,11 +805,53 @@ class Trainer:
                             x_val_nb = val_batch_nb['x']
                             y_val_nb = val_batch_nb['y']
                             bw_val_nb = val_batch_nb.get('bw', val_batch_nb.get('mgh'))
-                            outputs_val_nb = self.net(x_val_nb).squeeze()
-                            if bw_val_nb is not None:
-                                neurobe_val_loss = self.loss_fn(outputs_val_nb, y_val_nb, bw_val_nb)
+                            if getattr(self.net, 'masked_net', False):
+                                # Masked-inference validation metric, replicating NeuroBE
+                                # (Function-NN.hxx Train_ped, val forward with isTest=true):
+                                # score the HARD-masked prediction against the target in
+                                # LINEAR space, where true zeros are literally 0 —
+                                #   q = round(mask) * exp-denorm(value),  p = exp-denorm(target) (0 for zeros)
+                                #   val = 0.5*mean((q-p)^2) + BCE(mask)
+                                # A rotting mask directly inflates this (false-negative on a
+                                # high-mass entry costs p^2; false-positive on a zero costs q^2),
+                                # which a log-space value loss on finite targets cannot see.
+                                import torch.nn.functional as _F
+                                was_tr = self.net.training
+                                self.net.train()
+                                outputs_val_nb = self.net(x_val_nb).squeeze()
+                                mask_logit_val = self.net._last_mask_logit.reshape(-1)
+                                if was_tr is False:
+                                    self.net.eval()
+                                yflat = y_val_nb.reshape(-1)
+                                finn = torch.isfinite(yflat)
+                                dp = self.data_preprocessor
+                                if getattr(dp, 'normalization_mode', None) == 'minmax_01' and dp.ln_range:
+                                    lnr = float(dp.ln_range)
+                                    mhard = (torch.sigmoid(mask_logit_val) >= 0.5).float()
+                                    # linear space relative to the training max: x_norm -> exp((x-1)*ln_range)
+                                    p = torch.where(finn,
+                                                    torch.exp((yflat.clamp(min=0.0, max=1.5) - 1.0) * lnr),
+                                                    torch.zeros_like(yflat))
+                                    vnorm = outputs_val_nb.reshape(-1).clamp(min=0.0, max=1.5)
+                                    q = mhard * torch.exp((vnorm - 1.0) * lnr)
+                                    mask_val_loss = _F.binary_cross_entropy_with_logits(mask_logit_val, finn.float())
+                                    neurobe_val_loss = 0.5 * ((q - p) ** 2).mean() + mask_val_loss
+                                else:
+                                    # fallback (non-minmax masked run): value loss on finite + mask BCE
+                                    ovn = outputs_val_nb.reshape(-1)[finn]
+                                    yvn = yflat[finn]
+                                    bvn = bw_val_nb.reshape(-1)[finn] if bw_val_nb is not None else None
+                                    value_val_loss = self.loss_fn(ovn, yvn, bvn) if bvn is not None else self.loss_fn(ovn, yvn)
+                                    if torch.is_tensor(value_val_loss) and value_val_loss.dim() > 0:
+                                        value_val_loss = value_val_loss.mean()
+                                    mask_val_loss = _F.binary_cross_entropy_with_logits(mask_logit_val, finn.float())
+                                    neurobe_val_loss = value_val_loss + mask_val_loss
                             else:
-                                neurobe_val_loss = self.loss_fn(outputs_val_nb, y_val_nb)
+                                outputs_val_nb = self.net(x_val_nb).squeeze()
+                                if bw_val_nb is not None:
+                                    neurobe_val_loss = self.loss_fn(outputs_val_nb, y_val_nb, bw_val_nb)
+                                else:
+                                    neurobe_val_loss = self.loss_fn(outputs_val_nb, y_val_nb)
                             if neurobe_val_loss.dim() > 0:
                                 neurobe_val_loss = neurobe_val_loss.mean()
                             neurobe_val_loss_value = neurobe_val_loss.item()
@@ -752,6 +896,15 @@ class Trainer:
                         postfix["ValLoss"] = val_loss_str
                     pbar.set_postfix(postfix)
                     pbar.update(1)
+
+                    # Time-limit check (from num_epochs="20m" etc.)
+                    if _training_start_time is not None:
+                        elapsed = time.time() - _training_start_time
+                        if elapsed >= training_time_limit:
+                            print(f'Training time limit reached ({elapsed:.1f}s >= {training_time_limit:.0f}s) at epoch {epoch+1}.')
+                            self.bucket.gm.traced_losses_data.append((self.bucket.label, traced_losses_data))
+                            return traced_losses_data
+
                     # if current_lr <= self.config['min_lr'] * 10:
                     #     self.bucket.gm.traced_losses_data.append((self.bucket.label, traced_losses_data))
                     #     return traced_losses_data
@@ -767,6 +920,9 @@ class Trainer:
             self.config['loss_fn'] = old_loss_fn_name
             self.loss_fn = self._get_loss_fn(old_loss_fn_name)
 
+        # Put the net in eval mode so downstream message computation (and masked-net
+        # masking, which keys off training/eval) uses the final inference behavior.
+        self.net.eval()
         return traced_losses_data
               
     def train_batch(self, x_batch, y_batch, bw_hat_batch=None, plot_message=False, epoch=None):
@@ -869,9 +1025,33 @@ class Trainer:
         # loss.backward(retain_graph=True)
 
         # try with scaler-----------------------------------------
-        
-        if self.config.get('optimizer') == "muon":
-            with torch.cuda.amp.autocast(enabled=True):
+
+        # Masked net (NeuroBE): train value head on NONZERO (finite) targets only,
+        # plus a BCE "is-nonzero" mask head. True zeros (-inf targets) are excluded
+        # from the value loss and learned by the mask instead.
+        _masked = getattr(self.net, 'masked_net', False)
+        if _masked:
+            import torch.nn.functional as F
+            label = torch.isfinite(y_batch).reshape(-1).float()      # 1 = nonzero
+            mask_logit = self.net._last_mask_logit.reshape(-1)
+            mask_loss = F.binary_cross_entropy_with_logits(mask_logit, label)
+            fin = label.bool()
+            if fin.any():
+                vbw = bw_hat_batch[fin] if bw_hat_batch is not None else None
+                vloss = self.loss_fn(outputs.reshape(-1)[fin], y_batch.reshape(-1)[fin], vbw)
+                if torch.is_tensor(vloss) and vloss.dim() > 0:
+                    vloss = vloss.mean()
+            else:
+                vloss = outputs.sum() * 0.0
+            lam = float(self.config.get('masked_net_lambda', 1.0))
+            loss = vloss + lam * mask_loss
+            loss.backward()
+
+        if _masked:
+            pass  # loss already computed + backpropagated above
+        elif self.config.get('optimizer') == "muon":
+            _use_amp = self.config.get('use_amp', True) and not self.config.get('use_float64', False)
+            with torch.cuda.amp.autocast(enabled=_use_amp):
                 if 'elp_least_squares_v2' in str(self.loss_fn):
                     loss_result = self.loss_fn(outputs.reshape(-1), y_batch, bw_hat_batch, expansion_point=self.expansion_point)
                     if isinstance(loss_result, tuple):
@@ -983,6 +1163,7 @@ class Trainer:
 
         # Create preprocessor with deferred normalization (y=None)
         # The normalizing constant will be computed on first load() call
+        from nce.utils.dtype_utils import get_dtype
         data_preprocessor = DataPreprocessor(
             y=None,  # Deferred - will be set on first load()
             bw=None,
@@ -990,6 +1171,7 @@ class Trainer:
             device=self.config['device'],
             use_bw_approx=use_bw_approx,
             normalization_mode=normalization_mode,
+            dtype=get_dtype(self.config),
         )
 
         return sg, data_preprocessor, DataLoader(self.bucket, sample_generator=sg, data_preprocessor=data_preprocessor)
@@ -1334,7 +1516,8 @@ class Trainer:
             is_logspace: If True, use logsumexp (for log-space losses like log-likelihood)
                         If False, use simple sum (for linear-space losses like UKL)
         """
-        losses = torch.tensor(losses, dtype=torch.float32, device=self.config['device']).detach()
+        from nce.utils.dtype_utils import get_dtype
+        losses = torch.tensor(losses, dtype=get_dtype(self.config), device=self.config['device']).detach()
         if is_logspace:
             return torch.logsumexp(losses, dim=0) - torch.log(torch.tensor(len(losses)))
         else:
@@ -1343,23 +1526,37 @@ class Trainer:
         
     def set_optimizer(self, name):
         if name == 'adam' or name == 'Adam':
-            self.optimizer = optim.Adam(
-                self.net.parameters(), 
-                lr=self.config['lr']
-            )
+            wd = float(self.config.get('weight_decay', 0.0))
+            if wd > 0:
+                self.optimizer = optim.AdamW(
+                    self.net.parameters(),
+                    lr=self.config['lr'],
+                    weight_decay=wd,
+                )
+            else:
+                self.optimizer = optim.Adam(
+                    self.net.parameters(),
+                    lr=self.config['lr']
+                )
         elif name == 'muon':
-            from muon import Muon
-            
-            # Separate parameters for Muon and AdamW
+            from muon import SingleDeviceMuonWithAuxAdam
+
+            # Separate parameters: Muon for matrices (ndim>=2), AdamW for biases/embeddings
             muon_params = [p for p in self.net.parameters() if p.ndim >= 2]
             adamw_params = [p for p in self.net.parameters() if p.ndim < 2]
-            
-            # Create separate optimizers
-            self.muon_optimizer = Muon(muon_params, lr=0.02, momentum=0.95)
-            self.adamw_optimizer = optim.AdamW(adamw_params, lr=3e-4, betas=(0.9, 0.95), weight_decay=0.01)
-            
-            # Store both optimizers (need to step both)
-            self.optimizer = [self.muon_optimizer, self.adamw_optimizer]
+
+            param_groups = [
+                {"params": muon_params, "use_muon": True,
+                 "lr": float(self.config.get('muon_lr', 0.02)),
+                 "momentum": float(self.config.get('muon_momentum', 0.95)),
+                 "weight_decay": float(self.config.get('muon_weight_decay', 0.0))},
+                {"params": adamw_params, "use_muon": False,
+                 "lr": float(self.config.get('aux_adam_lr', 3e-4)),
+                 "betas": (0.9, 0.95),
+                 "eps": 1e-10,
+                 "weight_decay": float(self.config.get('aux_adam_weight_decay', 0.01))},
+            ]
+            self.optimizer = SingleDeviceMuonWithAuxAdam(param_groups)
         elif name == 'sgd' or name == 'SGD':
             self.optimizer = optim.SGD(
                 self.net.parameters(), 

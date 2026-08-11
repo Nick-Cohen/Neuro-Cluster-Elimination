@@ -10,7 +10,7 @@ from typing import List, Optional
 LN10 = np.log(10)
 
 
-def pygms_factor_to_fastfactor(pf, device: str = 'cpu'):
+def pygms_factor_to_fastfactor(pf, device: str = 'cpu', dtype=None):
     """
     Convert a pyGMs Factor to an NCE FastFactor.
 
@@ -19,11 +19,15 @@ def pygms_factor_to_fastfactor(pf, device: str = 'cpu'):
     Args:
         pf: pyGMs Factor object (in natural log space)
         device: Device for the output tensor ('cpu' or 'cuda')
+        dtype: Torch dtype (default: torch.float32)
 
     Returns:
         FastFactor in log10 space
     """
     from ..inference.factor import FastFactor
+
+    if dtype is None:
+        dtype = torch.float32
 
     # Get variable labels
     labels = [v.label for v in pf.vars]
@@ -35,10 +39,10 @@ def pygms_factor_to_fastfactor(pf, device: str = 'cpu'):
     # Create tensor with appropriate shape
     if labels:
         shape = tuple(v.states for v in pf.vars)
-        tensor = torch.tensor(table_log10.reshape(shape), dtype=torch.float32, device=device)
+        tensor = torch.tensor(table_log10.reshape(shape), dtype=dtype, device=device)
     else:
         # Scalar factor
-        tensor = torch.tensor(float(table_log10.flatten()[0]), dtype=torch.float32, device=device)
+        tensor = torch.tensor(float(table_log10.flatten()[0]), dtype=dtype, device=device)
 
     return FastFactor(tensor, labels)
 

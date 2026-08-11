@@ -1,0 +1,41 @@
+# Single-bucket diagnostic config matching the full-problem
+# bw_half_nr_20k_interp run (the |err|=1.29 result).
+#
+# Usage:
+#   python train_buckets_simple.py --config configs/g20f15_bucket_diag_bw_half_nr_interp.yaml \
+#       --bucket <bucket_id> --slow --gpu 0
+
+experiment_name: 'g20f15_bdiag_half_nr_interp'
+
+loss_fn: 'unnormalized_kl'
+use_bw_approx: True
+bw_iB: 10   # matches bw_ecl = 2^10 - 1 ≈ 1024 in full run
+
+num_epochs: 20000
+batch_size: 256
+lr: 0.001
+
+hidden_sizes: 'neurobe,1'
+# Hardcoded integer (train_single_bucket NR path doesn't parse 'nbe,…').
+# Will be clipped down to msg_ec when proposal_tree can't return more.
+num_samples: 50000
+
+# Interpolated threshold early stop: log10(threshold) linearly from -6
+# at epoch 0 to -1 at epoch num_epochs. No NeuroBE patience.
+skip_early_stopping: False
+loss_threshold_log10_start: -6
+loss_threshold_log10_end: -1
+neurobe_early_stopping: False
+
+sampling_scheme: 'all'
+proposal_sampling: True
+proposal_mix: 'half_nr'
+proposal_temperature: 1.0
+bw_ecl: 1025
+
+device: 'cuda'
+output_subdir: 'benchmark_results'
+
+# Avoid the slow eager WMB-elim per bucket during populate.
+populate_bw_via_tree_collect: True
+populate_bw_skip_non_nn: True

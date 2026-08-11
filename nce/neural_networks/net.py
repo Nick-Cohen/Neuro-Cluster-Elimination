@@ -48,6 +48,12 @@ class Net(nn.Module):
         else:
             activation_cls = nn.Tanh
 
+        # Masked net (NeuroBE-style): a value head + a sigmoid "is-nonzero" mask
+        # head over a shared trunk. At inference, configs the mask predicts as
+        # zero are set to -inf (true zero) instead of relying on factor doping.
+        self.masked_net = nn_config.get('masked_net', False)
+        self._last_mask_logit = None
+
         layers = []
         prev_dim = input_size
         for hidden_dim in hidden_sizes:
@@ -55,31 +61,43 @@ class Net(nn.Module):
             layers.append(activation_cls())
             prev_dim = hidden_dim
 
-        layers.append(nn.Linear(prev_dim, 1))
+        if self.masked_net:
+            # trunk = shared hidden layers; separate value + mask heads
+            self.trunk = nn.Sequential(*layers)
+            self.value_head = nn.Linear(prev_dim, 1)
+            self.mask_head = nn.Linear(prev_dim, 1)
+            self.network = None
+        else:
+            layers.append(nn.Linear(prev_dim, 1))
+            self.network = nn.Sequential(*layers)
 
 
         # Add a learnable bias parameter for linspace mode
         self.linspace_bias = nn.Parameter(torch.zeros(1, device=device))
 
-        self.network = nn.Sequential(*layers)
         self.to(device)
 
         # Xavier/Glorot normal initialization for all layers
-        for layer in self.network.modules():
+        for layer in self.modules():
             if isinstance(layer, nn.Linear):
                 torch.nn.init.xavier_normal_(layer.weight)
                 torch.nn.init.constant_(layer.bias, 0)
 
         # For bias_only mode: freeze weights to zero, only bias is trainable
         if self.bias_only:
-            for layer in self.network.modules():
+            for layer in self.modules():
                 if isinstance(layer, nn.Linear):
                     layer.weight.data.fill_(0.0)
                     layer.weight.requires_grad = False
-              
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        network_output = self.network(x)
-        
+        if self.masked_net:
+            h = self.trunk(x)
+            network_output = self.value_head(h)
+            self._last_mask_logit = self.mask_head(h)
+        else:
+            network_output = self.network(x)
+
         if self.use_linspace_bias:
             # If we're using linspace bias, we need to combine with the output
             # using logsumexp. First, reshape the outputs to ensure compatibility.
@@ -93,11 +111,19 @@ class Net(nn.Module):
             
             # Apply logsumexp along the last dimension
             final_output = torch.logsumexp(combined, dim=-1, keepdim=True)
-            
-            return final_output
+
+            out = final_output
         else:
             # If not using linspace bias, just return the network output directly
-            return network_output
+            out = network_output
+
+        # Masked net: at inference (eval), force configs the mask predicts as
+        # zero to -inf (true zero) -- this is value*mask in log-space. During
+        # training we return the raw value; the BCE mask loss reads _last_mask_logit.
+        if self.masked_net and not self.training:
+            maskp = torch.sigmoid(self._last_mask_logit)
+            out = out.masked_fill(maskp < 0.5, float('-inf'))
+        return out
     
     def get_sum_grad(self) -> torch.Tensor:
         total_grad = torch.tensor(0.0, device=self.device)

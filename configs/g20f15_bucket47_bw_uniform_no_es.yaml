@@ -1,0 +1,36 @@
+# Diagnostic single-bucket config matching the grid20x20.f15 bw_uniform_no_es run.
+# Used with train_buckets_simple.py against
+# /home/cohenn1/NCE/data/hard_buckets/grid20x20_f15_uai__bucket_47_diag.pt
+#
+# Goal: isolate why bw_uniform on the full sweep is producing |lse_err|~13 on
+# this bucket. The .pt file already contains exact_fw and exact_bw, so this
+# isolates the NN training step itself.
+
+experiment_name: 'g20f15_b47_bw_uniform_no_es_20k_steps'
+
+loss_fn: 'unnormalized_kl'
+use_bw_approx: True
+
+# Match full-problem bw_ecl=1025 (= 2^10+1) so the diagnostic exercises
+# WMB-approximated bw, not exact (default in train_single_bucket is bw_iB=100,
+# which is effectively unbounded → exact).
+bw_iB: 10
+
+# Compute budget specified as total gradient steps (invariant to bucket size).
+max_steps: 20000
+num_epochs: 50000   # cap; max_steps overrides this
+batch_size: 256
+lr: 0.001
+
+hidden_sizes: 'neurobe,1'
+num_samples: 'nbe,0.05,10000'
+
+# No early stopping (match no_es production run)
+skip_early_stopping: True
+neurobe_early_stopping: False
+
+sampling_scheme: 'uniform'
+proposal_sampling: False
+
+device: 'cuda'
+output_subdir: 'benchmark_results'

@@ -1,0 +1,22 @@
+experiment_name: grid10_b10_nr_fullenum
+
+loss_fn: 'unnormalized_kl'
+
+num_epochs: 100000
+batch_size: 1048576
+lr: 0.001
+hidden_sizes: [2]
+
+proposal_sampling: True
+proposal_mix: 'no_replacement'
+proposal_temperature: 1.0
+num_samples: 1048576
+sampling_scheme: 'all'
+
+use_bw_approx: True
+bw_ecl: 1073741824
+backward_iB: 30
+populate_bw_factors: True
+
+device: 'cuda'
+output_subdir: 'benchmark_results'

@@ -647,3 +647,181 @@ class TestFastGMIntegration:
         flat_result = prepare_config(reference_flat_config)
         nested_result = prepare_config(equivalent_nested_config)
         assert flat_result == nested_result
+
+
+# ===================================================================
+# M005-T01: Width parameter translation and validation
+# ===================================================================
+
+
+class TestWidthParameterTranslation:
+    """M005-T01: Width-based threshold parameters translate correctly."""
+
+    def test_ib2_translation_to_iB_and_ecl(self):
+        """ib2:23 translates to iB:23 and ecl:8388607 (2^23 - 1)."""
+        config = {
+            'inference': {'ib2': 23},
+            'training': {'loss_fn': 'logspace_mse_fdb', 'num_epochs': 10},
+            'sampling': {'num_samples': 1000},
+        }
+        result = prepare_config(config)
+        
+        assert result['iB'] == 23
+        assert result['ecl'] == (2 ** 23) - 1  # 8388607
+        assert 'ib2' not in result  # derived field removed
+
+    def test_bw_ib2_translation_to_bw_iB_and_bw_ecl(self):
+        """bw_ib2:23 translates to bw_iB:23 and bw_ecl:8388607."""
+        config = {
+            'backward': {'bw_ib2': 23},
+            'training': {'loss_fn': 'logspace_mse_fdb', 'num_epochs': 10},
+            'sampling': {'num_samples': 1000},
+        }
+        result = prepare_config(config)
+        
+        assert result['bw_iB'] == 23
+        assert result['bw_ecl'] == (2 ** 23) - 1
+        assert 'bw_ib2' not in result
+
+    def test_ib2_and_iB_conflict(self):
+        """Specifying both ib2 and iB raises ValueError."""
+        config = {
+            'inference': {'ib2': 23, 'iB': 20},
+            'training': {'loss_fn': 'logspace_mse_fdb', 'num_epochs': 10},
+            'sampling': {'num_samples': 1000},
+        }
+        with pytest.raises(ValueError, match='width parameter'):
+            prepare_config(config)
+
+    def test_ib2_and_ecl_conflict(self):
+        """Specifying both ib2 and ecl raises ValueError."""
+        config = {
+            'inference': {'ib2': 23, 'ecl': 1024},
+            'training': {'loss_fn': 'logspace_mse_fdb', 'num_epochs': 10},
+            'sampling': {'num_samples': 1000},
+        }
+        with pytest.raises(ValueError, match='width parameter'):
+            prepare_config(config)
+
+    def test_iB_and_ecl_conflict(self):
+        """Specifying ib2 with iB raises ValueError (new vs old param conflict)."""
+        config = {
+            'ib2': 23,
+            'iB': 20,
+            'loss_fn': 'logspace_mse_fdb',
+            'num_epochs': 10,
+            'num_samples': 1000,
+        }
+        with pytest.raises(ValueError, match='width parameter'):
+            prepare_config(config)
+
+    def test_bw_ib2_and_bw_iB_conflict(self):
+        """Specifying both bw_ib2 and bw_iB raises ValueError."""
+        config = {
+            'backward': {'bw_ib2': 23, 'bw_iB': 20},
+            'training': {'loss_fn': 'logspace_mse_fdb', 'num_epochs': 10},
+            'sampling': {'num_samples': 1000},
+        }
+        with pytest.raises(ValueError, match='width parameter'):
+            prepare_config(config)
+
+    def test_bw_ib2_and_bw_ecl_conflict(self):
+        """Specifying both bw_ib2 and bw_ecl raises ValueError."""
+        config = {
+            'backward': {'bw_ib2': 23, 'bw_ecl': 1024},
+            'training': {'loss_fn': 'logspace_mse_fdb', 'num_epochs': 10},
+            'sampling': {'num_samples': 1000},
+        }
+        with pytest.raises(ValueError, match='width parameter'):
+            prepare_config(config)
+
+    def test_bw_iB_and_bw_ecl_conflict(self):
+        """Specifying bw_ib2 with bw_iB raises ValueError (new vs old param conflict)."""
+        config = {
+            'bw_ib2': 23,
+            'bw_iB': 20,
+            'loss_fn': 'logspace_mse_fdb',
+            'num_epochs': 10,
+            'num_samples': 1000,
+        }
+        with pytest.raises(ValueError, match='width parameter'):
+            prepare_config(config)
+
+    def test_forward_and_backward_thresholds_independent(self):
+        """ib2:20 + bw_ecl:1024 should not conflict (different directions)."""
+        config = {
+            'inference': {'ib2': 20},
+            'backward': {'bw_ecl': 1024},
+            'training': {'loss_fn': 'logspace_mse_fdb', 'num_epochs': 10},
+            'sampling': {'num_samples': 1000},
+        }
+        result = prepare_config(config)
+        
+        assert result['iB'] == 20
+        assert result['ecl'] == (2 ** 20) - 1
+        assert result['bw_ecl'] == 1024
+
+    def test_ib2_with_backward_thresholds_independent(self):
+        """ib2:20 + bw_ib2:18 should not conflict."""
+        config = {
+            'inference': {'ib2': 20},
+            'backward': {'bw_ib2': 18},
+            'training': {'loss_fn': 'logspace_mse_fdb', 'num_epochs': 10},
+            'sampling': {'num_samples': 1000},
+        }
+        result = prepare_config(config)
+        
+        assert result['iB'] == 20
+        assert result['ecl'] == (2 ** 20) - 1
+        assert result['bw_iB'] == 18
+        assert result['bw_ecl'] == (2 ** 18) - 1
+
+    def test_backward_compatibility_flat_iB_ecl(self):
+        """Old flat config with iB and ecl still works (no width params)."""
+        config = {
+            'iB': 10,
+            'ecl': 512,
+            'loss_fn': 'logspace_mse_fdb',
+            'num_epochs': 10,
+            'num_samples': 1000,
+        }
+        result = prepare_config(config)
+        
+        assert result['iB'] == 10
+        assert result['ecl'] == 512
+
+    def test_backward_compatibility_nested_iB(self):
+        """Old nested config with i_bound (no width params) still works."""
+        config = {
+            'inference': {'i_bound': 10, 'exact_computation_limit': 512},
+            'training': {'loss_fn': 'logspace_mse_fdb', 'num_epochs': 10},
+            'sampling': {'num_samples': 1000},
+        }
+        result = prepare_config(config)
+        
+        assert result['iB'] == 10
+        assert result['ecl'] == 512
+
+    def test_ib2_edge_case_zero(self):
+        """ib2:0 translates to iB:0, ecl:0 (all buckets exact)."""
+        config = {
+            'inference': {'ib2': 0},
+            'training': {'loss_fn': 'logspace_mse_fdb', 'num_epochs': 10},
+            'sampling': {'num_samples': 1000},
+        }
+        result = prepare_config(config)
+        
+        assert result['iB'] == 0
+        assert result['ecl'] == 0  # 2^0 - 1 = 0
+
+    def test_ib2_edge_case_large(self):
+        """ib2:50 translates to iB:50, ecl:2^50-1 (huge threshold)."""
+        config = {
+            'inference': {'ib2': 50},
+            'training': {'loss_fn': 'logspace_mse_fdb', 'num_epochs': 10},
+            'sampling': {'num_samples': 1000},
+        }
+        result = prepare_config(config)
+        
+        assert result['iB'] == 50
+        assert result['ecl'] == (2 ** 50) - 1

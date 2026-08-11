@@ -36,10 +36,14 @@ NESTED_SECTIONS = OrderedDict([
         'ecl':                     _field('ecl', default=0),
         'i_bound':                 _field('iB', default=0),
         'iB':                      _field('iB', default=0),
+        'ib2':                     _field('ib2', default=None),
         'approximation_method':    _field('approximation_method', default='nn'),
         'dope_factors':            _field('dope_factors', default=False),
+        'masked_net':              _field('masked_net', default=False),
+        'masked_net_lambda':       _field('masked_net_lambda', default=1.0),
         'device':                  _field('device', default='cuda'),
         'neurobe_mode':            _field('neurobe_mode', default=False),
+        'use_float64':             _field('use_float64', default=False),
     }),
     ('nn', {
         'hidden_sizes':              _field('hidden_sizes', default=[]),
@@ -99,14 +103,18 @@ NESTED_SECTIONS = OrderedDict([
         'neurobe_early_stopping':        _field('neurobe_early_stopping', default=False),
         'neurobe_stop_iter':             _field('neurobe_stop_iter', default=2),
         'use_amp':                       _field('use_amp', default=True),
+        'training_time_limit':           _field('training_time_limit', default=None),
     }),
     ('sampling', {
-        'sampling_scheme':   _field('sampling_scheme', default='uniform'),
-        'num_samples':       _field('num_samples', default=_REQUIRED),
-        'set_size':          _field('set_size', default=None),
-        'val_set':           _field('val_set', default=True),
-        'stratify_samples':  _field('stratify_samples', default=False),
-        'lower_dim':         _field('lower_dim', default=False),
+        'sampling_scheme':      _field('sampling_scheme', default='uniform'),
+        'proposal_sampling':    _field('proposal_sampling', default=False),
+        'proposal_mix':         _field('proposal_mix', default='full'),
+        'proposal_temperature': _field('proposal_temperature', default=1.0),
+        'num_samples':          _field('num_samples', default=_REQUIRED),
+        'set_size':           _field('set_size', default=None),
+        'val_set':            _field('val_set', default=True),
+        'stratify_samples':   _field('stratify_samples', default=False),
+        'lower_dim':          _field('lower_dim', default=False),
     }),
     ('backward', {
         'use_backward_approximation': _field('use_bw_approx', default=False),
@@ -117,6 +125,8 @@ NESTED_SECTIONS = OrderedDict([
         'bw_ecl':                     _field('bw_ecl', default=None),
         'backward_i_bound':           _field('backward_iB', default=None),
         'backward_iB':                _field('backward_iB', default=None),
+        'bw_iB':                      _field('bw_iB', default=None),
+        'bw_ib2':                     _field('bw_ib2', default=None),
         'forward_diff_barrier':       _field('fdb', default=False),
         'fdb':                        _field('fdb', default=False),
     }),
@@ -125,6 +135,8 @@ NESTED_SECTIONS = OrderedDict([
         'display_intermediate': _field('display_intermediate', default=False),
         'track_errors':         _field('track_errors', default=False),
         'error_tracking':       _field('error_tracking', default=False),
+        'compute_local_error':  _field('compute_local_error', default=False),
+        'time_sample_gen':      _field('time_sample_gen', default=False),
         'plot_messages':        _field('plot_messages', default=False),
         'traced_losses':        _field('traced_losses', default=[]),
         'gather_message_stats': _field('gather_message_stats', default=False),
@@ -348,6 +360,66 @@ def flatten_config(nested):
 
 
 # ===================================================================
+# Width parameter conflict validation
+# ===================================================================
+
+def _validate_width_parameter_conflicts(flat):
+    """Check for conflicting width threshold specifications before translation.
+    
+    The new width parameter system (ib2, bw_ib2) is mutually exclusive with
+    the traditional separate specification of iB/ecl or bw_iB/bw_ecl.
+    
+    Users can either:
+    - Use width parameters: ib2 (derives both iB and ecl), bw_ib2 (derives bw_iB and bw_ecl)
+    - Use traditional parameters: iB and/or ecl separately, bw_iB and/or bw_ecl separately
+    
+    But cannot mix width parameters with traditional parameters in the same direction.
+    
+    Args:
+        flat: Flat config dict (aliases already resolved, but not translated).
+    
+    Raises:
+        ValueError: If width parameters are mixed with traditional parameters.
+    """
+    # Forward direction: ib2 is mutually exclusive with iB or ecl
+    has_ib2 = 'ib2' in flat and flat['ib2'] is not None
+    has_iB = 'iB' in flat and flat['iB'] not in (None, 0)
+    has_ecl = 'ecl' in flat and flat['ecl'] not in (None, 0)
+    
+    if has_ib2 and (has_iB or has_ecl):
+        specified = ['ib2']
+        if has_iB:
+            specified.append('iB')
+        if has_ecl:
+            specified.append('ecl')
+        raise ValueError(
+            f"Config specifies both width parameter (ib2) and traditional "
+            f"threshold parameters ({', '.join(specified[1:])}). "
+            f"Use either ib2 (for binary domains) OR iB/ecl (for general domains), not both."
+        )
+    
+    # Backward direction: bw_ib2 is mutually exclusive with bw_iB or bw_ecl
+    # (bw_ib2='fw' is a reference, not a width param — skip conflict check)
+    bw_ib2_raw = flat.get('bw_ib2')
+    has_bw_ib2 = bw_ib2_raw is not None and not (isinstance(bw_ib2_raw, str) and 'fw' in bw_ib2_raw)
+    has_bw_iB = 'bw_iB' in flat and flat['bw_iB'] is not None
+    bw_ecl_raw = flat.get('bw_ecl')
+    has_bw_ecl = bw_ecl_raw is not None and not (isinstance(bw_ecl_raw, str) and 'fw' in bw_ecl_raw)
+    
+    if has_bw_ib2 and (has_bw_iB or has_bw_ecl):
+        specified = ['bw_ib2']
+        if has_bw_iB:
+            specified.append('bw_iB')
+        if has_bw_ecl:
+            specified.append('bw_ecl')
+        raise ValueError(
+            f"Config specifies both width parameter (bw_ib2) and traditional "
+            f"backward threshold parameters ({', '.join(specified[1:])}). "
+            f"Use either bw_ib2 (for binary domains) OR bw_iB/bw_ecl (for general domains), not both."
+        )
+
+
+# ===================================================================
 # Validation: flat config
 # ===================================================================
 
@@ -454,6 +526,53 @@ def prepare_config(config_dict, strict=False):
         # Flat config path: resolve aliases
         flat = _resolve_aliases(config)
 
+    # Mutual exclusivity validation BEFORE translation
+    # Check that user didn't specify conflicting width parameters
+    _validate_width_parameter_conflicts(flat)
+
+    # Width parameter translation: convert ib2 → iB + ecl, bw_ib2 → bw_iB + bw_ecl
+    # Runs after alias resolution and flattening, after conflict validation.
+    if 'ib2' in flat and flat['ib2'] is not None:
+        flat['iB'] = flat['ib2']
+        flat['ecl'] = (2 ** flat['ib2']) - 1
+        del flat['ib2']
+    
+    if 'bw_ib2' in flat and flat['bw_ib2'] is not None:
+        bw_ib2_val = flat['bw_ib2']
+        if isinstance(bw_ib2_val, str) and 'fw' in bw_ib2_val:
+            # bw_ib2='fw' → copy forward ecl/iB to backward
+            flat['bw_iB'] = flat.get('iB', 0)
+            flat['bw_ecl'] = flat.get('ecl', 0)
+        else:
+            flat['bw_iB'] = bw_ib2_val
+            flat['bw_ecl'] = (2 ** bw_ib2_val) - 1
+        del flat['bw_ib2']
+
+    # bw_ecl='fw' → copy forward ecl to backward ecl
+    if 'bw_ecl' in flat and isinstance(flat.get('bw_ecl'), str) and 'fw' in flat['bw_ecl']:
+        flat['bw_ecl'] = flat.get('ecl', 0)
+        if flat.get('bw_iB') is None:
+            flat['bw_iB'] = flat.get('iB', 0)
+
+    # Time-based num_epochs: "20m" → num_epochs=999999999, training_time_limit=1200
+    # Supports 's' (seconds), 'm' (minutes), 'h' (hours)
+    num_epochs_raw = flat.get('num_epochs')
+    if isinstance(num_epochs_raw, str):
+        suffix = num_epochs_raw[-1].lower()
+        value = float(num_epochs_raw[:-1])
+        if suffix == 's':
+            flat['training_time_limit'] = value
+        elif suffix == 'm':
+            flat['training_time_limit'] = value * 60
+        elif suffix == 'h':
+            flat['training_time_limit'] = value * 3600
+        else:
+            raise ValueError(
+                f"Invalid num_epochs time format: '{num_epochs_raw}'. "
+                f"Use a number or a time string like '20m', '1h', '300s'."
+            )
+        flat['num_epochs'] = 999_999_999  # effectively unlimited
+
     # neurobe_mode expansion: fill in NEUROBE_DEFAULTS for any key
     # not already set by the user. User overrides win.
     # Runs before validation so expanded defaults satisfy required-field checks.
@@ -463,5 +582,19 @@ def prepare_config(config_dict, strict=False):
                 flat[key] = default_value
 
     flat = _validate_flat_config(flat, strict=strict)
+
+    # Populate defaults for any keys not already present.
+    # Build internal_name → default from the schema (skip _REQUIRED and
+    # duplicate aliases that map to the same internal name).
+    seen_internal = set()
+    for section_fields in NESTED_SECTIONS.values():
+        for field_def in section_fields.values():
+            internal = field_def['old_name']
+            default = field_def['default']
+            if internal not in seen_internal and default is not _REQUIRED and default is not None:
+                seen_internal.add(internal)
+                if internal not in flat:
+                    # Use a copy for mutable defaults (e.g. lists)
+                    flat[internal] = list(default) if isinstance(default, list) else default
 
     return flat

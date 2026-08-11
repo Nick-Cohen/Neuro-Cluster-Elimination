@@ -121,11 +121,13 @@ def unnormalized_kl(outputs, targets, bw_hat=None, sigma_f=None, sigma_g=None, b
         max_val = torch.tensor(max_val, device=outputs.device)
     max_val = max_val.detach()
 
-    log_p_tilde = targets - max_val
-    log_q_tilde = outputs - max_val
+    # Clamp -inf before subtraction to avoid -inf - (-inf) = NaN
+    log_p_tilde = torch.clamp(targets - max_val, min=-100)
+    log_q_tilde = torch.clamp(outputs - max_val, min=-100)
     p_tilde = torch.exp(log_p_tilde)
     q_tilde = torch.exp(log_q_tilde)
-    unsummed = p_tilde * (log_p_tilde - log_q_tilde) - p_tilde + q_tilde
+    log_ratio = log_p_tilde - log_q_tilde
+    unsummed = p_tilde * log_ratio - p_tilde + q_tilde
     result = torch.sum(unsummed, dim=0)
 
     return result
@@ -272,9 +274,7 @@ def logspace_mse_fdb(outputs, targets, bw_hat=None):
     difs = outputs - targets
     sqr_difs = difs ** 2
     avg_sqr_difs = torch.mean(sqr_difs)
-    # Aggressive clipping to prevent gradient overflow during backprop
-    max_loss = 1e4  # Reduced from 1e6 for numerical stability
-    return torch.clamp(avg_sqr_difs, max=max_loss)
+    return avg_sqr_difs
     
 def elp(outputs, targets, bw_hat=None, sigma_f=0, sigma_g=0, rho=0, num_bw_samples=100, seed=None):
     """

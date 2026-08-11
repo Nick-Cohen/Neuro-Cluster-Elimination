@@ -1,0 +1,33 @@
+# Same as g20f15_bucket_diag_bw_half_nr_interp.yaml but with batch_size set
+# large enough to make every training step process the entire dataset
+# (one batch per epoch).
+
+experiment_name: 'g20f15_bdiag_half_nr_interp_fullbatch'
+
+loss_fn: 'unnormalized_kl'
+use_bw_approx: True
+bw_iB: 10
+
+num_epochs: 20000
+batch_size: 1000000   # exceeds any bucket's |samples|; collapses to 1 batch/epoch
+lr: 0.001
+
+hidden_sizes: 'neurobe,1'
+num_samples: 50000
+
+# Interpolated threshold early stop
+skip_early_stopping: False
+loss_threshold_log10_start: -6
+loss_threshold_log10_end: -1
+neurobe_early_stopping: False
+
+sampling_scheme: 'all'
+proposal_sampling: True
+proposal_mix: 'half_nr'
+proposal_temperature: 1.0
+bw_ecl: 1025
+
+device: 'cuda'
+output_subdir: 'benchmark_results'
+populate_bw_via_tree_collect: True
+populate_bw_skip_non_nn: True
