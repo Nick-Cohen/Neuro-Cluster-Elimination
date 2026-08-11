@@ -1093,8 +1093,15 @@ class FastGM:
         for var in self.elim_order:
             if var not in vars_to_eliminate:
                 continue
-            
-            bucket_factors = self.buckets[var].factors
+            # Merge-safe: buckets absorbed into a merged cluster are removed from
+            # self.buckets but REMAIN in self.elim_order (see merge_join_tree's
+            # docstring). Raw-indexing self.buckets[var] here used to KeyError
+            # under every merge strategy.
+            if var not in self.buckets:
+                continue
+
+            bucket = self.buckets[var]
+            bucket_factors = bucket.factors
             incoming_messages = []
             outgoing_message_vars = set()
 
@@ -1107,6 +1114,11 @@ class FastGM:
             # Determine variables in the outgoing message
             for factor in bucket_factors:
                 outgoing_message_vars.update(factor.labels)
+            # A merged cluster eliminates several variables: discard ALL of them,
+            # not just the key var (cf. FastBucket.get_message_scope, which does
+            # this correctly).
+            for ev in bucket.elim_vars:
+                outgoing_message_vars.discard(getattr(ev, 'label', ev))
             outgoing_message_vars.discard(var)
 
             # Find the next bucket to send the message to
@@ -1806,6 +1818,141 @@ class FastGM:
         self.config['sigma_g_global'] = var_g_avg ** 0.5
         self.config['rho_global'] = rho_avg
 
+    # ------------------------------------------------------------------
+    # Merge-aware helpers for backward-factor population
+    #
+    # Invariant relied on throughout: every merge pass absorbs a CHILD into its
+    # PARENT, and find_next_bucket only ever returns a bucket at or after the
+    # current position in self.elim_order. So the surviving key var of a cluster
+    # is the LAST of its elim_vars in elimination order (merge_join_tree:626,
+    # merge_non_subsumption:691, merge_by_degree, _reduce_nn_core `key = chain[-1]`).
+    # ------------------------------------------------------------------
+
+    def _cluster_members(self):
+        """Map each surviving cluster to its member variables, in elim order.
+
+        Returns (key_label -> [Var, ...] sorted by elim-order position,
+                 var_label -> key_label).
+        """
+        pos = {var.label: i for i, var in enumerate(self.elim_order)}
+        members, owner = {}, {}
+        for key_var, b in self.buckets.items():
+            labels = sorted(
+                {getattr(v, 'label', v) for v in b.elim_vars},
+                key=lambda l: pos.get(l, len(pos)))
+            members[key_var.label] = [self.matching_var(l) for l in labels]
+            for l in labels:
+                owner[l] = key_var.label
+        return members, owner
+
+    def _cluster_separator(self, key_var, bucket=None):
+        """The cluster's true separator (outgoing message scope) at elim time.
+
+        Uses the merge passes' `_scope_at_elim` cache when present (it is the
+        union of the constituent buckets' induced scopes) and falls back to the
+        pre-merge message_scopes cache. Unlike bucket.get_message_scope() this is
+        valid BEFORE elimination has moved any messages into the bucket.
+        """
+        if bucket is None:
+            bucket = self.buckets[key_var]
+        elim_labels = {getattr(v, 'label', v) for v in bucket.elim_vars}
+        scope = getattr(bucket, '_scope_at_elim', None)
+        if scope is None:
+            scope = set()
+            for lab in elim_labels:
+                scope.update(self.message_scopes.get(lab, []))
+            scope.update(elim_labels)
+        scope = set(scope) - elim_labels
+        # Union in whatever the bucket's own factors already imply, so the result
+        # is never an under-estimate.
+        scope.update(bucket.get_message_scope())
+        return sorted(scope)
+
+    def _cluster_is_nn_eligible(self, key_var, bucket=None):
+        """Whether this cluster will take the NN path in forward elimination.
+
+        Mirrors the exactness gate in eliminate_variables (width > iB OR
+        message size > ecl). Only NN clusters ever read
+        approximate_upstream/downstream_factors (they are consumed by proposal
+        sampling inside compute_message_nn), so non-NN clusters can be skipped.
+        """
+        if bucket is None:
+            bucket = self.buckets[key_var]
+        sep = self._cluster_separator(key_var, bucket)
+        size = 1.0
+        for lab in sep:
+            v = self.matching_var(lab)
+            size *= (v.states if v is not None else 1)
+        if self.ecl is not None and size > self.ecl:
+            return True
+        if self.iB is not None and len(sep) > self.iB:
+            return True
+        return False
+
+    def _check_cluster_tree_consistency(self, members, parent_of, where=''):
+        """Warn if a merged cluster is not a connected subtree of the UNMERGED
+        copy tree rooted at its key var.
+
+        The upstream/downstream assembly below assumes it is: every member other
+        than the key sends its forward message to another member, and the key is
+        the last member in elim order. Both hold for every merge pass in this
+        file by construction (child absorbed into a later parent), but the merge
+        passes route on the *growing cluster* scope while the copy routes on
+        per-var scopes, so the two can in principle disagree. Rather than assume,
+        check and say so.
+        """
+        violations = []
+        for key_label, member_vars in members.items():
+            labels = {v.label for v in member_vars}
+            if len(labels) < 2:
+                continue
+            if member_vars[-1].label != key_label:
+                violations.append((key_label, 'key is not the last member'))
+                continue
+            for v in member_vars[:-1]:
+                p = parent_of.get(v.label)
+                if p not in labels:
+                    violations.append((key_label, f'member {v.label} routes to {p} outside cluster'))
+        if violations:
+            print(f"  WARNING [{where}]: {len(violations)} cluster/copy-tree "
+                  f"inconsistencies; upstream/downstream for those clusters may "
+                  f"double-count. First few: {violations[:5]}")
+        return violations
+
+    @staticmethod
+    def _collect_cluster_upstream(member_labels, snapshots, internal_msg_ids):
+        """Joint upstream factor list for a merged cluster.
+
+        `snapshots[l]` is the factor list of the UNMERGED copy bucket for var `l`
+        at the moment it was processed (its own originals plus every message it
+        had received). `internal_msg_ids[l]` holds the ids of the messages that
+        copy bucket PRODUCED. Unioning the snapshots and dropping the
+        cluster-internal messages reconstructs exactly
+
+            (all cluster originals) + (forward messages entering from outside),
+
+        which is what the merged cluster sees in the forward pass. The previous
+        code used only the key var's snapshot, in which the absorbed members'
+        variables had already been summed out -- a partially-marginalised
+        surrogate over a strictly smaller variable set.
+
+        Passthrough factors (no elim var) are kept: they are dropped from the
+        receiving member's snapshot only because they are already present, and
+        deduplicated by identity, in the sending member's snapshot.
+        """
+        internal = set()
+        for l in member_labels:
+            internal |= internal_msg_ids.get(l, set())
+        out, seen = [], set()
+        for l in member_labels:
+            for f in snapshots.get(l, []):
+                fid = id(f)
+                if fid in internal or fid in seen:
+                    continue
+                seen.add(fid)
+                out.append(f)
+        return out
+
     def _create_population_copy(self):
         """
         Create a controlled copy of this GM for backward factor population.
@@ -1825,7 +1972,14 @@ class FastGM:
         # Configure for population: use WMB, don't populate recursively
         pop_config['populate_bw_factors'] = False  # Prevent recursive population
         pop_config['approximation_method'] = 'wmb'  # Use WMB for backward factors
-        pop_config['use_join_tree_merge'] = False  # Don't re-merge in the copy
+        # Don't re-merge in the copy. __init__ dispatches FOUR independent merge
+        # passes; disabling only use_join_tree_merge left the copy re-merging
+        # under every other strategy, after which the copy-side lookups that
+        # assume an unmerged one-var-per-bucket tree raise KeyError.
+        for _flag in ('use_join_tree_merge', 'use_reduce_nn_merge',
+                      'use_non_subsumption_merge'):
+            pop_config[_flag] = False
+        pop_config['merge_degree'] = 0
 
         # Get all factors from original GM's buckets. Skip vars whose buckets
         # were absorbed into a merged cluster (their factors live on the
@@ -1909,8 +2063,10 @@ class FastGM:
         downstream_config['populate_bw_factors'] = False
         downstream_config['approximation_method'] = 'wmb'
         downstream_config['ecl'] = bw_ecl
-        # Don't re-merge in the temporary GM
-        downstream_config['use_join_tree_merge'] = False
+        # Don't re-merge in the temporary GM (all four merge passes)
+        for _flag in ('use_join_tree_merge', 'use_reduce_nn_merge',
+                      'use_non_subsumption_merge'):
+            downstream_config[_flag] = False
         downstream_config['merge_degree'] = 0
 
         # Compute effective iB from ecl
@@ -1975,43 +2131,57 @@ class FastGM:
         skip_non_nn = self.config.get('populate_bw_skip_non_nn', False)
         n_skipped = 0
 
+        # --- Merge bookkeeping -------------------------------------------------
+        # copied_gm is always UNMERGED (one elim var per bucket, every var in
+        # self.elim_order has a bucket there), so the sweep below must visit every
+        # var. self, however, may hold merged clusters: absorbed vars have no
+        # bucket at all, and a surviving cluster's quantities must be assembled
+        # from ALL of its members, not just the key var.
+        members, owner = self._cluster_members()
+        last_member = {ms[-1].label: key for key, ms in members.items()}
+        nn_cluster = {key: ((not skip_non_nn) or
+                            self._cluster_is_nn_eligible(self.matching_var(key)))
+                      for key in members}
+        snapshots = {}          # var label -> copy bucket factors at process time
+        internal_msg_ids = {}   # var label -> ids of the messages it produced
+        self._check_cluster_tree_consistency(
+            members, {info['var'].label: info['sends_to'] for info in scheme_info},
+            where='populate_backward_factors_wmb')
+
         # Process buckets in elimination order
         n_total = len(self.elim_order)
         for i, current_var in enumerate(self.elim_order):
             if i % 50 == 0 or i == n_total - 1:
                 print(f"  populate_bw_factors: bucket {i+1}/{n_total} (var={current_var.label})", flush=True)
-            # Get corresponding buckets from original and copied GMs
-            orig_bucket = self.get_bucket(current_var)
             copy_bucket = copied_gm.get_bucket(current_var)
+            snapshots[current_var.label] = list(copy_bucket.factors)
 
-            # NN-eligibility check (forward gate): if bucket_ec > self.ecl in original
-            # forward, this bucket will be NN-approximated and may use bw factors via
-            # proposal sampling. Else it will be exact and ignores bw factors.
-            # copy_bucket.get_ec() reflects scope (var domain product) which is
-            # invariant to WMB partitioning, so it's a valid proxy for forward bucket_ec.
-            is_nn_eligible = (not skip_non_nn) or (copy_bucket.get_ec() > self.ecl)
-
-            if is_nn_eligible:
+            # The cluster's downstream is everything OUTSIDE its subtree, which is
+            # correct to snapshot at the LAST of its members in elim order: at that
+            # point every member's content has been folded into this bucket and its
+            # own outgoing message has not been sent yet.
+            cluster_key = last_member.get(current_var.label)
+            if cluster_key is not None and nn_cluster.get(cluster_key, True):
+                orig_bucket = self.buckets[self.matching_var(cluster_key)]
                 # Gather all downstream factors from copied GM and WMB-eliminate them
-                # down to the bucket scope (elim var + message scope).
+                # down to the cluster scope (ALL cluster elim vars + separator).
                 # This keeps factor sizes bounded by bw_ecl.
                 downstream_factors_raw = []
-                for j in range(i+1, len(self.elim_order)):
+                for j in range(i + 1, len(self.elim_order)):
                     downstream_bucket = copied_gm.get_bucket(self.elim_order[j])
                     for factor in downstream_bucket.factors:
                         downstream_factors_raw.append(factor.to_exact() if hasattr(factor, 'to_exact') else factor)
 
-                bucket_scope = orig_bucket.get_message_scope() + [current_var.label]
+                elim_labels = [getattr(v, 'label', v) for v in orig_bucket.elim_vars]
+                bucket_scope = sorted(
+                    set(self._cluster_separator(self.matching_var(cluster_key), orig_bucket))
+                    | set(elim_labels))
                 orig_bucket.approximate_downstream_factors = self._wmb_eliminate_to_scope(
-                    downstream_factors_raw, bucket_scope, current_var)
-
-                # Save the forward factors: original factors + upstream WMB messages
-                upstream_factors = []
-                for factor in copy_bucket.factors:
-                    upstream_factors.append(factor.to_exact() if hasattr(factor, 'to_exact') else factor)
-                orig_bucket.approximate_upstream_factors = upstream_factors
-            else:
-                # Skip — non-NN bucket won't use these.
+                    downstream_factors_raw, bucket_scope, self.matching_var(cluster_key))
+            elif cluster_key is not None:
+                # Skip — non-NN cluster won't use these (only compute_message_nn
+                # reads approximate_*_factors).
+                orig_bucket = self.buckets[self.matching_var(cluster_key)]
                 orig_bucket.approximate_downstream_factors = None
                 orig_bucket.approximate_upstream_factors = None
                 n_skipped += 1
@@ -2048,6 +2218,10 @@ class FastGM:
                         print(f"    Warning: Exact computation failed: {e}, falling back to WMB")
                         messages = copy_bucket.compute_wmb_message(ecl=bw_ecl)
 
+            # Record the messages this copy bucket produced (NOT the passthrough
+            # factors) so cluster upstream assembly can drop cluster-internal ones.
+            internal_msg_ids[current_var.label] = {id(m) for m in messages}
+
             # Combine WMB messages and independent factors
             all_outgoing_factors = messages + no_elim_var
 
@@ -2059,8 +2233,20 @@ class FastGM:
                 next_bucket = copied_gm.get_bucket(next_var_label)
                 next_bucket.factors.extend(all_outgoing_factors)
 
+        # --- Cluster upstream, assembled from ALL members' snapshots -----------
+        # Deferred to after the sweep so it does not depend on where the key var
+        # sits relative to its absorbed members in elim order.
+        for key_label, member_vars in members.items():
+            if not nn_cluster.get(key_label, True):
+                continue
+            orig_bucket = self.buckets[self.matching_var(key_label)]
+            member_labels = [v.label for v in member_vars]
+            up = self._collect_cluster_upstream(member_labels, snapshots, internal_msg_ids)
+            orig_bucket.approximate_upstream_factors = [
+                f.to_exact() if hasattr(f, 'to_exact') else f for f in up]
+
         if skip_non_nn:
-            print(f"  populate_bw skipped {n_skipped}/{n_total} non-NN buckets")
+            print(f"  populate_bw skipped {n_skipped}/{len(members)} non-NN clusters")
 
         # Print summary of forward partitions during backward factor population
         if self.wmb_fw_partitions > 0:
@@ -2099,6 +2285,21 @@ class FastGM:
         bw_ecl = self.config.get('bw_ecl', 0)
         n_total = len(self.elim_order)
 
+        # --- Merge bookkeeping (see populate_backward_factors_wmb) -------------
+        # copied_gm is unmerged; self may hold merged clusters. A cluster's
+        # upstream must be assembled from ALL of its members' snapshots, not read
+        # off the key var's copy bucket (in which the absorbed members' variables
+        # have already been summed out by the copy's own WMB sweep).
+        members, owner = self._cluster_members()
+        self._check_cluster_tree_consistency(
+            members, parent_of, where='populate_backward_factors_via_tree_collect')
+        skip_non_nn = self.config.get('populate_bw_skip_non_nn', False)
+        nn_cluster = {key: ((not skip_non_nn) or
+                            self._cluster_is_nn_eligible(self.matching_var(key)))
+                      for key in members}
+        snapshots = {}          # var label -> copy bucket factors at process time
+        internal_msg_ids = {}   # var label -> ids of the messages it produced
+
         # ---- Forward sweep: WMB-elim each bucket, store outgoing msgs and originals ----
         parent_originals = {}     # var_label -> list of FastFactor (= bucket's true originals,
                                    # i.e. factors that did NOT come from any child msg)
@@ -2108,11 +2309,6 @@ class FastGM:
             if i % 100 == 0 or i == n_total - 1:
                 print(f"  fwd: bucket {i+1}/{n_total} (var={current_var.label})", flush=True)
 
-            # If this var was absorbed into a merged cluster, self has no
-            # bucket for it. The copied_gm still has the original tree.
-            # Skip setting upstream on self for this var; cluster's surviving
-            # bucket already has correct upstream from its own slot.
-            orig_bucket = self.buckets.get(current_var)
             copy_bucket = copied_gm.get_bucket(current_var)
 
             # Identify originals at this bucket: factors NOT in any child's outgoing msg
@@ -2124,9 +2320,9 @@ class FastGM:
                 f for f in copy_bucket.factors if id(f) not in child_msg_ids
             ]
 
-            # Snapshot upstream (full joint at forward) for orig_bucket
-            if orig_bucket is not None:
-                orig_bucket.approximate_upstream_factors = list(copy_bucket.factors)
+            # Snapshot the full joint at forward time; cluster upstream is
+            # assembled from these after the sweep.
+            snapshots[current_var.label] = list(copy_bucket.factors)
 
             # WMB-elim the elim var → outgoing msg
             has_elim_var = [f for f in copy_bucket.factors if current_var in f.labels]
@@ -2146,12 +2342,30 @@ class FastGM:
             else:
                 msgs = []
 
+            internal_msg_ids[current_var.label] = {id(m) for m in msgs}
             outgoing = msgs + no_elim_var
             forward_msgs[current_var.label] = outgoing
 
             parent_label = parent_of.get(current_var.label)
             if parent_label is not None and outgoing:
                 copied_gm.get_bucket(parent_label).factors.extend(outgoing)
+
+        # ---- Cluster upstream, assembled from ALL members' snapshots ----------
+        n_skipped = 0
+        for key_label, member_vars in members.items():
+            orig_bucket = self.buckets[self.matching_var(key_label)]
+            if not nn_cluster.get(key_label, True):
+                # Only compute_message_nn reads approximate_*_factors, so exact
+                # clusters need neither list (mirrors populate_bw_skip_non_nn on
+                # the wmb route).
+                orig_bucket.approximate_upstream_factors = None
+                orig_bucket.approximate_downstream_factors = None
+                n_skipped += 1
+                continue
+            orig_bucket.approximate_upstream_factors = self._collect_cluster_upstream(
+                [v.label for v in member_vars], snapshots, internal_msg_ids)
+        if skip_non_nn:
+            print(f"  populate_bw skipped {n_skipped}/{len(members)} non-NN clusters")
 
         # ---- Backward distribute (BFS from root) — collect factor lists, no elim ----
         # Maintain an internal bw-chain dict keyed by var label, populated for
@@ -2164,7 +2378,7 @@ class FastGM:
         for r in roots:
             internal_bw[r] = []
             r_var = self.matching_var(r)
-            if r_var in self.buckets:
+            if r_var in self.buckets and nn_cluster.get(r, True):
                 self.buckets[r_var].approximate_downstream_factors = []
 
         visited = set(roots)
@@ -2192,7 +2406,10 @@ class FastGM:
 
                     child_var = self.matching_var(child_label)
                     child_orig_bucket = self.buckets.get(child_var)
-                    if child_orig_bucket is not None:
+                    # Only assign to a SURVIVING cluster key, and only when that
+                    # cluster will take the NN path (nn_cluster is keyed by the
+                    # cluster key label, which is the var's own label here).
+                    if child_orig_bucket is not None and nn_cluster.get(child_label, True):
                         child_orig_bucket.approximate_downstream_factors = child_bw_chain
 
                     next_queue.append(child_label)

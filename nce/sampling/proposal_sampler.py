@@ -260,6 +260,25 @@ def build_proposal_tree(factors: List[FastFactor], message_scope: List[int],
     return ProposalTree(levels, device)
 
 
+def proposal_scope_for_bucket(bucket, reference_gm):
+    """The variable scope a proposal tree for `bucket` must be built over.
+
+    Single-var buckets keep using the precomputed message_scopes cache (which is
+    keyed per eliminated variable). Merged clusters must NOT: the cache holds the
+    pre-merge, per-variable scopes. bucket.get_message_scope() is merge-correct —
+    it unions the labels of the bucket's current factors (originals plus every
+    message received so far, buckets being processed in elimination order) and
+    discards ALL of the cluster's elim vars.
+
+    Exposed separately from build_proposal_for_bucket so the scope can be
+    asserted without building a tree.
+    """
+    elim_var_labels = {getattr(v, 'label', v) for v in bucket.elim_vars}
+    if len(elim_var_labels) > 1:
+        return bucket.get_message_scope()
+    return list(reference_gm.message_scopes.get(bucket.label, []))
+
+
 def build_proposal_for_bucket(bucket, reference_gm, ecl=None, temperature=1.0):
     """
     Convenience function: build a proposal tree for a single bucket.
@@ -298,22 +317,19 @@ def build_proposal_for_bucket(bucket, reference_gm, ecl=None, temperature=1.0):
                        for f in all_factors]
 
     # Get message scope and domain sizes. For super-bucket clusters (multiple
-    # elim_vars), the cluster's outgoing scope is the union of its factors'
-    # labels minus the cluster's elim_var labels. We derive it dynamically
-    # rather than relying on the pre-merge message_scopes cache.
+    # elim_vars) the pre-merge message_scopes cache is keyed per variable and is
+    # not the cluster's scope, so we take it from the bucket itself.
+    #
+    # bucket.get_message_scope() is already merge-correct: it unions the labels
+    # of the bucket's factors (originals + every message received so far, since
+    # buckets are processed in elimination order) and discards ALL of the
+    # cluster's elim vars. Deriving the scope by unioning the backward chain
+    # instead -- as this used to -- pulled in every variable of the whole
+    # downstream chain: measured 14/16/17 variables against true separators of
+    # 1/1/0 on grid10x10.f10 (see notebooks/_August-2026/claude_experiments/
+    # 01-hybrid-memorization-table.md §0a F3).
     elim_var_labels = sorted({getattr(v, 'label', v) for v in bucket.elim_vars})
-    if len(elim_var_labels) > 1:
-        # Cluster: derive scope from factors + already-attached upstream/downstream
-        scope_set = set()
-        for f in all_factors:
-            scope_set.update(f.labels)
-        for f in bucket.factors:
-            scope_set.update(f.labels)
-        for lab in elim_var_labels:
-            scope_set.discard(lab)
-        msg_scope = sorted(scope_set)
-    else:
-        msg_scope = reference_gm.message_scopes.get(bucket.label, [])
+    msg_scope = proposal_scope_for_bucket(bucket, reference_gm)
 
     if not msg_scope:
         return ProposalTree([], reference_gm.device)
