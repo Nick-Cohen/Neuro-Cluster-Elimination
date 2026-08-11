@@ -68,6 +68,9 @@ class FastGM:
             self.lr_decay = self.config.get('lr_decay', 1.0)
             self.patience = self.config.get('patience', 10)
             self.min_lr = self.config.get('min_lr', 1e-8)
+            # Raw config entry: may be an int OR the per-cluster formula string
+            # "nbe,<epsilon>[,<n_min>]".  Currently unread -- do not use it as a
+            # count.  Per-bucket resolution lives in FastBucket.resolve_num_samples().
             self.num_samples = self.config.get('num_samples')
             self.num_epochs = self.config.get('num_epochs')
             self.batch_size = self.config.get('batch_size')

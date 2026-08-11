@@ -98,23 +98,20 @@ class FastBucket:
         if use_memorizer:
             print(f"Bucket {self.label}: Using Memorizer (lookup table)")
 
-            # Handle "nbe,<epsilon>" string format for num_samples
-            num_samples_cfg = self.config.get('num_samples')
-            if isinstance(num_samples_cfg, str) and num_samples_cfg.startswith('nbe'):
-                if ',' in num_samples_cfg:
-                    epsilon = float(num_samples_cfg.split(',')[1])
-                else:
-                    epsilon = 0.25  # default from NeuroBE Config.h
-                nbe_result = self.get_nbe_num_samples(epsilon)
-                self.config['num_samples'] = nbe_result['total']
-                print(f"Bucket {self.label}: NBE num_samples (eps={epsilon}): total={nbe_result['total']}, train={nbe_result['n_train']}, val={nbe_result['n_val']}")
+            # Resolve num_samples for THIS bucket. "nbe,<epsilon>[,<n_min>]" is a
+            # PER-CLUSTER formula; resolve_num_samples() evaluates it against this
+            # bucket's own message scope and does not mutate the shared config.
+            nbe_result = self.resolve_num_samples()
+            num_samples = nbe_result['total']
+            if nbe_result['source'] == 'nbe':
+                print(f"Bucket {self.label}: NBE num_samples (eps={nbe_result['epsilon']}): total={nbe_result['total']}, train={nbe_result['n_train']}, val={nbe_result['n_val']}")
 
             # Create a dummy net for initialization (needed for Trainer/dataloader)
             net = Net(self, hidden_sizes=[])
             t = Trainer(net=net, bucket=self, stats=self.stats)
 
             # Generate validation set first (for normalization and plotting)
-            nbe_val_size = max(1, self.config['num_samples'] // 9)
+            nbe_val_size = max(1, num_samples // 9)
             t.nbe_val_set = t._generate_validation_set_nbe(nbe_val_size)
             print(f"Validation set generated for normalization: {len(t.nbe_val_set[0]['x'])} samples")
 
@@ -228,16 +225,13 @@ class FastBucket:
                     h = b * math.ceil(math.log2(message_size)) if message_size > 1 else b
                     hidden_sizes = [h, h]
 
-            # Handle "nbe,<epsilon>" string format for num_samples
-            num_samples_cfg = self.config.get('num_samples')
-            if isinstance(num_samples_cfg, str) and num_samples_cfg.startswith('nbe'):
-                if ',' in num_samples_cfg:
-                    epsilon = float(num_samples_cfg.split(',')[1])
-                else:
-                    epsilon = 0.25  # default from NeuroBE Config.h
-                nbe_result = self.get_nbe_num_samples(epsilon)
-                self.config['num_samples'] = nbe_result['total']
-                print(f"Bucket {self.label}: NBE num_samples (eps={epsilon}): total={nbe_result['total']}, train={nbe_result['n_train']}, val={nbe_result['n_val']}")
+            # Resolve num_samples for THIS bucket. "nbe,<epsilon>[,<n_min>]" is a
+            # PER-CLUSTER formula; resolve_num_samples() evaluates it against this
+            # bucket's own message scope and does not mutate the shared config.
+            nbe_result = self.resolve_num_samples()
+            num_samples = nbe_result['total']
+            if nbe_result['source'] == 'nbe':
+                print(f"Bucket {self.label}: NBE num_samples (eps={nbe_result['epsilon']}): total={nbe_result['total']}, train={nbe_result['n_train']}, val={nbe_result['n_val']}")
 
             net = Net(self, hidden_sizes=hidden_sizes)
             t = Trainer(net=net, bucket=self, stats=self.stats)
@@ -336,7 +330,7 @@ class FastBucket:
                     hidden_sizes=hidden_sizes,
                     num_epochs=self.config.get('num_epochs'),
                     loss_fn=self.config.get('loss_fn'),
-                    num_samples=self.config.get('num_samples'),
+                    num_samples=self.get_num_samples(),
                 )
 
             t.train()
@@ -595,7 +589,7 @@ class FastBucket:
         trainer = Trainer(net=net, bucket=self, stats=self.stats)
 
         # Generate validation set first (for normalization and plotting)
-        nbe_val_size = max(1, self.config['num_samples'] // 9)
+        nbe_val_size = max(1, self.get_num_samples() // 9)
         trainer.nbe_val_set = trainer._generate_validation_set_nbe(nbe_val_size)
         print(f"Validation set generated for normalization: {len(trainer.nbe_val_set[0]['x'])} samples")
 
@@ -1119,6 +1113,61 @@ class FastBucket:
         dims = self.get_message_dimension()
         l = max(dims) if dims else 2
         return FastBucket.compute_nbe_num_samples(w, l, epsilon)
+
+    def resolve_num_samples(self):
+        """Resolve the run-wide ``num_samples`` config entry for THIS bucket.
+
+        ``config['num_samples']`` is either
+
+        * an ``int`` -- a fixed count shared by every bucket, or
+        * the string ``"nbe,<epsilon>[,<n_min>]"`` -- a PER-CLUSTER formula whose
+          value depends on this bucket's own message scope (width + max domain
+          size), evaluated at the moment the bucket is eliminated.
+
+        Returns a fresh dict with keys ``total``, ``n_train``, ``n_val`` plus a
+        ``source`` tag (``'nbe'`` or ``'config'``); the ``'nbe'`` case also carries
+        ``epsilon`` and ``n_min`` for logging.
+
+        IMPORTANT -- this deliberately does NOT write the resolved int back into
+        ``self.config``.  ``self.config`` is ``self.gm.config``: ONE dict shared by
+        every bucket in the run.  Earlier revisions assigned
+        ``self.config['num_samples'] = nbe_result['total']`` here, which froze the
+        FIRST NN bucket's sample count for the entire elimination -- every later
+        bucket then failed the ``isinstance(..., str)`` test, skipped the formula,
+        and silently reused the first bucket's number.  Because the merge strategy
+        determines which bucket is eliminated first, the frozen value was
+        confounded with the experimental arm.  Keep this function pure.
+
+        Deliberately NOT memoised: it is cheap (one ``get_message_scope()``), and a
+        cache would reintroduce a milder version of the same staleness bug if it
+        were ever populated before the bucket's incoming messages had arrived.  All
+        current call sites run inside the bucket's own message computation, so every
+        call sees the same scope.
+        """
+        import math
+
+        cfg_val = self.config.get('num_samples')
+        if isinstance(cfg_val, str) and cfg_val.startswith('nbe'):
+            parts = cfg_val.split(',')
+            # default epsilon from NeuroBE Config.h
+            epsilon = float(parts[1]) if len(parts) > 1 and parts[1] != '' else 0.25
+            n_min = int(parts[2]) if len(parts) > 2 and parts[2] != '' else 0
+            result = self.get_nbe_num_samples(epsilon)
+            if result['total'] < n_min:
+                n_train = int(n_min * 0.8)
+                result = {'total': n_min, 'n_train': n_train, 'n_val': n_min - n_train}
+            result = dict(result, source='nbe', epsilon=epsilon, n_min=n_min)
+        else:
+            total = int(cfg_val) if cfg_val is not None else 0
+            n_train = int(math.floor(total * 0.8))
+            result = {'total': total, 'n_train': n_train, 'n_val': total - n_train,
+                      'source': 'config'}
+
+        return result
+
+    def get_num_samples(self):
+        """Per-bucket resolved ``num_samples`` total (int).  See resolve_num_samples()."""
+        return self.resolve_num_samples()['total']
 
     def get_message_scope(self):
         scope = set()
