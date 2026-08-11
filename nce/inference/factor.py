@@ -174,6 +174,9 @@ class FastFactor:
     def sum_all_entries(self):
         return self.eliminate('all').tensor.item()
 
+    def sum(self):
+        return self.sum_all_entries()
+
     def to(self, device):
         self.tensor = self.tensor.to(device)
         return self
@@ -215,44 +218,125 @@ class FastFactor:
 
         # indices in assignments that correspond to dimensions in the tensor
         assignment_indices = [i for i, idx in enumerate(message_scope) if idx in tensor_labels]
-        
+
         # indices of the assignment in the tensor
         tensor_assignment_indices = [i for i, idx in enumerate(tensor_labels) if idx not in elim_vars]
         # indices of eliminated variables in the tensor
         tensor_elim_indices = [i for i, idx in enumerate(tensor_labels) if idx in elim_vars]
-        
+        # Number of elim vars actually present in this factor (may be < len(elim_vars)
+        # for super-buckets where a factor only touches a subset of cluster's elim_vars).
+        n_elim_in_tensor = len(tensor_elim_indices)
+
         # put elimination indices at end of tensor
         permutation = (*tensor_assignment_indices, *tensor_elim_indices)
         # permute tensor
         tensor = tensor.permute(permutation)
         # reordered labels
         tensor_labels = [tensor_labels[i] for i in permutation]
-        
+
         # get assignments from permuted tensor
         # assertation necessary for indexing
-        assert(all(tensor_labels[i] < tensor_labels[i+1] for i in range(len(tensor_labels)-len(elim_vars)-1)))
+        assert(all(tensor_labels[i] < tensor_labels[i+1] for i in range(len(tensor_labels)-n_elim_in_tensor-1)))
         permuted_assignment_indices = [i for i, idx in enumerate(message_scope) if idx in tensor_labels]
         projected_assignments = assignments[:,permuted_assignment_indices]
 
-        # stretch out elimination indices to 1d
-        # grab slices corresponding to assignments
-        view = tuple(int(dim) for dim in tensor.shape[:len(tensor.shape) - len(elim_vars)]) + (int(torch.prod(torch.tensor(tensor.shape[len(tensor.shape) - len(elim_vars):]))),)
+        # stretch out the elim-vars-present-in-this-factor dimensions to 1d
+        n_assign_dims = len(tensor.shape) - n_elim_in_tensor
+        if n_elim_in_tensor == 0:
+            view = tuple(int(dim) for dim in tensor.shape) + (1,)
+        else:
+            view = tuple(int(dim) for dim in tensor.shape[:n_assign_dims]) + \
+                   (int(torch.prod(torch.tensor(tensor.shape[n_assign_dims:]))),)
         try:
             if not projected_assignments.numel() == 0:
-                slices = tensor.view(view)[tuple(projected_assignments.t())]
+                # .view() requires contiguous strides which may not hold after
+                # permute() above (especially for multi-elim_var super buckets).
+                # Use reshape() which falls back to a copy when needed.
+                slices = tensor.reshape(view)[tuple(projected_assignments.t())]
             else:
-                slices = tensor.unsqueeze(0).expand(len(assignments), len(tensor))
+                # Factor has no assignment-projection dims (all its labels
+                # are elim_vars). Flatten the elim dims and broadcast to
+                # all assignments.
+                flat = tensor.reshape(-1)
+                slices = flat.unsqueeze(0).expand(len(assignments), flat.numel())
         except Exception:
-            print(f"_get_slices error: tensor.shape={tensor.shape}, view={view}, "
-                  f"projected_assignments.shape={projected_assignments.shape}")
+            print(f"[_get_slices INDEX error] orig tensor.shape={self.tensor.shape} labels={self.labels}")
+            print(f"  permuted tensor.shape={tensor.shape}, tensor_labels={tensor_labels}")
+            print(f"  view={view}, projected_assignments.shape={projected_assignments.shape}")
+            print(f"  elim_var_labels={[v.label for v in elim_vars]}, n_elim_in_tensor={n_elim_in_tensor}")
+            print(f"  message_scope={message_scope}, permuted_assignment_indices={permuted_assignment_indices}")
             raise
         
         # reshape slices to match elimination variables in order, e.g. (1,2,2,1) if 2nd and 3rd variables are in tensor
         unexpanded_slice_shape = (len(assignments),) + tuple([v.states if v.label in tensor_labels else 1 for v in elim_vars])
-        reshaped_slices = slices.reshape(unexpanded_slice_shape)
+        try:
+            reshaped_slices = slices.reshape(unexpanded_slice_shape)
+        except Exception:
+            print(f"[_get_slices reshape error] slices.shape={slices.shape} → unexpanded={unexpanded_slice_shape}")
+            print(f"  tensor.shape={self.tensor.shape}, tensor_labels={self.labels}, elim_var_labels={[v.label for v in elim_vars]}")
+            raise
         expanded_slice_shape = (len(assignments),) + tuple([v.states for v in elim_vars])
         return reshaped_slices.expand(expanded_slice_shape)
-    
+
+    def _eval_elim_block(self, assignments, elim_coords, elim_vars, elim_var_labels, message_scope):
+        """Evaluate this factor at every (message assignment x elim assignment)
+        pair for an explicit BLOCK of elim assignments.
+
+        assignments : (A, len(message_scope));  elim_coords : (B, n_elim_vars)
+        returns     : (A, B).
+
+        Same math as _get_slices but returns just the requested elim block, so the
+        caller can stream over the 2^#elim grid without materializing it. This
+        factor only depends on the elim vars it actually contains, so we build the
+        small assignment-indexed slice and flat-index it by the block.
+        """
+        tensor = self.tensor
+        tensor_labels = self.labels
+        A = len(assignments)
+        B = len(elim_coords)
+
+        if tensor.dim() == 0 or len(tensor_labels) == 0:
+            return tensor.to(assignments.device).expand(A, B)
+
+        tensor_assignment_indices = [i for i, idx in enumerate(tensor_labels) if idx not in elim_vars]
+        tensor_elim_indices = [i for i, idx in enumerate(tensor_labels) if idx in elim_vars]
+        n_elim_in_tensor = len(tensor_elim_indices)
+        permutation = (*tensor_assignment_indices, *tensor_elim_indices)
+        tensor_p = tensor.permute(permutation)
+        tensor_labels_p = [tensor_labels[i] for i in permutation]
+        permuted_assignment_indices = [i for i, idx in enumerate(message_scope) if idx in tensor_labels_p]
+        projected = assignments[:, permuted_assignment_indices]
+
+        n_assign_dims = len(tensor_p.shape) - n_elim_in_tensor
+        if n_elim_in_tensor == 0:
+            view = tuple(int(d) for d in tensor_p.shape) + (1,)
+        else:
+            view = tuple(int(d) for d in tensor_p.shape[:n_assign_dims]) + \
+                   (int(torch.prod(torch.tensor(tensor_p.shape[n_assign_dims:]))),)
+        if projected.numel() != 0:
+            slices = tensor_p.reshape(view)[tuple(projected.t())]
+        else:
+            flat = tensor_p.reshape(-1)
+            slices = flat.unsqueeze(0).expand(A, flat.numel())
+
+        # (A, s1..sk) with si = states if elim var i is in this factor else 1
+        present = tuple(v.states if v.label in tensor_labels_p else 1 for v in elim_vars)
+        reshaped = slices.reshape((A,) + present)
+        flat_rs = reshaped.reshape(A, -1)                        # (A, prod(present))
+
+        coords = elim_coords.to(flat_rs.device).clone()
+        for i, si in enumerate(present):
+            if si == 1:
+                coords[:, i] = 0                                  # absent dim -> broadcast index 0
+        strides = [1] * len(present)
+        acc = 1
+        for i in range(len(present) - 1, -1, -1):
+            strides[i] = acc
+            acc *= int(present[i])
+        strides_t = torch.tensor(strides, device=coords.device, dtype=coords.dtype)
+        flat_idx = (coords * strides_t).sum(dim=1)               # (B,)
+        return flat_rs[:, flat_idx]                              # (A, B)
+
     def _get_values(self, assignments, message_scope):
         tensor = self.tensor
         tensor_labels = self.labels

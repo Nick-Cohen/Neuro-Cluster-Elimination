@@ -55,6 +55,8 @@ class FastGM:
         self.track_errors = self.config.get('track_errors', False)
         self.nn_errors = []
         self.error_tracking_data = []  # List of (bucket_label, [(epoch, loss, log_Z_err, abs_log_Z_err), ...])
+        self.local_errors = []  # per-NN-cluster signed local error: sum(approx_fw*exact_bw) - sum(exact_fw*exact_bw)
+        self.phase_times = {}   # accumulated wall time per phase: 'exact', 'nn_path' (see process_bucket)
         self.per_bucket_training_log = []  # List of dicts per NN bucket: {label, epochs_trained, hidden_sizes, losses, val_losses, [nn_state_dict, normalizing_constant]}
         self.populate_bw_factors = self.config.get('populate_bw_factors', False)
         if self.config:
@@ -121,9 +123,37 @@ class FastGM:
         
         self.message_scopes = {}
         self.calculate_message_scopes()
+        if self.config.get('use_join_tree_merge', False):
+            self.merge_join_tree(
+                verbose=self.config.get('verbose_merge', True),
+                max_merge_bound=self.config.get('max_merge_bound',
+                                                self.config.get('max_cluster_size')),
+            )
+        if self.config.get('use_reduce_nn_merge', False):
+            self.reduce_nn_merge(
+                verbose=self.config.get('verbose_merge', True),
+                max_merge_bound=self.config.get('max_merge_bound',
+                                                self.config.get('max_cluster_size')),
+                backtrack=self.config.get('reduce_nn_backtrack', False),
+            )
+        if self.config.get('use_non_subsumption_merge', False):
+            self.merge_non_subsumption(
+                verbose=self.config.get('verbose_merge', True),
+                max_merge_bound=self.config.get('max_merge_bound',
+                                                self.config.get('max_cluster_size')),
+            )
+        if self.config.get('merge_degree', 0) and int(self.config.get('merge_degree', 0)) > 0:
+            self.merge_by_degree(
+                int(self.config['merge_degree']),
+                verbose=self.config.get('verbose_merge', True),
+            )
         if self.populate_bw_factors:
-            print("Populating backward factors using WMB approximations...")
-            self.populate_backward_factors_wmb()
+            if self.config.get('populate_bw_via_tree_collect', False):
+                print("Populating backward factor LISTS via tree-collect (no per-bucket elim)...")
+                self.populate_backward_factors_via_tree_collect()
+            else:
+                print("Populating backward factors using WMB approximations...")
+                self.populate_backward_factors_wmb()
         if self.config.get('dope_factors'):
             self.dope_factors()
         if self.config.get('sigma_g_global') is None and ('approx_smg' in self.loss_fn or 'approx_smg' in self.config.get('loss_fn2', '')):
@@ -163,9 +193,11 @@ class FastGM:
         self.vars = gm_model.vars
         
         # Convert PyGM factors to FastFactors
+        from nce.utils.dtype_utils import get_dtype
+        factor_dtype = get_dtype(self.config)
         fast_factors = []
         for factor in gm_model.factors:
-            tensor = torch.tensor(factor.table, dtype=torch.float32).to(self.device)
+            tensor = torch.tensor(factor.table, dtype=factor_dtype).to(self.device)
             labels = [var.label for var in factor.vars]
             fast_factors.append(FastFactor(torch.log10(tensor), labels))
         
@@ -402,7 +434,10 @@ class FastGM:
         bucket_msg_complexity = bucket.get_message_complexity()
 
         if (exact or (bucket_width <= self.iB and bucket_ec <= self.ecl)) or bucket_msg_complexity < self.complexity_limit:
+            import time as _time
+            _t0 = _time.time()
             output_message = bucket.compute_message_exact()
+            self.phase_times['exact'] = self.phase_times.get('exact', 0.0) + (_time.time() - _t0)
             if self.gather_message_stats:
                 get_message_stats(self, bucket, output_message)
             # begin debug
@@ -417,7 +452,12 @@ class FastGM:
                 return output_messages
             elif self.config.get('approximation_method') == 'nn':
                 print(f"Bucket {bucket.label}: training NN", flush=True)
+                import time as _time
+                _t0 = _time.time()
                 output_message = bucket.compute_message_nn()
+                # NN-path wall time (sample gen + training + message construction);
+                # pure training time is separable per bucket from training.jsonl.
+                self.phase_times['nn_path'] = self.phase_times.get('nn_path', 0.0) + (_time.time() - _t0)
             elif self.config.get('approximation_method') == 'dt':
                 print(f"Bucket {bucket.label}: training DT", flush=True)
                 output_message = bucket.compute_message_dt()
@@ -515,8 +555,433 @@ class FastGM:
         print("Bucket Scopes:")
         for var in self.elim_order:
             print(f"Bucket {var}: {self.message_scopes[var.label]}")
+
+    def _bucket_scope_at_elim(self, key_var):
+        """Variables present in bucket at elimination time.
+
+        For a single-var bucket this is message_scopes[var] ∪ {var}. For a
+        merged cluster, we cache the cluster scope on the surviving bucket.
+        """
+        b = self.buckets[key_var]
+        cached = getattr(b, '_scope_at_elim', None)
+        if cached is not None:
+            return cached
+        scope = set(self.message_scopes.get(key_var.label, []))
+        scope.update(v.label for v in b.elim_vars)
+        return scope
+
+    def merge_join_tree(self, verbose=False, max_merge_bound=None, max_cluster_size=None):
+        """Merge buckets along the bucket tree wherever the join-tree subsumption
+        condition holds: a child whose scope-at-elim-time contains its parent's
+        scope can be merged into the parent at zero added complexity.
+
+        max_merge_bound caps the number of eliminated variables per merged
+        cluster (None = unbounded full subsumption).
+
+        Pre-condition: calculate_message_scopes() has been called.
+
+        After this pass, self.buckets contains a mix of single-var buckets and
+        merged clusters (FastBucket with len(elim_vars) > 1). Buckets absorbed
+        into a parent are removed from self.buckets but stay in self.elim_order
+        (the eliminate_variables loop must skip vars not in self.buckets).
+        """
+        # Backward compatibility: max_cluster_size was the previous name for
+        # max_merge_bound. Honor it if the new name was not supplied.
+        if max_cluster_size is not None and max_merge_bound is None:
+            max_merge_bound = max_cluster_size
+
+        # Initialise scope cache on each bucket
+        for key_var, b in self.buckets.items():
+            b._scope_at_elim = set(self.message_scopes.get(key_var.label, []))
+            b._scope_at_elim.update(v.label for v in b.elim_vars)
+
+        merges = []  # log of (child_elim_var_labels, parent_elim_var_labels_before, after)
+
+        for var in list(self.elim_order):
+            if var not in self.buckets:
+                continue  # absorbed earlier
+            cur_var = var
+            while True:
+                cur_bucket = self.buckets[cur_var]
+                cur_scope = cur_bucket._scope_at_elim
+                msg_scope = cur_scope - {v.label for v in cur_bucket.elim_vars}
+                parent_bucket = self.find_next_bucket(list(msg_scope), cur_var)
+                if parent_bucket is None or parent_bucket is cur_bucket:
+                    break
+                parent_scope = parent_bucket._scope_at_elim
+                # Optional safeguard: cap the number of elim_vars per cluster (merge bound).
+                merged_size = len(set(cur_bucket.elim_vars + parent_bucket.elim_vars))
+                if max_merge_bound is not None and merged_size > int(max_merge_bound):
+                    break
+                if cur_scope >= parent_scope:
+                    # Absorb cur into parent
+                    child_elim_labels = sorted(v.label for v in cur_bucket.elim_vars)
+                    parent_elim_before = sorted(v.label for v in parent_bucket.elim_vars)
+                    for v in cur_bucket.elim_vars:
+                        if v not in parent_bucket.elim_vars:
+                            parent_bucket.elim_vars.append(v)
+                    parent_bucket.factors = list(cur_bucket.factors) + list(parent_bucket.factors)
+                    # New cluster scope is the union; by the condition this equals cur_scope.
+                    parent_bucket._scope_at_elim = cur_scope | parent_scope
+                    parent_key = next(k for k, v in self.buckets.items() if v is parent_bucket)
+                    del self.buckets[cur_var]
+                    parent_elim_after = sorted(v.label for v in parent_bucket.elim_vars)
+                    merges.append({
+                        'child_elim_vars': child_elim_labels,
+                        'parent_elim_vars_before': parent_elim_before,
+                        'cluster_elim_vars': parent_elim_after,
+                        'cluster_scope': sorted(parent_bucket._scope_at_elim),
+                    })
+                    if verbose:
+                        print(f"[merge_join_tree] absorb {child_elim_labels} into "
+                              f"{parent_elim_before} → cluster {parent_elim_after} "
+                              f"(scope {sorted(parent_bucket._scope_at_elim)})")
+                    cur_var = parent_key
+                else:
+                    break
+
+        self._merges = merges
+        if verbose:
+            print(f"[merge_join_tree] {len(merges)} merges performed; "
+                  f"{len(self.buckets)} buckets/clusters remain "
+                  f"(was {len(self.elim_order)} original).")
+        return merges
+
+    def merge_non_subsumption(self, verbose=False, max_merge_bound=None):
+        """Merge buckets along the bucket tree ONLY where the join-tree subsumption
+        condition does NOT hold — the complement of merge_join_tree. Each merge
+        strictly grows the cluster scope (costly merges), capped at max_merge_bound
+        eliminated vars per cluster. Subsumption (free) merges are skipped.
+
+        Purpose: isolate how much scope-growing merges alone reduce error,
+        vs the free subsumption merges.
+
+        Pre-condition: calculate_message_scopes() has been called.
+        """
+        for key_var, b in self.buckets.items():
+            b._scope_at_elim = set(self.message_scopes.get(key_var.label, []))
+            b._scope_at_elim.update(v.label for v in b.elim_vars)
+
+        merges = []
+        for var in list(self.elim_order):
+            if var not in self.buckets:
+                continue  # absorbed earlier
+            cur_var = var
+            while True:
+                cur_bucket = self.buckets[cur_var]
+                cur_scope = cur_bucket._scope_at_elim
+                msg_scope = cur_scope - {v.label for v in cur_bucket.elim_vars}
+                parent_bucket = self.find_next_bucket(list(msg_scope), cur_var)
+                if parent_bucket is None or parent_bucket is cur_bucket:
+                    break
+                parent_scope = parent_bucket._scope_at_elim
+                merged_size = len(set(cur_bucket.elim_vars + parent_bucket.elim_vars))
+                if max_merge_bound is not None and merged_size > int(max_merge_bound):
+                    break
+                if cur_scope >= parent_scope:
+                    break  # subsumption (free) merge -> NOT taken in this mode
+                # Non-subsumption merge: absorb cur into parent (scope grows)
+                child_elim_labels = sorted(v.label for v in cur_bucket.elim_vars)
+                parent_elim_before = sorted(v.label for v in parent_bucket.elim_vars)
+                for v in cur_bucket.elim_vars:
+                    if v not in parent_bucket.elim_vars:
+                        parent_bucket.elim_vars.append(v)
+                parent_bucket.factors = list(cur_bucket.factors) + list(parent_bucket.factors)
+                parent_bucket._scope_at_elim = cur_scope | parent_scope
+                parent_key = next(k for k, v in self.buckets.items() if v is parent_bucket)
+                del self.buckets[cur_var]
+                merges.append({
+                    'child_elim_vars': child_elim_labels,
+                    'parent_elim_vars_before': parent_elim_before,
+                    'cluster_elim_vars': sorted(v.label for v in parent_bucket.elim_vars),
+                    'cluster_scope': sorted(parent_bucket._scope_at_elim),
+                })
+                if verbose:
+                    print(f"[merge_non_subsumption] absorb {child_elim_labels} into "
+                          f"{parent_elim_before} → cluster "
+                          f"{sorted(v.label for v in parent_bucket.elim_vars)}")
+                cur_var = parent_key
+
+        self._merges = merges
+        if verbose:
+            print(f"[merge_non_subsumption] {len(merges)} merges performed; "
+                  f"{len(self.buckets)} buckets/clusters remain "
+                  f"(was {len(self.elim_order)} original).")
+        return merges
+
+    def merge_by_degree(self, merge_degree, verbose=False):
+        """Greedy merge of adjacent NN-eligible buckets along the bucket tree.
+
+        Limits each resulting cluster to at most `merge_degree` elimination
+        variables. Only considers NN-eligible buckets (those whose outgoing
+        message exceeds ecl or iB). At each step the candidate merge that
+        ADDS THE FEWEST scope variables is chosen (subsumption merges add 0
+        and therefore win automatically).
+
+        Can be run after merge_join_tree() to combine subsumption-based
+        merges with degree-bounded merges, OR standalone.
+        """
+        ecl = float(self.ecl or float('inf'))
+        iB = float(self.iB or float('inf'))
+
+        # Ensure scope-at-elim cache exists on every bucket.
+        for key_var, b in self.buckets.items():
+            if getattr(b, '_scope_at_elim', None) is None:
+                b._scope_at_elim = set(self.message_scopes.get(key_var.label, []))
+                b._scope_at_elim.update(v.label for v in b.elim_vars)
+
+        def out_scope(b):
+            return b._scope_at_elim - {v.label for v in b.elim_vars}
+
+        def is_nn_eligible(b):
+            scope = out_scope(b)
+            size = 1
+            for label in scope:
+                size *= self.matching_var(label).states
+            return size > ecl or len(scope) > iB
+
+        merges_done = []
+        while True:
+            candidates = []
+            for var in self.elim_order:
+                if var not in self.buckets:
+                    continue
+                cur = self.buckets[var]
+                if not is_nn_eligible(cur):
+                    continue
+                parent = self.find_next_bucket(list(out_scope(cur)), var)
+                if parent is None or parent is cur:
+                    continue
+                if not is_nn_eligible(parent):
+                    continue
+                new_size = len(set(cur.elim_vars + parent.elim_vars))
+                if new_size > int(merge_degree):
+                    continue
+                added = len(cur._scope_at_elim | parent._scope_at_elim) - len(parent._scope_at_elim)
+                candidates.append((added, self.elim_order.index(var), var, parent))
+            if not candidates:
+                break
+            candidates.sort(key=lambda x: (x[0], x[1]))  # min added scope, then earliest var
+            added, _, var, parent = candidates[0]
+            cur = self.buckets[var]
+            for v in cur.elim_vars:
+                if v not in parent.elim_vars:
+                    parent.elim_vars.append(v)
+            parent.factors = list(cur.factors) + list(parent.factors)
+            parent._scope_at_elim = cur._scope_at_elim | parent._scope_at_elim
+            del self.buckets[var]
+            merges_done.append({
+                'child_elim_vars': sorted(v.label for v in cur.elim_vars),
+                'parent_elim_vars': sorted(v.label for v in parent.elim_vars),
+                'added_scope_vars': added,
+            })
+            if verbose:
+                print(f"[merge_by_degree] absorb {sorted(v.label for v in cur.elim_vars)} "
+                      f"into cluster {sorted(v.label for v in parent.elim_vars)} "
+                      f"(added {added} scope vars)")
+
+        if not hasattr(self, '_merges') or self._merges is None:
+            self._merges = []
+        self._merges.extend(merges_done)
+        if verbose:
+            print(f"[merge_by_degree] {len(merges_done)} merges; "
+                  f"{len(self.buckets)} buckets/clusters remain.")
+        return merges_done
+
+    def reduce_nn_merge(self, max_merge_bound=None, verbose=False, backtrack=False):
+        """Greedy NN-count-reducing merge (NOT subsumption), with optional backtrack.
+
+        Goal: minimize the number of NN-approximated buckets. For each NN
+        bucket, absorb its ancestor chain (up the bucket tree) -- the message may
+        grow mid-chain (lookahead) -- until the cluster either COLLAPSES to exact
+        (output message width <= iB and size <= ecl) or MERGES into another NN;
+        either outcome drops the NN count by >=1. Repeat until no NN bucket can be
+        reduced within max_merge_bound (cap on eliminated vars per cluster).
+
+        With backtrack=True: the greedy can over-grow clusters when the cap leaves
+        head-room (a bigger cap lets it take longer chains, so the same NN count is
+        reached with needlessly large clusters -- e.g. rbm_22 reaches 1 NN with a
+        24-var cluster at D=24 but a 28-var one at D=28). Backtracking finds the
+        minimum NN count reachable within the cap, then re-runs the merge at the
+        SMALLEST bound that still achieves it -- the least merging (smallest
+        clusters) for the best NN count. The result then depends only on the NN
+        count achieved, not on spare cap.
+
+        Each committed chain is a connected path in the bucket tree, so the
+        merge is elimination-order valid (same mechanics as merge_join_tree).
+
+        Pre-condition: calculate_message_scopes() has been called.
+        """
+        D = None if max_merge_bound is None else int(max_merge_bound)
+        if not (backtrack and D is not None):
+            n_nn, merges = self._reduce_nn_core(D, verbose=verbose)
+            if not getattr(self, '_merges', None):
+                self._merges = []
+            self._merges.extend(merges)
+            return merges
+
+        # --- backtrack: smallest bound achieving the best (min) NN count ---
+        snap = self._reduce_nn_snapshot()
+        k_target, _ = self._reduce_nn_core(D, verbose=False)
+        lo, hi, best = 1, D, D                      # K(D') is ~non-increasing in D'
+        while lo <= hi:
+            mid = (lo + hi) // 2
+            self._reduce_nn_restore(snap)
+            k_mid, _ = self._reduce_nn_core(mid, verbose=False)
+            if k_mid <= k_target:
+                best = mid
+                hi = mid - 1
+            else:
+                lo = mid + 1
+        self._reduce_nn_restore(snap)
+        n_nn, merges = self._reduce_nn_core(best, verbose=False)
+        if not getattr(self, '_merges', None):
+            self._merges = []
+        self._merges.extend(merges)
+        if verbose:
+            print(f"[reduce_nn_merge:backtrack] cap D={D}: min NN={k_target} first "
+                  f"reached at D={best}; using D={best} ({len(merges)} chain-merges, "
+                  f"{len(self.buckets)} clusters, {n_nn} NN).")
+        return merges
+
+    def _reduce_nn_snapshot(self):
+        """Snapshot pristine bucket state so the merge can be re-run at different
+        bounds during backtracking. Holds references to the bucket objects (some are
+        deleted on merge) plus copies of their mutable elim_vars/factors lists."""
+        return {kv: (b, list(b.elim_vars), list(b.factors))
+                for kv, b in self.buckets.items()}
+
+    def _reduce_nn_restore(self, snap):
+        """Restore buckets to the snapshotted pristine state (undo a trial merge)."""
+        self.buckets = {kv: b for kv, (b, _, _) in snap.items()}
+        for kv, (b, ev, fc) in snap.items():
+            b.elim_vars = list(ev)
+            b.factors = list(fc)
+            b._scope_at_elim = None              # recomputed by _reduce_nn_core
+        return
+
+    def _reduce_nn_core(self, max_merge_bound=None, verbose=False):
+        """One greedy NN-count-reducing merge pass at the given bound. Mutates
+        self.buckets in place; returns (n_nn_remaining, merges_list)."""
+        iB = float(self.iB) if self.iB else float('inf')
+        ecl = float(self.ecl) if self.ecl else float('inf')
+        D = None if max_merge_bound is None else int(max_merge_bound)
+        pos = {var: i for i, var in enumerate(self.elim_order)}
+        states = {v.label: self.matching_var(v.label).states for v in self.vars}
+
+        for key_var, b in self.buckets.items():
+            b._scope_at_elim = set(self.message_scopes.get(key_var.label, []))
+            b._scope_at_elim.update(v.label for v in b.elim_vars)
+
+        # label -> the bucket key_var that eliminates that label (updated on merge),
+        # so the parent of a cluster is found in O(message size) not O(#vars).
+        owner = {v.label: kv for kv in self.buckets for v in self.buckets[kv].elim_vars}
+
+        def states_prod(labels):
+            p = 1.0
+            for l in labels:
+                p *= states[l]
+            return p
+
+        def is_nn(scope, elim_labels):
+            out = scope - elim_labels
+            return len(out) > iB or states_prod(out) > ecl
+
+        def find_chain(start_var):
+            scope = set(self.buckets[start_var]._scope_at_elim)
+            elim = {v.label for v in self.buckets[start_var].elim_vars}
+            chain = [start_var]; seen = {start_var}
+            while True:
+                out = scope - elim
+                if not (len(out) > iB or states_prod(out) > ecl):
+                    return chain                        # collapsed to exact
+                # parent = bucket eliminating the earliest (in elim order) message var
+                cand = {owner[l] for l in out}
+                cand = [kv for kv in cand if kv not in seen]
+                if not cand:
+                    return None
+                pvar = min(cand, key=lambda kv: pos[kv])
+                pb = self.buckets[pvar]
+                p_elim = {v.label for v in pb.elim_vars}
+                if D is not None and len(elim | p_elim) > D:
+                    return None
+                p_is_nn = is_nn(set(pb._scope_at_elim), p_elim)
+                elim |= p_elim; scope |= pb._scope_at_elim
+                chain.append(pvar); seen.add(pvar)
+                if p_is_nn:
+                    return chain                        # merged into another NN
+
+        merges = []
+        while True:
+            progressed = False
+            nn_vars = sorted(
+                (kv for kv, b in self.buckets.items()
+                 if is_nn(set(b._scope_at_elim), {v.label for v in b.elim_vars})),
+                key=lambda kv: pos[kv])
+            for kv in nn_vars:
+                if kv not in self.buckets:
+                    continue
+                chain = find_chain(kv)
+                if chain and len(chain) > 1:
+                    # Per-step tags (P3 enabling-bookkeeping): walking the chain from
+                    # its seed upward, record how many scope vars each absorbed parent
+                    # adds (0 = subsumption/free step) and the parent's identity, so a
+                    # structure pass can tell which free steps exist only because prior
+                    # (scope-growing) steps enlarged the child's scope.
+                    step_tags = []
+                    _cum = set(self.buckets[chain[0]]._scope_at_elim)
+                    for other in chain[1:]:
+                        _os = set(self.buckets[other]._scope_at_elim)
+                        step_tags.append({
+                            'parent_key': other.label,
+                            'parent_elim_vars': sorted(v.label for v in self.buckets[other].elim_vars),
+                            'added_scope_vars': len(_os - _cum),
+                        })
+                        _cum |= _os
+                    key = chain[-1]                     # topmost (latest-eliminated)
+                    kb = self.buckets[key]
+                    for other in chain[:-1]:
+                        ob = self.buckets[other]
+                        for v in ob.elim_vars:
+                            if v not in kb.elim_vars:
+                                kb.elim_vars.append(v)
+                            owner[v.label] = key
+                        kb.factors = list(ob.factors) + list(kb.factors)
+                        kb._scope_at_elim = set(kb._scope_at_elim) | set(ob._scope_at_elim)
+                        del self.buckets[other]
+                    merges.append({
+                        'cluster_elim_vars': sorted(v.label for v in kb.elim_vars),
+                        'seed_key': chain[0].label,
+                        'steps': step_tags,
+                    })
+                    progressed = True
+                    break
+            if not progressed:
+                break
+
+        n_nn = sum(1 for kv, b in self.buckets.items()
+                   if is_nn(set(b._scope_at_elim), {v.label for v in b.elim_vars}))
+        if verbose:
+            print(f"[reduce_nn_merge] {len(merges)} chain-merges; "
+                  f"{len(self.buckets)} clusters remain, {n_nn} NN.")
+        return n_nn, merges
+
+    def print_join_tree(self):
+        """Human-readable dump of all buckets/clusters and their scopes."""
+        print("Join-tree clusters (in elim order):")
+        for var in self.elim_order:
+            if var not in self.buckets:
+                continue
+            b = self.buckets[var]
+            elim = sorted(v.label for v in b.elim_vars)
+            scope = sorted(getattr(b, '_scope_at_elim', set()))
+            n_factors = len(b.factors)
+            tag = "cluster" if len(elim) > 1 else "bucket"
+            print(f"  {tag} key={var.label} elim={elim} scope={scope} n_factors={n_factors}")
+        if getattr(self, '_merges', None):
+            print(f"Total merges: {len(self._merges)}")
     
-    def show_elimination(self, elim_vars=None, up_to=None, through=None, all=False):
+    def show_elimination(self, elim_vars=None, up_to=None, through=None, all=False, complexity=False):
         if sum(map(bool, [elim_vars, up_to, through, all])) != 1:
             print("Showing all eliminations")
             all = True
@@ -567,6 +1032,32 @@ class FastGM:
                 'outgoing_message': sorted(list(outgoing_message_vars)),
                 'width': width
             }
+            if complexity:
+                # Compute factor complexity: sum of table sizes for all
+                # factors in the bucket (originals + incoming messages).
+                # Can't use bucket.get_message_complexity() since incoming
+                # messages haven't been moved into the bucket yet.
+                factor_complexity = 0
+                # Original factors in the bucket
+                for f in bucket_factors:
+                    size = 1
+                    for v in f.labels:
+                        size *= self.matching_var(v).states
+                    factor_complexity += size
+                # Incoming messages from earlier buckets
+                for msg_scope in incoming_messages:
+                    size = 1
+                    for v in msg_scope:
+                        size *= self.matching_var(v).states
+                    factor_complexity += size
+                bucket_info['message_complexity'] = factor_complexity
+                # Compute message size from the scope we already derived,
+                # since bucket.get_message_size() relies on factors/messages
+                # having been moved during elimination (which hasn't happened).
+                msg_size = 1
+                for v in outgoing_message_vars:
+                    msg_size *= self.matching_var(v).states
+                bucket_info['message_size'] = msg_size
 
             elimination_scheme.append(bucket_info)
 
@@ -581,9 +1072,17 @@ class FastGM:
             else:
                 print(f"  Sends: mess_{bucket['var']}_to_root({', '.join(map(str, bucket['outgoing_message']))}) to root")
             print(f"  Width: {bucket['width']}")
+            if complexity:
+                print(f"  Factor complexity: {bucket['message_complexity']:,}")
+                print(f"  Message size: {int(bucket['message_size']):,}")
             print()
 
         print(f"Maximum width: {max_width}")
+        if complexity:
+            total_complexity = sum(b['message_complexity'] for b in elimination_scheme)
+            max_msg_size = max((b['message_size'] for b in elimination_scheme), default=0)
+            print(f"Total factor complexity: {total_complexity:,}")
+            print(f"Maximum message size: {int(max_msg_size):,}")
 
     def get_senders_receivers(self):
         vars_to_eliminate = self.elim_order
@@ -1326,10 +1825,15 @@ class FastGM:
         # Configure for population: use WMB, don't populate recursively
         pop_config['populate_bw_factors'] = False  # Prevent recursive population
         pop_config['approximation_method'] = 'wmb'  # Use WMB for backward factors
+        pop_config['use_join_tree_merge'] = False  # Don't re-merge in the copy
 
-        # Get all factors from original GM's buckets
+        # Get all factors from original GM's buckets. Skip vars whose buckets
+        # were absorbed into a merged cluster (their factors live on the
+        # surviving cluster's bucket already).
         all_factors = []
         for var in self.elim_order:
+            if var not in self.buckets:
+                continue
             bucket = self.buckets[var]
             for factor in bucket.factors:
                 # Deep copy each factor to avoid sharing
@@ -1350,6 +1854,96 @@ class FastGM:
         copied_gm.is_populating_backward_factors = True
 
         return copied_gm
+
+    def _wmb_eliminate_to_scope(self, factors, target_scope, bucket_var):
+        """
+        WMB-eliminate a list of factors down to a target variable scope.
+
+        Returns a list of factors (not a single product) to keep sizes bounded
+        by bw_ecl. This mirrors get_backward_message(..., return_factor_list=True)
+        but works directly on a factor list without needing a full GM copy.
+
+        Args:
+            factors: List of FastFactor objects to eliminate
+            target_scope: List of variable labels to keep (not eliminate)
+            bucket_var: The Var object for the bucket (used for logging)
+
+        Returns:
+            List of FastFactor objects over target_scope variables
+        """
+        import copy as copy_module
+
+        # Separate scalar factors from non-scalar
+        scalar_factors = [f for f in factors if not f.labels]
+        non_scalar_factors = [f for f in factors if f.labels]
+
+        # Accumulate scalar constants
+        scalar_constant = torch.tensor(0.0, device=self.device, requires_grad=False)
+        for sf in scalar_factors:
+            scalar_constant = scalar_constant + sf.tensor.squeeze()
+
+        if not non_scalar_factors:
+            if scalar_constant != 0.0:
+                return [FastFactor(scalar_constant, [])]
+            return []
+
+        # Check if any variables actually need to be eliminated
+        all_vars = set()
+        for f in non_scalar_factors:
+            all_vars.update(f.labels)
+        vars_to_eliminate = all_vars - set(target_scope)
+
+        if not vars_to_eliminate:
+            # Nothing to eliminate — just return factors as-is (plus scalar)
+            result = list(non_scalar_factors)
+            if scalar_constant != 0.0:
+                result[0] = FastFactor(result[0].tensor + scalar_constant, result[0].labels)
+            return result
+
+        # Compute elimination order for the variables we need to remove
+        elim_order = wtminfill_order(non_scalar_factors, variables_not_eliminated=target_scope)
+
+        # Build a temporary GM for elimination
+        bw_ecl = self.config.get('bw_ecl', 0)
+        downstream_config = dict(self.config)
+        downstream_config['populate_bw_factors'] = False
+        downstream_config['approximation_method'] = 'wmb'
+        downstream_config['ecl'] = bw_ecl
+        # Don't re-merge in the temporary GM
+        downstream_config['use_join_tree_merge'] = False
+        downstream_config['merge_degree'] = 0
+
+        # Compute effective iB from ecl
+        effective_iB = int(math.log2(bw_ecl)) if bw_ecl > 0 else 0
+        downstream_config['iB'] = effective_iB
+
+        downstream_gm = FastGM(
+            factors=non_scalar_factors,
+            elim_order=elim_order,
+            reference_fastgm=self,
+            device=self.device,
+            nn_config=downstream_config,
+            stats=self.stats
+        )
+        downstream_gm.is_primary = False
+
+        # Eliminate all variables except target scope
+        downstream_gm.eliminate_variables(all_but=target_scope)
+
+        # Collect remaining factors
+        result_factors = downstream_gm.get_all_factors()
+
+        if not result_factors:
+            if scalar_constant != 0.0:
+                return [FastFactor(scalar_constant, [])]
+            return []
+
+        # Add scalar constant to first factor
+        if scalar_constant != 0.0:
+            first = result_factors[0]
+            result_factors[0] = FastFactor(first.tensor + scalar_constant, first.labels)
+
+        return result_factors
 
     def populate_backward_factors_wmb(self):
         """
@@ -1373,20 +1967,54 @@ class FastGM:
         scheme_info = copied_gm.get_senders_receivers()
         scheme = {info['var']: info['sends_to'] for info in scheme_info}
 
+        # Optional optimization: skip the per-bucket WMB-eliminate step for
+        # buckets that won't use NN approximation in forward elim (i.e.,
+        # bucket_ec <= self.ecl ⇒ exact message in forward, no proposal sampling).
+        # Non-NN buckets don't read approximate_*_factors, so we can leave them
+        # as None and save the O(N) WMB-eliminate work per non-NN bucket.
+        skip_non_nn = self.config.get('populate_bw_skip_non_nn', False)
+        n_skipped = 0
+
         # Process buckets in elimination order
+        n_total = len(self.elim_order)
         for i, current_var in enumerate(self.elim_order):
+            if i % 50 == 0 or i == n_total - 1:
+                print(f"  populate_bw_factors: bucket {i+1}/{n_total} (var={current_var.label})", flush=True)
             # Get corresponding buckets from original and copied GMs
             orig_bucket = self.get_bucket(current_var)
             copy_bucket = copied_gm.get_bucket(current_var)
 
-            # Gather all downstream factors from copied GM and store in original GM
-            downstream_factors = []
-            for j in range(i+1, len(self.elim_order)):
-                downstream_bucket = copied_gm.get_bucket(self.elim_order[j])
-                for factor in downstream_bucket.factors:
-                    downstream_factors.append(factor.to_exact() if hasattr(factor, 'to_exact') else factor)
+            # NN-eligibility check (forward gate): if bucket_ec > self.ecl in original
+            # forward, this bucket will be NN-approximated and may use bw factors via
+            # proposal sampling. Else it will be exact and ignores bw factors.
+            # copy_bucket.get_ec() reflects scope (var domain product) which is
+            # invariant to WMB partitioning, so it's a valid proxy for forward bucket_ec.
+            is_nn_eligible = (not skip_non_nn) or (copy_bucket.get_ec() > self.ecl)
 
-            orig_bucket.approximate_downstream_factors = downstream_factors
+            if is_nn_eligible:
+                # Gather all downstream factors from copied GM and WMB-eliminate them
+                # down to the bucket scope (elim var + message scope).
+                # This keeps factor sizes bounded by bw_ecl.
+                downstream_factors_raw = []
+                for j in range(i+1, len(self.elim_order)):
+                    downstream_bucket = copied_gm.get_bucket(self.elim_order[j])
+                    for factor in downstream_bucket.factors:
+                        downstream_factors_raw.append(factor.to_exact() if hasattr(factor, 'to_exact') else factor)
+
+                bucket_scope = orig_bucket.get_message_scope() + [current_var.label]
+                orig_bucket.approximate_downstream_factors = self._wmb_eliminate_to_scope(
+                    downstream_factors_raw, bucket_scope, current_var)
+
+                # Save the forward factors: original factors + upstream WMB messages
+                upstream_factors = []
+                for factor in copy_bucket.factors:
+                    upstream_factors.append(factor.to_exact() if hasattr(factor, 'to_exact') else factor)
+                orig_bucket.approximate_upstream_factors = upstream_factors
+            else:
+                # Skip — non-NN bucket won't use these.
+                orig_bucket.approximate_downstream_factors = None
+                orig_bucket.approximate_upstream_factors = None
+                n_skipped += 1
 
             # Separate factors into those with and without the elimination variable
             has_elim_var = [f for f in copy_bucket.factors if current_var in f.labels]
@@ -1431,7 +2059,147 @@ class FastGM:
                 next_bucket = copied_gm.get_bucket(next_var_label)
                 next_bucket.factors.extend(all_outgoing_factors)
 
+        if skip_non_nn:
+            print(f"  populate_bw skipped {n_skipped}/{n_total} non-NN buckets")
+
         # Print summary of forward partitions during backward factor population
+        if self.wmb_fw_partitions > 0:
+            print(f"  WMB forward partitions during backward factor population: {self.wmb_fw_partitions} (upper bound)")
+
+    def populate_backward_factors_via_tree_collect(self):
+        """Junction-tree backward distribute that just COLLECTS factor lists.
+
+        For each bucket X:
+            approximate_downstream_factors[X] = bw(parent) + parent.originals
+                                              + (forward msgs from parent's children except X)
+
+        Stored as a list of FastFactor — NOT eliminated. The lazy WMB-elim
+        happens later when a consumer (e.g. get_backward_message during NN
+        training) needs the actual bw message.
+
+        Cost: O(N) per-bucket bookkeeping. Per-NN-bucket elim cost amortized to
+        when the bucket actually trains (≈ N_NN × WMB-elim of ~depth*branching
+        small factors).
+
+        Each factor in approximate_downstream_factors is a Python reference to
+        a shared FastFactor object — sharing across buckets means memory cost
+        is O(distinct factors) not O(N × bucket_factors).
+        """
+        copied_gm = self._create_population_copy()
+        scheme_info = copied_gm.get_senders_receivers()
+        parent_of = {info['var'].label: info['sends_to'] for info in scheme_info}
+        children_of = {label: [] for label in parent_of}
+        roots = []
+        for child, par in parent_of.items():
+            if par is None:
+                roots.append(child)
+            else:
+                children_of[par].append(child)
+
+        bw_ecl = self.config.get('bw_ecl', 0)
+        n_total = len(self.elim_order)
+
+        # ---- Forward sweep: WMB-elim each bucket, store outgoing msgs and originals ----
+        parent_originals = {}     # var_label -> list of FastFactor (= bucket's true originals,
+                                   # i.e. factors that did NOT come from any child msg)
+        forward_msgs = {}          # var_label -> list of FastFactor (bucket's outgoing msg)
+
+        for i, current_var in enumerate(self.elim_order):
+            if i % 100 == 0 or i == n_total - 1:
+                print(f"  fwd: bucket {i+1}/{n_total} (var={current_var.label})", flush=True)
+
+            # If this var was absorbed into a merged cluster, self has no
+            # bucket for it. The copied_gm still has the original tree.
+            # Skip setting upstream on self for this var; cluster's surviving
+            # bucket already has correct upstream from its own slot.
+            orig_bucket = self.buckets.get(current_var)
+            copy_bucket = copied_gm.get_bucket(current_var)
+
+            # Identify originals at this bucket: factors NOT in any child's outgoing msg
+            child_msg_ids = set()
+            for c_label in children_of.get(current_var.label, []):
+                for f in forward_msgs.get(c_label, []):
+                    child_msg_ids.add(id(f))
+            parent_originals[current_var.label] = [
+                f for f in copy_bucket.factors if id(f) not in child_msg_ids
+            ]
+
+            # Snapshot upstream (full joint at forward) for orig_bucket
+            if orig_bucket is not None:
+                orig_bucket.approximate_upstream_factors = list(copy_bucket.factors)
+
+            # WMB-elim the elim var → outgoing msg
+            has_elim_var = [f for f in copy_bucket.factors if current_var in f.labels]
+            no_elim_var = [f for f in copy_bucket.factors if current_var not in f.labels]
+            copy_bucket.factors = has_elim_var
+
+            if has_elim_var:
+                bucket_ec = copy_bucket.get_ec()
+                if bucket_ec > bw_ecl:
+                    msgs = copy_bucket.compute_wmb_message(ecl=bw_ecl)
+                    self.wmb_fw_partitions += copy_bucket.wmb_stats.get('fw_partitions', 0)
+                else:
+                    try:
+                        msgs = [copy_bucket.compute_message_exact()]
+                    except Exception:
+                        msgs = copy_bucket.compute_wmb_message(ecl=bw_ecl)
+            else:
+                msgs = []
+
+            outgoing = msgs + no_elim_var
+            forward_msgs[current_var.label] = outgoing
+
+            parent_label = parent_of.get(current_var.label)
+            if parent_label is not None and outgoing:
+                copied_gm.get_bucket(parent_label).factors.extend(outgoing)
+
+        # ---- Backward distribute (BFS from root) — collect factor lists, no elim ----
+        # Maintain an internal bw-chain dict keyed by var label, populated for
+        # every var in the tree (even those whose self-bucket was absorbed by
+        # a join-tree merge). Surviving buckets get the chain copied onto
+        # their approximate_downstream_factors; absorbed vars don't need it
+        # on a bucket (they live inside a cluster) but the chain must still
+        # flow through them to their descendants.
+        internal_bw = {}
+        for r in roots:
+            internal_bw[r] = []
+            r_var = self.matching_var(r)
+            if r_var in self.buckets:
+                self.buckets[r_var].approximate_downstream_factors = []
+
+        visited = set(roots)
+        queue = list(roots)
+        bw_processed = 0
+
+        while queue:
+            next_queue = []
+            for parent_label in queue:
+                parent_bw = internal_bw.get(parent_label, [])
+                p_originals = parent_originals.get(parent_label, [])
+
+                for child_label in children_of.get(parent_label, []):
+                    if child_label in visited:
+                        continue
+                    visited.add(child_label)
+
+                    sibling_msgs = []
+                    for c in children_of.get(parent_label, []):
+                        if c != child_label:
+                            sibling_msgs.extend(forward_msgs.get(c, []))
+
+                    child_bw_chain = parent_bw + p_originals + sibling_msgs
+                    internal_bw[child_label] = child_bw_chain
+
+                    child_var = self.matching_var(child_label)
+                    child_orig_bucket = self.buckets.get(child_var)
+                    if child_orig_bucket is not None:
+                        child_orig_bucket.approximate_downstream_factors = child_bw_chain
+
+                    next_queue.append(child_label)
+                    bw_processed += 1
+            queue = next_queue
+
+        print(f"  bwd distribute: {bw_processed}/{n_total} buckets processed (factor lists stored, lazy elim)", flush=True)
         if self.wmb_fw_partitions > 0:
             print(f"  WMB forward partitions during backward factor population: {self.wmb_fw_partitions} (upper bound)")
 
