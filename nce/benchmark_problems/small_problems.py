@@ -41,6 +41,7 @@ _MODELS = [
     ('objdetect/deer_rescaled_0034.K15.F1.5.model', 10),
     ('objdetect/deer_rescaled_0294.K10.F1.75.model', 10),
     ('grids/grid10x10.f5.wrap', 10),
+    ('grids/grid20x20.f15', 10),
     # iB15-only problems
     ('bn/BN_2', 15),
     ('bn/BN_8', 15),
@@ -77,6 +78,7 @@ _AUTO_ECL = {
     'deer_rescaled_0034.K15.F1.5.model.uai': 1048575,
     'deer_rescaled_0294.K10.F1.75.model.uai': 1771560,
     'grid10x10.f5.wrap.uai': 1048575,
+    'grid20x20.f15.uai': 1024,
     'deer_rescaled_0034.K10.F2.model.uai': 19487170,
     'deer_rescaled_0034.K15.F1.75.model.uai': 16777215,
     'deer_rescaled_0034.K20.F1.25.model.uai': 4084100,

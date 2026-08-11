@@ -26,7 +26,8 @@ class DataPreprocessor:
         use_bw_approx: If True, use bw-aware normalization
     """
     def __init__(self, y: torch.Tensor = None, bw: torch.Tensor = None, lower_dim: bool = True,
-                 device=None, use_bw_approx: bool = False, normalization_mode: str = 'logspace_mean') -> None:
+                 device=None, use_bw_approx: bool = False, normalization_mode: str = 'logspace_mean',
+                 dtype=None) -> None:
         self.y = y
         self.bw = bw
         if device is None:
@@ -36,6 +37,7 @@ class DataPreprocessor:
         self.lower_dim = lower_dim
         self.use_bw_approx = use_bw_approx
         self.normalization_mode = normalization_mode
+        self.dtype = dtype or torch.float32
 
         # Normalizing constant (in natural log space) - computed lazily
         self.normalizing_constant = None
@@ -87,11 +89,17 @@ class DataPreprocessor:
         y_ln = y_vals * ln10
 
         if self.normalization_mode == 'minmax_01':
-            self.ln_min = y_ln.min().item()
-            self.ln_max = y_ln.max().item()
+            # Finite-aware: with masked_net + doping off, true-zero targets are
+            # -inf and must be ignored when fitting the [0,1] range. No-op when
+            # all targets are finite (the usual doped/no-zeros case).
+            finite_ln = y_ln[torch.isfinite(y_ln)]
+            if finite_ln.numel() == 0:
+                finite_ln = y_ln
+            self.ln_min = finite_ln.min().item()
+            self.ln_max = finite_ln.max().item()
             self.ln_range = max(self.ln_max - self.ln_min, 1e-10)
             # sum_ln = sum(y_ln_i - ln_min) for IS weights in loss function
-            self.sum_ln = (y_ln - self.ln_min).sum().item()
+            self.sum_ln = (finite_ln - self.ln_min).sum().item()
             if self.ln_max == self.ln_min:
                 print(f"[DataPreprocessor minmax_01] WARNING: all targets identical (ln_max == ln_min), using epsilon guard")
             print(f"[DataPreprocessor minmax_01] ln_min={self.ln_min:.4f}, ln_max={self.ln_max:.4f}, sum_ln={self.sum_ln:.4f}")
@@ -227,5 +235,5 @@ class DataPreprocessor:
             one_hot_encoded_samples = torch.cat(
                 [F.one_hot(assignments[:, i], num_classes=domain_sizes[i])
                  for i in range(num_vars)], dim=-1)
-        return one_hot_encoded_samples.float().to(self.device)
+        return one_hot_encoded_samples.to(dtype=self.dtype, device=self.device)
 

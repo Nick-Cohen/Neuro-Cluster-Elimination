@@ -1,5 +1,6 @@
 import torch
 import math
+import os
 import numpy as np
 from typing import List, Tuple
 from nce.inference.graphical_model import FastGM
@@ -7,6 +8,41 @@ from nce.inference.bucket import FastBucket
 from nce.inference.factor import FastFactor
 from nce.inference.message_gradient_factors import get_wmb_message_gradient_factors
 import copy
+
+# Streaming sample-gen block knobs. Bigger blocks -> fewer kernel launches ->
+# the launch-bound large-cluster path spends less time idle waiting on Python
+# dispatch (see notebooks/.../reduce_nn_experiment/SPEEDUP_LARGER_BATCHES.md).
+# Defaults reproduce the historical behavior exactly; override via env to trade
+# GPU memory for speed (e.g. NCE_SAMPLE_BLOCK_LOG2=28 NCE_SAMPLE_ACHUNK=4096).
+_SG_BLOCK_LOG2 = int(os.environ.get("NCE_SAMPLE_BLOCK_LOG2", "23"))   # large-path block budget UPPER cap = 2**this elems
+_SG_ACHUNK     = int(os.environ.get("NCE_SAMPLE_ACHUNK", "512"))      # large-path assignment rows per chunk (cap)
+_SG_SMALL_LOG2 = int(os.environ.get("NCE_SAMPLE_SMALL_LOG2", "22"))   # dense small-path block budget
+_SG_MEM_FRAC   = float(os.environ.get("NCE_SAMPLE_MEM_FRAC", "0.25")) # frac of FREE gpu mem a streamed block may use
+
+
+def _dyn_streaming_budget(dev, factors, cap_log2):
+    """Number of rows (a_chunk * e_chunk) a streamed block may hold, sized from
+    FREE gpu memory and the WIDEST NN factor's per-row footprint. The dominant
+    transient is FactorNN._eval_elim_block's (rows x n_labels) int64 coord cube +
+    the one-hot expansion. Floors at 2**12, capped at 2**cap_log2 (env). Falls
+    back to a 2 GB budget off-cuda."""
+    worst = 1
+    for f in factors:
+        if not getattr(f, 'is_nn', False):
+            continue
+        nlab = len(f.labels)
+        try:
+            onehot = int(sum(int(d) for d in f.domain_sizes))
+        except Exception:
+            onehot = 2 * nlab
+        worst = max(worst, nlab * 8 + onehot * 4 + 4)   # coord cube + one_hot + accum
+    try:
+        free, _ = torch.cuda.mem_get_info(dev)
+    except Exception:
+        free = 2 * 1024 ** 3
+    SLACK = 4                                            # net activations + transient copies
+    budget = int(_SG_MEM_FRAC * free / max(1, worst * SLACK))
+    return max(2 ** 12, min(budget, 2 ** cap_log2))
 
 class SampleGenerator:
     def __init__(self, gm: FastGM, bucket: FastBucket, random_seed=None):
@@ -131,10 +167,11 @@ class SampleGenerator:
         samples = []
         for domain_size in self.domain_sizes:
             column_samples = torch.randint(
-                low=0, 
-                high=domain_size.item(), 
-                size=(num_samples,), 
-                dtype=torch.long
+                low=0,
+                high=domain_size.item(),
+                size=(num_samples,),
+                dtype=torch.long,
+                device=self.gm.device,   # keep assignments on-device (sample gen is otherwise CPU-bound)
             )
             samples.append(column_samples)
         return torch.stack(samples, dim=1)
@@ -143,6 +180,9 @@ class SampleGenerator:
         scope = set()
         for factor in self.bucket.factors:
             scope = scope.union(factor.labels)
+        # Discard ALL elim_vars (super-bucket may eliminate multiple variables).
+        for ev in self.bucket.elim_vars:
+            scope.discard(getattr(ev, 'label', ev))
         scope.discard(self.bucket.label)
         scope = sorted(list(scope))
         if len(scope) == 0:
@@ -184,14 +224,69 @@ class SampleGenerator:
     def sample_tensor_product_elimination(self, factors, assignments) -> torch.Tensor:
         for factor in factors:
             factor.order_indices()
-        unsummed_shape = (*self.elim_domain_sizes,)
-        unsummed_values = torch.zeros((len(assignments),) + unsummed_shape, device=self.gm.device, requires_grad=False)
-        for fast_factor in factors:
-            # If this is a FactorNN with bw_inv, convert to exact first to apply inverse transformation
-            if hasattr(fast_factor, 'is_nn') and fast_factor.is_nn and hasattr(fast_factor, 'bw_inv') and fast_factor.bw_inv:
-                fast_factor = fast_factor.to_exact()
-            unsummed_values += fast_factor._get_slices(assignments=assignments, elim_vars=self.elim_vars, elim_domain_sizes = self.elim_domain_sizes, message_scope=self.message_scope)
-        return torch.logsumexp(unsummed_values * math.log(10), dim=tuple(range(1, unsummed_values.dim()))) / math.log(10)
+        elim_doms = [int(d) for d in self.elim_domain_sizes]
+        elim_prod = 1
+        for d in elim_doms:
+            elim_prod *= d
+        n = len(assignments)
+        ln10 = math.log(10)
+        dev = self.gm.device
+
+        # Resolve FactorNN-with-bw_inv to exact once.
+        fx = []
+        for f in factors:
+            if hasattr(f, 'is_nn') and f.is_nn and hasattr(f, 'bw_inv') and f.bw_inv:
+                f = f.to_exact()
+            fx.append(f)
+
+        # --- small clusters: build the full (chunk x 2^#elim) and reduce (fast) ---
+        if elim_prod <= 2 ** 18:
+            unsummed_shape = tuple(elim_doms)
+            a_chunk = max(1, (2 ** _SG_SMALL_LOG2) // max(1, elim_prod))
+            outs = []
+            for start in range(0, n, a_chunk):
+                ca = assignments[start:start + a_chunk]
+                uv = torch.zeros((len(ca),) + unsummed_shape, device=dev, requires_grad=False)
+                for f in fx:
+                    uv += f._get_slices(assignments=ca, elim_vars=self.elim_vars,
+                                        elim_domain_sizes=self.elim_domain_sizes,
+                                        message_scope=self.message_scope)
+                outs.append(torch.logsumexp(uv * ln10, dim=tuple(range(1, uv.dim()))) / ln10)
+            return torch.cat(outs, dim=0)
+
+        # --- large clusters (2^#elim too big to materialize): stream over elim
+        # blocks with an online log-sum-exp, so peak memory ~ a_chunk * e_chunk.
+        elim_labels = [v.label for v in self.elim_vars]
+        strides = [1] * len(elim_doms)
+        acc = 1
+        for i in range(len(elim_doms) - 1, -1, -1):
+            strides[i] = acc
+            acc *= elim_doms[i]
+        strides_t = torch.tensor(strides, device=dev)
+        doms_t = torch.tensor(elim_doms, device=dev)
+
+        # Size the streamed block from FREE gpu memory (and the widest factor),
+        # so wide / multi-valued NN factors never blow up the per-eval coord cube.
+        budget = _dyn_streaming_budget(dev, fx, _SG_BLOCK_LOG2)
+        a_chunk = max(1, min(_SG_ACHUNK, budget, n))
+        e_chunk = max(1, min(budget // a_chunk, elim_prod))
+        outs = []
+        for start in range(0, n, a_chunk):
+            ca = assignments[start:start + a_chunk]
+            A = len(ca)
+            acc_lse = torch.full((A,), float('-inf'), device=dev)
+            for e0 in range(0, elim_prod, e_chunk):
+                e1 = min(elim_prod, e0 + e_chunk)
+                flat = torch.arange(e0, e1, device=dev)
+                coords = (flat.unsqueeze(1) // strides_t) % doms_t   # (B, n_elim_vars)
+                block = torch.zeros((A, e1 - e0), device=dev)
+                for f in fx:
+                    block += f._eval_elim_block(ca, coords, self.elim_vars,
+                                                elim_labels, self.message_scope)
+                blk = torch.logsumexp(block * ln10, dim=1) / ln10     # (A,)
+                acc_lse = torch.logaddexp(acc_lse * ln10, blk * ln10) / ln10
+            outs.append(acc_lse)
+        return torch.cat(outs, dim=0)
 
     def sample_tensor_product(self, factors, assignments) -> torch.Tensor:
         # Check for edge cases

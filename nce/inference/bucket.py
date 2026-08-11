@@ -3,6 +3,8 @@ from .factor_nn import FactorNN
 from nce.training_logger import log_bucket_training_start, log_bucket_training_end
 from typing import List
 import numpy as np
+import math
+import os
 import torch
 
 class FastBucket:
@@ -19,6 +21,7 @@ class FastBucket:
         self.elim_vars = elim_vars
         self.isRoot = isRoot
         self.approximate_downstream_factors: List[FastFactor] = None
+        self.approximate_upstream_factors: List[FastFactor] = None
         self.sigma_f, self.sigma_g, self.rho = None, None, None
         self.numel = -1
 
@@ -39,7 +42,19 @@ class FastBucket:
         if not self.factors:
             # Empty bucket: return scalar 0 (contributes nothing when multiplied)
             return FastFactor(torch.tensor(0.0, device=self.device, requires_grad=False), [])
-        
+
+        # Size gate: if the full joint over the bucket scope would be too large to
+        # materialize as one tensor (merged super-buckets at high i-bound), compute
+        # the exact message by streaming over blocks of the output variables instead
+        # (same result, bounded memory). The fast path below is unchanged otherwise.
+        elim_labels = [getattr(v, 'label', v) for v in self.elim_vars]
+        scope = sorted(set().union(*[set(f.labels) for f in self.factors]))
+        joint_numel = 1
+        for lbl in scope:
+            joint_numel *= int(self.gm.matching_var(lbl).states)
+        if joint_numel > FastBucket._EXACT_JOINT_NUMEL_LIMIT:
+            return self._compute_message_exact_chunked(scope, elim_labels)
+
         if self.factors[0].is_nn:
             message = self.factors[0].to_exact()
             assert message.tensor is not None
@@ -63,7 +78,156 @@ class FastBucket:
         assert not (message.tensor is None and len(message.labels) > 0), f"{self.label}"
         self.gm.bucket_complexities.append((self.label, width, self.numel, message.tensor.std().item()))
         return message
-    
+
+    # Joint-tensor entry count above which compute_message_exact streams over
+    # output-variable blocks instead of materializing the full product. 2**28
+    # entries ~ 1 GiB in float32; the *log(10) copy + logsumexp temporaries
+    # multiply that, so this keeps peak memory bounded well under GPU capacity.
+    _EXACT_JOINT_NUMEL_LIMIT = 2 ** 28
+
+    def _compute_message_exact_chunked(self, scope, elim_labels, block_limit=2 ** 26):
+        """Memory-bounded exact message.
+
+        Streams over blocks of the output (message) variables so the full
+        2^scope joint product is never materialized. For each block we fix a few
+        output variables, slice every factor to those values, multiply the
+        (now small) factors and eliminate -- producing one slice of the message.
+        Result is identical to the unchunked product+eliminate path.
+        """
+        import itertools
+        # When stream_nn_exact is set, keep NN factors as NNs and evaluate them
+        # per output-slice over only their free variables (bounded by block_limit),
+        # instead of densifying the full 2^scope grid up front -- which OOMs for
+        # wide merged clusters (2^32 = 16 GiB). Result is identical.
+        stream = self.config.get('stream_nn_exact', False)
+        if stream:
+            factors = self.factors
+            device = self.device
+        else:
+            factors = [f.to_exact() if f.is_nn else f for f in self.factors]
+            device = factors[0].tensor.device
+        dom = {lbl: int(self.gm.matching_var(lbl).states) for lbl in scope}
+        out_labels = [lbl for lbl in scope if lbl not in elim_labels]
+
+        # Fix the fewest (largest-domain) output vars per block so the remaining
+        # joint <= block_limit. elim count is bounded by the merge cap, so the
+        # remaining joint always shrinks below the limit.
+        remaining = 1
+        for lbl in scope:
+            remaining *= dom[lbl]
+        batch_labels = []
+        for lbl in sorted(out_labels, key=lambda x: -dom[x]):
+            if remaining <= block_limit:
+                break
+            batch_labels.append(lbl)
+            remaining //= dom[lbl]
+
+        # Near-root clusters can eliminate (nearly) their whole scope: output vars
+        # alone cannot bound the block. Batch over elimination vars too; blocks are
+        # then combined by log-sum-exp accumulation instead of slice assignment.
+        batch_elim = []
+        for lbl in sorted(elim_labels, key=lambda x: -dom[x]):
+            if remaining <= block_limit:
+                break
+            batch_elim.append(lbl)
+            remaining //= dom[lbl]
+
+        non_batch_out = [lbl for lbl in out_labels if lbl not in batch_labels]
+        if batch_elim:
+            result = torch.full([dom[lbl] for lbl in out_labels] or [1], float('-inf'), device=device)
+        else:
+            result = torch.empty([dom[lbl] for lbl in out_labels] or [1], device=device)
+
+        for combo in itertools.product(*[range(dom[lbl]) for lbl in (batch_labels + batch_elim)]):
+            fix = dict(zip(batch_labels + batch_elim, combo))
+            sliced = []
+            for f in factors:
+                if stream and getattr(f, 'is_nn', False):
+                    sliced.append(self._nn_factor_slice(f, fix))
+                    continue
+                t = f.tensor
+                labs = list(f.labels)
+                for bl, bv in fix.items():
+                    if bl in labs:
+                        d = labs.index(bl)
+                        t = t.select(d, bv)
+                        labs = labs[:d] + labs[d + 1:]
+                sliced.append(FastFactor(t, labs))
+            if os.environ.get('NCE_CHUNK_DEBUG'):
+                import functools, operator
+                union = sorted(set().union(*[set(f2.labels) for f2 in sliced]))
+                usz = functools.reduce(operator.mul, [dom[l] for l in union], 1)
+                if usz > block_limit * 4:
+                    print(f"[ChunkDebug] bucket={self.label} union={len(union)} vars, {usz:.3e} entries; "
+                          f"batch_labels={batch_labels} remaining={remaining}", flush=True)
+                    for f2 in sliced:
+                        if f2.tensor is not None and f2.tensor.numel() > 2**24:
+                            print(f"  big sliced factor: labels={list(f2.labels)} shape={list(f2.tensor.shape)}", flush=True)
+                    raise RuntimeError('ChunkDebug: oversized block union')
+            m = sliced[0]
+            for f in sliced[1:]:
+                m = m * f
+            elim_present = [v for v in self.elim_vars
+                            if getattr(v, 'label', v) in m.labels]
+            if elim_present:
+                m = m.eliminate(elim_present)
+            # Place this block's message slice into the result.
+            if non_batch_out:
+                mt = m.tensor.permute([m.labels.index(lbl) for lbl in non_batch_out])
+            else:
+                mt = m.tensor.reshape([1] if not out_labels else [])
+            idx = [slice(None)] * max(len(out_labels), 0)
+            for bl, bv in fix.items():
+                if bl in out_labels:
+                    idx[out_labels.index(bl)] = bv
+            idx = tuple(idx) if idx else (slice(None),)
+            if batch_elim:
+                # log10-space accumulation: result = log10(10^result + 10^mt)
+                ln10 = math.log(10.0)
+                result[idx] = torch.logaddexp(result[idx] * ln10, mt * ln10) / ln10
+            else:
+                result[idx] = mt
+
+        return FastFactor(result, out_labels)
+
+    def _nn_factor_slice(self, f, fix):
+        """Evaluate an NN factor over its FREE variables (those not pinned by
+        `fix`), returning a dense FastFactor -- without materializing the full
+        2^scope grid. The free grid is bounded by block_limit (set by the caller's
+        batch selection); we still chunk it internally so the (B x n_labels) cube
+        inside _eval_elim_block stays small. Identical result to slicing
+        f.to_exact(), but with bounded peak memory."""
+        dev = f.net.device
+        fixed = [l for l in f.labels if l in fix]          # message_scope (pinned)
+        free = [l for l in f.labels if l not in fix]       # gridded
+        free_doms = [int(self.gm.matching_var(l).states) for l in free]
+        Bfull = 1
+        for d in free_doms:
+            Bfull *= d
+        assignments = torch.tensor([[fix[l] for l in fixed]],
+                                   dtype=torch.int64, device=dev)   # (1, len(fixed))
+        out = torch.empty(Bfull, device=dev)
+        nlab = max(1, len(f.labels))
+        chunk = max(1, (2 ** 20) // nlab)                  # cap the int64 coord cube
+        strides = [1] * len(free)
+        acc = 1
+        for i in range(len(free) - 1, -1, -1):
+            strides[i] = acc
+            acc *= free_doms[i]
+        strides_t = torch.tensor(strides, device=dev) if free else None
+        doms_t = torch.tensor(free_doms, device=dev) if free else None
+        for b0 in range(0, Bfull, chunk):
+            b1 = min(Bfull, b0 + chunk)
+            flat = torch.arange(b0, b1, device=dev)
+            if free:
+                coords = (flat.unsqueeze(1) // strides_t) % doms_t      # (b, len(free))
+            else:
+                coords = flat.unsqueeze(1)[:, :0]                       # (1, 0)
+            vals = f._eval_elim_block(assignments, coords, free, free, fixed)  # (1, b)
+            out[b0:b1] = vals.reshape(-1)
+        tensor = out.reshape(*free_doms) if free else out.reshape(())
+        return FastFactor(tensor, list(free))
+
     def compute_message_nn(self, loss_fn='None', loss_fn2=None):
         """
         Enhanced compute_message_nn with memorizer and linear solver options.
@@ -98,16 +262,18 @@ class FastBucket:
         if use_memorizer:
             print(f"Bucket {self.label}: Using Memorizer (lookup table)")
 
-            # Handle "nbe,<epsilon>" string format for num_samples
+            # Handle "nbe,<epsilon>[,<n_min>]" string format for num_samples
             num_samples_cfg = self.config.get('num_samples')
             if isinstance(num_samples_cfg, str) and num_samples_cfg.startswith('nbe'):
-                if ',' in num_samples_cfg:
-                    epsilon = float(num_samples_cfg.split(',')[1])
-                else:
-                    epsilon = 0.25  # default from NeuroBE Config.h
+                parts = num_samples_cfg.split(',')
+                epsilon = float(parts[1]) if len(parts) > 1 else 0.25
+                n_min = int(parts[2]) if len(parts) > 2 else 0
                 nbe_result = self.get_nbe_num_samples(epsilon)
+                if nbe_result['total'] < n_min:
+                    n_train = int(n_min * 0.8)
+                    nbe_result = {'total': n_min, 'n_train': n_train, 'n_val': n_min - n_train}
                 self.config['num_samples'] = nbe_result['total']
-                print(f"Bucket {self.label}: NBE num_samples (eps={epsilon}): total={nbe_result['total']}, train={nbe_result['n_train']}, val={nbe_result['n_val']}")
+                print(f"Bucket {self.label}: NBE num_samples (eps={epsilon}, n_min={n_min}): total={nbe_result['total']}, train={nbe_result['n_train']}, val={nbe_result['n_val']}")
 
             # Create a dummy net for initialization (needed for Trainer/dataloader)
             net = Net(self, hidden_sizes=[])
@@ -115,7 +281,19 @@ class FastBucket:
 
             # Generate validation set first (for normalization and plotting)
             nbe_val_size = max(1, self.config['num_samples'] // 9)
-            t.nbe_val_set = t._generate_validation_set_nbe(nbe_val_size)
+            if self.config.get('time_sample_gen', False):
+                import time as _time
+                _g0 = _time.time()
+                t.nbe_val_set = t._generate_validation_set_nbe(nbe_val_size)
+                _gt = _time.time() - _g0
+                _scope = self.get_message_scope()
+                _states = [v.states for v in self.gm.vars if v.label in set(_scope)]
+                print(f"[GammaTiming] bucket={self.label} T_gen={_gt:.4f} "
+                      f"m={len(t.nbe_val_set[0]['x'])} r={len(self.factors)} "
+                      f"e={len(self.elim_vars)} k={max(_states) if _states else 2} "
+                      f"w_scope={len(_scope) + len(self.elim_vars)}", flush=True)
+            else:
+                t.nbe_val_set = t._generate_validation_set_nbe(nbe_val_size)
             print(f"Validation set generated for normalization: {len(t.nbe_val_set[0]['x'])} samples")
 
             # Handle use_bw_approx mode
@@ -228,16 +406,18 @@ class FastBucket:
                     h = b * math.ceil(math.log2(message_size)) if message_size > 1 else b
                     hidden_sizes = [h, h]
 
-            # Handle "nbe,<epsilon>" string format for num_samples
+            # Handle "nbe,<epsilon>[,<n_min>]" string format for num_samples
             num_samples_cfg = self.config.get('num_samples')
             if isinstance(num_samples_cfg, str) and num_samples_cfg.startswith('nbe'):
-                if ',' in num_samples_cfg:
-                    epsilon = float(num_samples_cfg.split(',')[1])
-                else:
-                    epsilon = 0.25  # default from NeuroBE Config.h
+                parts = num_samples_cfg.split(',')
+                epsilon = float(parts[1]) if len(parts) > 1 else 0.25
+                n_min = int(parts[2]) if len(parts) > 2 else 0
                 nbe_result = self.get_nbe_num_samples(epsilon)
+                if nbe_result['total'] < n_min:
+                    n_train = int(n_min * 0.8)
+                    nbe_result = {'total': n_min, 'n_train': n_train, 'n_val': n_min - n_train}
                 self.config['num_samples'] = nbe_result['total']
-                print(f"Bucket {self.label}: NBE num_samples (eps={epsilon}): total={nbe_result['total']}, train={nbe_result['n_train']}, val={nbe_result['n_val']}")
+                print(f"Bucket {self.label}: NBE num_samples (eps={epsilon}, n_min={n_min}): total={nbe_result['total']}, train={nbe_result['n_train']}, val={nbe_result['n_val']}")
 
             net = Net(self, hidden_sizes=hidden_sizes)
             t = Trainer(net=net, bucket=self, stats=self.stats)
@@ -277,52 +457,27 @@ class FastBucket:
                 )
 
                 if can_use_full_data_batch:
-                    # Full data batch mode: materialize full backward message tensor (complexity allows it)
-
-                    if use_precomputed:
-                        # pyGMs factors ARE the backward message - use directly without re-processing
-                        # Multiply factors together (sum in log space) to get single factor
-                        from nce.inference.factor import FastFactor
-                        print(f"Bucket {self.label}: Using pyGMs backward directly ({len(self.approximate_downstream_factors)} factors, materializing product)")
-
-                        # Multiply all pyGMs factors together
-                        bw_wmb = self.approximate_downstream_factors[0]
-                        for f in self.approximate_downstream_factors[1:]:
-                            bw_wmb = bw_wmb * f
-
-                        t.dataloader.bw_modifier = bw_wmb
-                    else:
-                        # No pre-computed factors - compute backward message on-the-fly
-                        bw_wmb, _ = get_backward_message(
-                            self.gm,
-                            self.label,
-                            backward_factors=None,
-                            iB=backward_iB,
-                            backward_ecl=backward_ecl,
-                            approximation_method='wmb',
-                            return_factor_list=False
-                        )
-                        t.dataloader.bw_modifier = bw_wmb
+                    bw_wmb, _ = get_backward_message(
+                        self.gm,
+                        self.label,
+                        backward_factors=backward_factors_arg,
+                        iB=backward_iB,
+                        backward_ecl=backward_ecl,
+                        approximation_method='wmb',
+                        return_factor_list=False
+                    )
+                    t.dataloader.bw_modifier = bw_wmb
                 else:
-                    # Batched mode: use factor list to avoid materializing full product
-
-                    if use_precomputed:
-                        # pyGMs factors ARE the backward message - use directly as factor list
-                        # sample_tensor_product will evaluate at each sample point
-                        print(f"Bucket {self.label}: Using pyGMs backward directly as factor list ({len(self.approximate_downstream_factors)} factors)")
-                        t.dataloader.bw_factors = self.approximate_downstream_factors
-                    else:
-                        # No pre-computed factors - compute backward message on-the-fly
-                        bw_factors, _ = get_backward_message(
-                            self.gm,
-                            self.label,
-                            backward_factors=None,
-                            iB=backward_iB,
-                            backward_ecl=backward_ecl,
-                            approximation_method='wmb',
-                            return_factor_list=True
-                        )
-                        t.dataloader.bw_factors = bw_factors
+                    bw_factors, _ = get_backward_message(
+                        self.gm,
+                        self.label,
+                        backward_factors=backward_factors_arg,
+                        iB=backward_iB,
+                        backward_ecl=backward_ecl,
+                        approximation_method='wmb',
+                        return_factor_list=True
+                    )
+                    t.dataloader.bw_factors = bw_factors
 
                 # Enable backward-aware normalization - the actual normalizing constant
                 # will be computed lazily on first load() call using the training samples
@@ -339,7 +494,11 @@ class FastBucket:
                     num_samples=self.config.get('num_samples'),
                 )
 
-            t.train()
+            if self.config.get('proposal_sampling', False):
+                from nce.benchmark.proposal_in_elim import train_bucket_with_proposal_sampling
+                train_bucket_with_proposal_sampling(self, self.gm, t, self.config)
+            else:
+                t.train()
             self.epochs_trained = t.losses[-1][0] + 1 if t.losses else 0
             self.trained_hidden_sizes = hidden_sizes
             if self.config.get('loss_fn2') is not None and self.config.get('num_epochs2') is not None:
@@ -382,6 +541,59 @@ class FastBucket:
 
             # Increment num_trained counter on FastGM
             self.gm.num_trained += 1
+
+            # --- Signed local-error tracking ---
+            # For this approximated cluster, measure the partition-function error it injects,
+            # given the (approximate) upstream context and the EXACT backward message:
+            #   signed_local_error = sum(approx_fw * exact_bw) - sum(exact_fw * exact_bw)
+            # Backward is made exact via WMB with a huge i-bound/ecl; OOM => "give up" for this cluster.
+            if self.config.get('compute_local_error', False):
+                import time as _time
+                from nce.utils.backward_message import get_backward_message
+                rec = {'bucket': self.label,
+                       'message_scope': list(self.get_message_scope()),
+                       'fw_width': len(self.get_message_scope())}
+                _t0 = _time.time()
+                try:
+                    exact_fw = self.compute_message_exact()
+                    # Merge-aware downstream (backward) factors: collect each surviving
+                    # downstream cluster's factors directly. Passing them explicitly makes
+                    # get_backward_message skip _get_backward_factors, which is NOT merge-aware
+                    # (it indexes gm.buckets per-variable -> KeyError on merged-away vars) and
+                    # would also mutate the live GM via eliminate_variables(up_to=...).
+                    self_var = self.gm.matching_var(self.label)
+                    didx = self.gm.elim_order.index(self_var)
+                    downstream_set = set(self.gm.elim_order[didx + 1:])
+                    bw_factors = []
+                    for key_var, dbucket in self.gm.buckets.items():
+                        if key_var in downstream_set:
+                            for f in dbucket.factors:
+                                bw_factors.append(f.to_exact())
+                    exact_bw, _ = get_backward_message(
+                        self.gm, self.label, backward_factors=bw_factors,
+                        iB=100, backward_ecl=2**30,
+                        approximation_method='wmb', return_factor_list=False)
+                    approx_fw = nn_message_factor.to_exact()
+                    exact_contrib = float((exact_fw * exact_bw).sum_all_entries())
+                    approx_contrib = float((approx_fw * exact_bw).sum_all_entries())
+                    rec.update({
+                        'signed_local_error': approx_contrib - exact_contrib,
+                        'exact_contribution': exact_contrib,
+                        'approx_contribution': approx_contrib,
+                        'bw_width': len(exact_bw.labels),
+                        'seconds': _time.time() - _t0,
+                    })
+                    print(f"[LocalError] bucket {self.label}: signed={rec['signed_local_error']:.6g} "
+                          f"(fw_w={rec['fw_width']} bw_w={rec['bw_width']} {rec['seconds']:.1f}s)")
+                except Exception as e:
+                    import torch as _torch
+                    if _torch.cuda.is_available():
+                        _torch.cuda.empty_cache()
+                    rec.update({'signed_local_error': None,
+                                'error': f"{type(e).__name__}: {e}",
+                                'seconds': _time.time() - _t0})
+                    print(f"[LocalError] bucket {self.label}: GAVE UP ({rec['error']})")
+                self.gm.local_errors.append(rec)
 
         # Plot comparison if enabled
         if plot_messages:
@@ -846,8 +1058,15 @@ class FastBucket:
                 combined_factor = FastFactor(combined_factor.tensor.clone(), list(combined_factor.labels))
                 # apply weights inside
                 combined_factor.tensor *= n
+                # Only eliminate vars actually present in this mini-bucket's
+                # combined factor (super-bucket clusters may have elim_vars
+                # that don't appear in every mini-bucket).
+                mb_elim_vars = [v for v in self.elim_vars if v in combined_factor.labels]
                 # do the LSE
-                eliminated_factor = combined_factor.eliminate(self.elim_vars)
+                if mb_elim_vars:
+                    eliminated_factor = combined_factor.eliminate(mb_elim_vars)
+                else:
+                    eliminated_factor = combined_factor
                 # apply weights outside
                 eliminated_factor.tensor *= (1/n)
                 wmb_factors.append(eliminated_factor)
@@ -856,7 +1075,11 @@ class FastBucket:
                 combined_factor = mb[0]
                 for factor in mb[1:]:
                     combined_factor *= factor
-                eliminated_factor = combined_factor.eliminate(self.elim_vars)
+                mb_elim_vars = [v for v in self.elim_vars if v in combined_factor.labels]
+                if mb_elim_vars:
+                    eliminated_factor = combined_factor.eliminate(mb_elim_vars)
+                else:
+                    eliminated_factor = combined_factor
                 wmb_factors.append(eliminated_factor)
 
         # Add factors that didn't have the elimination variable (pass through unchanged)
@@ -1124,6 +1347,9 @@ class FastBucket:
         scope = set()
         for factor in self.factors:
             scope = scope.union(factor.labels)
+        # Discard all elim_vars (super-bucket may eliminate multiple variables).
+        for ev in self.elim_vars:
+            scope.discard(getattr(ev, 'label', ev))
         scope.discard(self.label)
         return sorted(list(scope))
     

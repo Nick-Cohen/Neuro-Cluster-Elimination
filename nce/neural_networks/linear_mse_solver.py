@@ -271,9 +271,12 @@ class LinearMSEOptimalSolver:
         bias : torch.Tensor
             Optimal bias (0 if fit_intercept=False)
         """
-        # Convert to float and ensure proper shapes
-        X = X.float()
-        y = y.float().squeeze()
+        # Convert to float (preserve float64 if already float64)
+        if X.dtype not in (torch.float32, torch.float64):
+            X = X.float()
+        if y.dtype not in (torch.float32, torch.float64):
+            y = y.float()
+        y = y.squeeze()
         n_samples, n_features = X.shape
         
         if self.verbose:

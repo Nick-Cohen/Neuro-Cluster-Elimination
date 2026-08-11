@@ -69,17 +69,21 @@ def nce_factors_to_pygms(factors: List[FastFactor], num_vars: int) -> gm.GraphMo
     return model
 
 
-def pygms_factor_to_nce(pf: gm.Factor, device: str = 'cpu') -> FastFactor:
+def pygms_factor_to_nce(pf: gm.Factor, device: str = 'cpu', dtype=None) -> FastFactor:
     """
     Convert a pyGMs Factor to an NCE FastFactor.
 
     Args:
         pf: pyGMs Factor (in natural log space)
         device: Device for the tensor
+        dtype: Torch dtype (default: torch.float32)
 
     Returns:
         NCE FastFactor in log10 space
     """
+    if dtype is None:
+        dtype = torch.float32
+
     # Get variable labels
     labels = [v.label for v in pf.vars]
 
@@ -91,10 +95,10 @@ def pygms_factor_to_nce(pf: gm.Factor, device: str = 'cpu') -> FastFactor:
     if labels:
         # Reshape based on variable dimensions
         shape = tuple(v.states for v in pf.vars)
-        tensor = torch.tensor(table_log10.reshape(shape), dtype=torch.float32, device=device)
+        tensor = torch.tensor(table_log10.reshape(shape), dtype=dtype, device=device)
     else:
         # Scalar factor
-        tensor = torch.tensor(float(table_log10.flatten()[0]), dtype=torch.float32, device=device)
+        tensor = torch.tensor(float(table_log10.flatten()[0]), dtype=dtype, device=device)
 
     return FastFactor(tensor, labels)
 
