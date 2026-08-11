@@ -157,20 +157,34 @@ class FactorNN(FastFactor):
             self.labels is a list of variable indices in the NN input
 
         """
-        all_elim_assignments = torch.cartesian_prod(
-            *[torch.arange(size, device=self.net.device) for size in elim_domain_sizes])
-        if all_elim_assignments.dim() == 1:
-            all_elim_assignments = all_elim_assignments.unsqueeze(1)
+        # Perf: enumerate ONLY the elimination variables this factor's scope
+        # actually contains. The value is constant along every absent elim axis,
+        # so the remaining axes are recovered with reshape + expand (a stride-0
+        # view, free) exactly as FastFactor._get_slices already does. For a
+        # cluster with e elim vars of which the NN holds e_f, this evaluates
+        # k^e_f rows per assignment instead of k^e.
+        full_sizes = tuple(int(d) for d in elim_domain_sizes)
+        present_pos = [j for j, var in enumerate(elim_vars) if var.label in self.labels]
+        present_sizes = [full_sizes[j] for j in present_pos]
+
+        if present_sizes:
+            all_elim_assignments = torch.cartesian_prod(
+                *[torch.arange(size, device=self.net.device) for size in present_sizes])
+            if all_elim_assignments.dim() == 1:
+                all_elim_assignments = all_elim_assignments.unsqueeze(1)
+        else:
+            # No elim var of this cluster is in the NN's scope: one row suffices.
+            all_elim_assignments = torch.zeros((1, 0), dtype=torch.int64,
+                                               device=self.net.device)
         n_elim = len(all_elim_assignments)
         n_assign = len(assignments)
         n_labels = len(self.labels)
-        elim_var_labels = [var.label for var in elim_vars]
         param_dtype = next(self.net.parameters()).dtype
 
         # Precompute, for each NN-input label, where its value comes from: a column
-        # of the message assignment, or a column of the elim assignment.
+        # of the message assignment, or a column of the (restricted) elim assignment.
         msg_idx = {l: k for k, l in enumerate(message_scope)}
-        elim_idx = {l: k for k, l in enumerate(elim_var_labels)}
+        elim_idx = {elim_vars[j].label: k for k, j in enumerate(present_pos)}
         col_src = []  # (is_msg, source_col) per NN-input label
         for l in self.labels:
             if l in msg_idx:
@@ -210,12 +224,19 @@ class FactorNN(FastFactor):
                                               param_dtype, dev)
 
             values = self.data_processor.undo_normalization(self.net(one_hot))
-            flat = values.view(n_elim, chunk_n).T.detach()
-            if len(elim_domain_sizes) > 1:
-                flat = flat.reshape((chunk_n,) + tuple(int(d) for d in elim_domain_sizes))
-            chunks_out.append(flat)
+            chunks_out.append(values.view(n_elim, chunk_n).T.detach())
 
-        return torch.cat(chunks_out, dim=0)
+        if not chunks_out:                                 # n_assign == 0
+            out = torch.empty((0, n_elim), device=dev)
+        else:
+            out = chunks_out[0] if len(chunks_out) == 1 else torch.cat(chunks_out, dim=0)
+        # (n_assign, k^e_f) -> (n_assign, 1, k_j, 1, ...) -> broadcast to the full
+        # elimination grid. expand() is a stride-0 view, so the absent axes cost
+        # nothing; the caller only ever reads / broadcasts against this.
+        present_set = set(present_pos)
+        unexpanded = (n_assign,) + tuple(d if j in present_set else 1
+                                         for j, d in enumerate(full_sizes))
+        return out.reshape(unexpanded).expand((n_assign,) + full_sizes)
 
     def _eval_elim_block(self, assignments, elim_coords, elim_vars, elim_var_labels, message_scope):
         """Evaluate this NN factor at every (message assignment x elim assignment)
