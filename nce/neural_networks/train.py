@@ -900,6 +900,17 @@ class Trainer:
                                 neurobe_val_loss = neurobe_val_loss.mean()
                             neurobe_val_loss_value = neurobe_val_loss.item()
 
+                        # Instrumentation only (doc 18): record the validation loss the
+                        # patience rule is already reading, so the epoch policy can be
+                        # diagnosed from the *validation* trajectory. The training loss
+                        # underflows to exactly 0.0 under neurobe_weighted_mse at float32
+                        # and is useless as a convergence diagnostic (doc 16 section 5).
+                        # This changes no control flow.
+                        self.val_losses.append((global_epoch_nb, neurobe_val_loss_value))
+                        if self.bucket.gm._training_logger:
+                            log_val_loss(self.bucket.gm._training_logger, self.bucket.label,
+                                         global_epoch_nb, neurobe_val_loss_value)
+
                         # Patience counter: reset on improvement, increment otherwise
                         if neurobe_val_loss_value < neurobe_prev_best:
                             neurobe_prev_best = neurobe_val_loss_value
