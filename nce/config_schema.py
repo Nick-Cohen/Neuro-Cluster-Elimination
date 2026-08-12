@@ -44,6 +44,9 @@ NESTED_SECTIONS = OrderedDict([
         'device':                  _field('device', default='cuda'),
         'neurobe_mode':            _field('neurobe_mode', default=False),
         'use_float64':             _field('use_float64', default=False),
+        # WMB residual learning: the NN learns log10(exact) - log10(wmb_base)
+        # and the cluster emits [*wmb_base_factors, residual_NN].
+        'wmb_residual':            _field('wmb_residual', default=False),
     }),
     ('nn', {
         'hidden_sizes':              _field('hidden_sizes', default=[]),

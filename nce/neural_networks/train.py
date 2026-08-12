@@ -418,6 +418,13 @@ class Trainer:
         if error_tracking:
             if self.dataloader.sample_generator.sampling_scheme != 'all':
                 raise ValueError("error_tracking requires sampling_scheme='all'")
+            if getattr(self.dataloader, 'base_factors', None) is not None:
+                # The checkpoints below densify FactorNN(self.net, ...), which under
+                # wmb_residual is the residual only and whose net expects the extra
+                # base column. Use config['compute_local_error'] instead.
+                raise NotImplementedError(
+                    "error_tracking is not supported with wmb_residual=True; "
+                    "use compute_local_error=True instead")
             from nce.utils.backward_message import get_backward_message
             print(f"[Error Tracking] Computing exact forward and backward messages for bucket {self.bucket.label}...")
             exact_fw = self.bucket.compute_message_exact()

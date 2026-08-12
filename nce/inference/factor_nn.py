@@ -148,6 +148,22 @@ class FactorNN(FastFactor):
             return torch.zeros((n_rows, n_labels), dtype=torch.int64, device=src.device)
         return src.index_select(1, sel)
 
+    def _get_values(self, assignments, message_scope):
+        """Evaluate this NN factor at message-scope assignments (log10 space).
+
+        FastFactor._get_values indexes self.tensor, which is None for an NN
+        factor, so it must be overridden. Needed by
+        SampleGenerator.sample_tensor_product, which is how WMB-residual
+        learning evaluates the base factors -- a base factor can be an NN when
+        an upstream NN message passed through this cluster untouched (it does
+        not mention an elim var, so compute_wmb_message returns it as-is).
+
+        Returns (num_assignments, 1), matching FastFactor._get_values.
+        """
+        vals = self._get_slices(assignments, elim_vars=[], elim_domain_sizes=(),
+                                message_scope=message_scope)
+        return vals.reshape(len(assignments), 1)
+
     def _get_slices(self, assignments, elim_vars, elim_domain_sizes, message_scope):
         """
         Args:

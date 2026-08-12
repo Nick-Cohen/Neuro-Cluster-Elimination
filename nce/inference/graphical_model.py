@@ -56,7 +56,8 @@ class FastGM:
         self.nn_errors = []
         self.error_tracking_data = []  # List of (bucket_label, [(epoch, loss, log_Z_err, abs_log_Z_err), ...])
         self.local_errors = []  # per-NN-cluster signed local error: sum(approx_fw*exact_bw) - sum(exact_fw*exact_bw)
-        self.phase_times = {}   # accumulated wall time per phase: 'exact', 'nn_path' (see process_bucket)
+        self.phase_times = {}   # accumulated wall time per phase: 'exact', 'nn_path', 'wmb_base'
+        self.wmb_residual_stats = []  # per-NN-cluster WMB residual diagnostics (config['wmb_residual'])
         self.per_bucket_training_log = []  # List of dicts per NN bucket: {label, epochs_trained, hidden_sizes, losses, val_losses, [nn_state_dict, normalizing_constant]}
         self.populate_bw_factors = self.config.get('populate_bw_factors', False)
         if self.config:
@@ -479,7 +480,8 @@ class FastGM:
                 raise ValueError(f"Unknown approximation_method: '{self.config.get('approximation_method')}'")
 
             # Track NN error if enabled
-            if self.track_errors:
+            # (not supported when the NN path emits a factor LIST, e.g. wmb_residual)
+            if self.track_errors and not isinstance(output_message, list):
                 from nce.utils.backward_message import get_backward_message
 
                 # Compute exact message for comparison

@@ -27,6 +27,14 @@ class DataLoader:
 
         # Backward factors - set externally by get_backward_message() via bucket.compute_message_nn()
         self.bw_factors = None
+
+        # WMB residual learning: forward WMB base factors for this cluster, set
+        # externally by bucket.compute_message_nn() when config['wmb_residual'].
+        # When set, load() appends the base value (in normalized units) as one
+        # extra trailing column of x, consumed by nce.neural_networks.net.WMBResidualNet.
+        self.base_factors = None
+        # Diagnostics filled in by load(): stats of the log10 residual r = y - base.
+        self.residual_stats = None
         
     # def __len__(self):
     #     """Required: Returns the total number of samples"""
@@ -87,6 +95,45 @@ class DataLoader:
 
         # One-hot encode assignments
         x = self.data_preprocessor.one_hot_encode(self.bucket, assignments)
+
+        # WMB residual learning: append the WMB base value as an extra trailing
+        # column of x, converted into the SAME normalized units the network
+        # outputs, so that WMBResidualNet can simply add it to the net output.
+        #
+        #   minmax_01:      y_norm = (y*ln10 - ln_min) / ln_range
+        #   logspace_mean:  y_norm = y*ln10 - normalizing_constant
+        #
+        # In both cases y_norm = residual_norm + base*ln10/scale with
+        # scale = ln_range (minmax_01) or 1 (logspace_mean), and the network's
+        # own undo_normalization() then maps its raw output back to exactly
+        # r = log10(exact) - log10(wmb), i.e. the residual factor.
+        if self.base_factors is not None:
+            import math
+            base_values = self.sample_generator.sample_tensor_product(self.base_factors, assignments)
+            dp = self.data_preprocessor
+            ln10 = math.log(10.0)
+            if dp.normalization_mode == 'minmax_01':
+                scale = dp.ln_range
+            else:
+                scale = 1.0
+            base_col = (base_values * (ln10 / scale)).reshape(-1, 1).to(dtype=x.dtype, device=x.device)
+            x = torch.cat([x, base_col], dim=1)
+            # Diagnostics: the log10 residual actually being learned.
+            with torch.no_grad():
+                r = mess_values.reshape(-1) - base_values.reshape(-1)
+                fin = torch.isfinite(r)
+                if fin.any():
+                    rf = r[fin]
+                    yf = mess_values.reshape(-1)[fin]
+                    self.residual_stats = {
+                        'r_max': float(rf.max()), 'r_min': float(rf.min()),
+                        'r_mean': float(rf.mean()),
+                        'r_std': float(rf.std()) if rf.numel() > 1 else 0.0,
+                        'sd_y': float(yf.std()) if yf.numel() > 1 else 0.0,
+                        'y_range': float(yf.max() - yf.min()),
+                        'n': int(rf.numel()),
+                        'frac_positive': float((rf > 1e-6).float().mean()),
+                    }
 
         return x, normalized_y, normalized_bw
 

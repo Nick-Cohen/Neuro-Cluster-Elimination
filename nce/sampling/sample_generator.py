@@ -296,7 +296,10 @@ class SampleGenerator:
             return torch.zeros(len(assignments), device=self.gm.device)
 
         for factor in factors:
-            factor.order_indices()
+            # NN factors have tensor=None (nothing to permute) and their label
+            # order defines the net's input layout, so it must not be reordered.
+            if not getattr(factor, 'is_nn', False):
+                factor.order_indices()
         output = torch.zeros((len(assignments),1), device=self.gm.device, requires_grad=False)
         for fast_factor in factors:
             # If this is a FactorNN with bw_inv, convert to exact first to apply inverse transformation

@@ -238,11 +238,13 @@ class FastBucket:
         - init_with_linear_optimum=True: Initializes with linear optimum then trains
         - Otherwise: Standard neural network training with plotting support
         """
-        from nce.neural_networks.net import Net, Memorizer
+        from nce.neural_networks.net import Net, Memorizer, WMBResidualNet
         from nce.neural_networks.train import Trainer
 
         # Check configuration flags
         use_memorizer = self.config.get('use_memorizer', False)
+        wmb_residual = self.config.get('wmb_residual', False) and not use_memorizer
+        base_factors = None
 
         # Check if plotting is enabled in config
         plot_messages = self.config.get('plot_messages', False)
@@ -420,7 +422,45 @@ class FastBucket:
                 print(f"Bucket {self.label}: NBE num_samples (eps={epsilon}, n_min={n_min}): total={nbe_result['total']}, train={nbe_result['n_train']}, val={nbe_result['n_val']}")
 
             net = Net(self, hidden_sizes=hidden_sizes)
-            t = Trainer(net=net, bucket=self, stats=self.stats)
+
+            # --- WMB residual learning -------------------------------------
+            # Build the forward weighted-mini-bucket estimate of this cluster's
+            # message with the SAME bound that decided NN-vs-exact (iB/ecl), and
+            # train the net on the log-ratio residual r = log10(exact) - log10(wmb).
+            # The cluster then emits [*base_factors, residual_NN]; downstream
+            # elimination multiplies them back (log-space product = sum).
+            if wmb_residual:
+                import time as _wt
+                _w0 = _wt.time()
+                base_factors = self.compute_wmb_message(self.gm.iB, ecl=self.gm.ecl)
+                # Detach pass-through factors from the live bucket: compute_wmb_message
+                # returns the bucket's own factor objects for factors that do not
+                # mention an elim var, and the bucket is mutated/destroyed later.
+                base_factors = [f if f.is_nn else FastFactor(f.tensor.clone(), list(f.labels))
+                                for f in base_factors]
+                _wdt = _wt.time() - _w0
+                self.gm.phase_times['wmb_base'] = self.gm.phase_times.get('wmb_base', 0.0) + _wdt
+                n_mb = self.wmb_stats.get('num_mini_buckets', 0)
+                self.gm.wmb_residual_stats.append({
+                    'bucket': self.label, 'num_mini_buckets': n_mb,
+                    'num_base_factors': len(base_factors),
+                    'base_entries': int(sum(f.tensor.numel() for f in base_factors if not f.is_nn)),
+                    'seconds': _wdt,
+                })
+                print(f"[WMBResidual] bucket {self.label}: {n_mb} mini-buckets, "
+                      f"{len(base_factors)} base factors, {_wdt:.3f}s", flush=True)
+                if n_mb <= 1:
+                    # A single mini-bucket means WMB elimination IS exact elimination:
+                    # the residual is identically zero. Skip training entirely.
+                    print(f"[WMBResidual] bucket {self.label}: single mini-bucket -> "
+                          f"WMB message is exact, skipping NN training", flush=True)
+                    self.gm.wmb_residual_stats[-1]['skipped_training'] = True
+                    return base_factors
+
+            train_net = WMBResidualNet(net) if wmb_residual else net
+            t = Trainer(net=train_net, bucket=self, stats=self.stats)
+            if wmb_residual:
+                t.dataloader.base_factors = base_factors
 
             # Handle use_bw_approx mode
             if self.config.get('use_bw_approx', False):
@@ -533,7 +573,18 @@ class FastBucket:
                 torch.cuda.synchronize()
 
             # Create FactorNN with trained network (no bw_inv needed - loss handles backward message)
+            # NOTE: under wmb_residual this wraps the INNER net, so the factor it
+            # represents is the residual r = log10(exact) - log10(wmb) alone. The
+            # base factors are emitted alongside it (see the return below).
             nn_message_factor = FactorNN(net, t.data_preprocessor, losses=t.losses)
+
+            if wmb_residual and getattr(t.dataloader, 'residual_stats', None):
+                self.gm.wmb_residual_stats[-1].update(t.dataloader.residual_stats)
+                _rs = t.dataloader.residual_stats
+                print(f"[WMBResidual] bucket {self.label}: r in [{_rs['r_min']:.4g}, {_rs['r_max']:.4g}], "
+                      f"r_std={_rs['r_std']:.4g}, sd_y={_rs['sd_y']:.4g}, "
+                      f"ratio={_rs['sd_y'] / _rs['r_std'] if _rs['r_std'] > 0 else float('inf'):.3g}, "
+                      f"frac_r>0={_rs['frac_positive']:.3g}", flush=True)
 
             # Save error tracking data to FastGM (bucket gets destroyed after elimination)
             if hasattr(t, 'error_tracking_data') and t.error_tracking_data:
@@ -574,6 +625,11 @@ class FastBucket:
                         iB=100, backward_ecl=2**30,
                         approximation_method='wmb', return_factor_list=False)
                     approx_fw = nn_message_factor.to_exact()
+                    if wmb_residual:
+                        # The emitted message is base * residual (a log-space sum);
+                        # the local error must be measured on the RECONSTRUCTED message.
+                        for _bf in base_factors:
+                            approx_fw = approx_fw * _bf.to_exact()
                     exact_contrib = float((exact_fw * exact_bw).sum_all_entries())
                     approx_contrib = float((approx_fw * exact_bw).sum_all_entries())
                     rec.update({
@@ -638,6 +694,14 @@ class FastBucket:
 
             except Exception as e:
                 print(f"Warning: Could not generate comparison plot: {e}")
+
+        if wmb_residual:
+            # Emit the WMB base factors alongside the residual NN. FastGM.eliminate_variables
+            # already routes a LIST of outgoing messages independently
+            # (graphical_model.py: `messages = result if isinstance(result, list) else [result]`),
+            # and log-space multiplication is addition, so downstream elimination
+            # reconstructs exact ~= base * residual with no FactorNN changes.
+            return [*base_factors, nn_message_factor]
 
         return nn_message_factor
 
@@ -1026,6 +1090,14 @@ class FastBucket:
         # If no factors have the elimination variable, just return all factors unchanged
         if not factors_with_elim_var:
             return self.factors.copy()
+
+        # Incoming FactorNN messages have tensor=None, but _create_mini_buckets
+        # partitions on f.tensor.numel() and the mini-bucket product needs a real
+        # tensor. Densify them exactly as compute_message_exact does (bucket.py:58-69).
+        # Only the ones touching an elim var need it -- pass-throughs ride along as-is.
+        if any(f.is_nn for f in factors_with_elim_var):
+            factors_with_elim_var = [f.to_exact() if f.is_nn else f
+                                     for f in factors_with_elim_var]
 
         # Step 1: Split factors (only those with elim var) into mini-buckets
         # Temporarily replace self.factors for _create_mini_buckets

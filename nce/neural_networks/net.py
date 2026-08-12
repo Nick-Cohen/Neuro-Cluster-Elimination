@@ -133,7 +133,55 @@ class Net(nn.Module):
                 total_grad += abs(param.grad.sum())
         
         return total_grad 
-    
+
+
+class WMBResidualNet(nn.Module):
+    """Training-time wrapper that reconstructs the message from a residual net.
+
+    Used only when ``wmb_residual`` is enabled. The inner ``Net`` predicts the
+    *residual* in normalized units; the WMB base value at each sample rides
+    along as the LAST column of the input ``x`` (appended by
+    ``DataLoader.load``), already scaled into the same normalized units.
+
+    forward(x) = inner(x[:, :-1]) + x[:, -1:]
+
+    Because every ``self.net(...)`` call site in ``Trainer`` receives batches
+    built by ``DataLoader.load``, wrapping the net makes *all* losses, all
+    validation losses and all early-stopping checks operate on the
+    reconstructed message ``y_hat = NN_residual + wmb_base`` against the
+    original target ``y`` -- which is decision D3 of the design doc, and which
+    also keeps the ``neurobe_weighted_mse`` importance weights keyed on the
+    true message ``y`` rather than on the residual.
+
+    The factor emitted downstream is ``FactorNN(inner, ...)`` (the residual
+    alone), multiplied back by the WMB base factors that the cluster emits
+    alongside it.
+    """
+
+    def __init__(self, inner: nn.Module):
+        super().__init__()
+        self.inner = inner
+
+    @property
+    def masked_net(self):
+        return getattr(self.inner, 'masked_net', False)
+
+    @property
+    def _last_mask_logit(self):
+        return self.inner._last_mask_logit
+
+    @property
+    def device(self):
+        return getattr(self.inner, 'device', None)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        base = x[:, -1:]
+        out = self.inner(x[:, :-1])
+        if out.dim() == 1:
+            out = out.unsqueeze(-1)
+        return out + base.reshape(out.shape)
+
+
 class Memorizer(Net):
     def __init__(self, bucket, all_x, all_y):
         # Call parent nn.Module constructor first
