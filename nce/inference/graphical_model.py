@@ -225,17 +225,24 @@ class FastGM:
             raise ValueError("Elimination order must be set before creating buckets")
         
         buckets = {var: FastBucket(self, var.label, [], self.device, [var]) for var in self.elim_order}
-        unplaced_factors = set(factors)
+        # DETERMINISM: `factors` must be walked in a stable order. `set(factors)`
+        # iterates FastFactor objects by their default identity hash (id()//16), so
+        # bucket.factors ended up in memory-address order, which differs between
+        # processes AND between two builds inside one process. That order is the
+        # order of the log-space factor product, so it changed the message values
+        # in the last bits, and (via the stable sort in _partition_into_miniBuckets)
+        # could change the mini-bucket partition outright. See
+        # notebooks/_August-2026/claude_experiments/21-determinism.md.
+        unplaced_factors = list(factors)
 
         for var in self.elim_order:
-            factors_to_place = []
+            remaining = []
             for factor in unplaced_factors:
                 if var in factor.labels:
-                    factors_to_place.append(factor)
-            
-            for factor in factors_to_place:
-                buckets[var].factors.append(factor)
-                unplaced_factors.remove(factor)
+                    buckets[var].factors.append(factor)
+                else:
+                    remaining.append(factor)
+            unplaced_factors = remaining
 
         if unplaced_factors and self.is_primary:
             raise ValueError(f"Some factors could not be placed in buckets: {unplaced_factors}")

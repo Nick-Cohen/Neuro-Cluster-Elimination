@@ -648,17 +648,27 @@ class PyGMsWMBBackward:
         # Get mini-buckets at this bucket AND their parents
         # This follows the pattern from check-nick-bwd.ipynb:
         #   all_msgs = set(mbBack.buckets[bucket_idx]) | set(mini.parent for mini in mbBack.atElim[var])
-        bucket_mini_buckets = set(self.wmb.buckets[bucket_idx])
+        # DETERMINISM: pyGMs mini-bucket Nodes are identity-hashed, so the original
+        # `list(set(A) | set(B))` produced a memory-address-dependent order. That
+        # order is the order of `factor_list` and of the `sum(...)` below, i.e. it
+        # perturbed the backward message in the last bits on every run. Ordered
+        # de-duplication over the two (deterministically ordered) source lists gives
+        # the same set in a stable order. See
+        # notebooks/_August-2026/claude_experiments/21-determinism.md.
+        mini_buckets = []
+        _seen = set()
 
-        # Get parent mini-buckets for all mini-buckets at the eliminated variable
-        # atElim[var] contains all mini-buckets created when variable 'var' was eliminated
-        parent_mini_buckets = set()
+        def _add(mb):
+            if id(mb) not in _seen:
+                _seen.add(id(mb))
+                mini_buckets.append(mb)
+
+        for mb in self.wmb.buckets[bucket_idx]:
+            _add(mb)
         if bucket_var < len(self.wmb.atElim) and self.wmb.atElim[bucket_var]:
             for mini in self.wmb.atElim[bucket_var]:
                 if mini.parent is not None:
-                    parent_mini_buckets.add(mini.parent)
-
-        mini_buckets = list(bucket_mini_buckets | parent_mini_buckets)
+                    _add(mini.parent)
 
         if not mini_buckets:
             # Empty bucket - return zero factor

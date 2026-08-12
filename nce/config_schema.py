@@ -102,6 +102,12 @@ NESTED_SECTIONS = OrderedDict([
         'normalization_mode':            _field('normalization_mode', default='logspace_mean'),
         'neurobe_early_stopping':        _field('neurobe_early_stopping', default=False),
         'neurobe_stop_iter':             _field('neurobe_stop_iter', default=2),
+        # Relative improvement the NeuroBE patience rule must see before it counts an
+        # epoch as an improvement: val < best * (1 - neurobe_es_min_delta).
+        # 0.0 reproduces the historical bare `<` comparison exactly. Any value above
+        # ~1e-6 makes the stopping epoch immune to last-bit float noise; see
+        # notebooks/_August-2026/claude_experiments/21-determinism.md.
+        'neurobe_es_min_delta':          _field('neurobe_es_min_delta', default=0.0),
         'use_amp':                       _field('use_amp', default=True),
         'training_time_limit':           _field('training_time_limit', default=None),
     }),
