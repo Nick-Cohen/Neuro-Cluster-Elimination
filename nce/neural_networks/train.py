@@ -300,6 +300,52 @@ class Trainer:
                         print(f"  [WMBResidual] epoch-0 bias calibration: shifted final bias by "
                               f"{delta:.4f} (inner shift {delta / _s:.4f}, scale {_s:.4g})")
 
+        # --- WMB residual: optimiser compensation for the output multiplier (arm 5) ---
+        # Under wmb_residual_norm='residual' the wrapper computes
+        #     y_hat = s*inner(x) + col,   s = net_scale = scale_r/scale_y  (< 1),
+        # and DataLoader.load builds `col` so that, exactly,
+        #     y_norm = s*r_norm + col   =>   y_hat - y_norm = s*(g - r_norm).
+        # With loss = mean(w*(y_hat - y_norm)^2) and w a function of the TARGET only
+        # (neurobe_weighted_mse), the objective seen by the inner net is EXACTLY
+        #     L(phi) = s^2 * Ltilde(phi),   Ltilde = mean(w*(g - r_norm)^2),
+        # i.e. s^2 times the same weighted MSE it would face if it were trained
+        # directly on its own normalised target r_norm.  So every gradient is scaled
+        # by s^2 -- NOT s, which counts only the explicit multiplier and misses the
+        # equal factor hiding in the error term.
+        #
+        # Adam: m_t = s^2*M_t and v_t = s^4*V_t exactly, so
+        #     dphi = -lr * s^2*Mhat / (s^2*sqrt(Vhat) + eps)
+        #          = -lr *     Mhat / (    sqrt(Vhat) + eps/s^2).
+        # Adam is therefore EXACTLY invariant to the multiplier except through eps,
+        # which it inflates to eps/s^2 (52x at the median s=0.139, 1e4x at the
+        # smallest cluster).  The exact compensation is eps -> s^2*eps
+        # (`wmb_residual_eps_compensate`), and lr needs no change.
+        #
+        # `wmb_residual_lr_compensate` sets lr -> lr/s instead. That is doc 20's
+        # literal proposal; under Adam it is not a compensation but a 1/s learning
+        # rate INCREASE, chosen so one step moves the RECONSTRUCTION as far as one
+        # baseline step moves its own output (the inner net's own output already
+        # moves ~lr/step, exactly as baseline's does, because Adam is scale-free).
+        # No-ops unless the run is a residual run with a fitted residual normaliser.
+        _rs = float(getattr(self.net, 'scale', 1.0) or 1.0)
+        _do_eps = self.config.get('wmb_residual_eps_compensate', False)
+        _do_lr = self.config.get('wmb_residual_lr_compensate', False)
+        if (_do_eps or _do_lr) and getattr(self.dataloader, 'base_factors', None) is not None \
+                and _rs != 1.0 and not isinstance(self.optimizer, list) \
+                and getattr(self, 'opt_compensation', None) is None:  # apply once per Trainer
+            for _g in self.optimizer.param_groups:
+                if _do_lr:
+                    _g['lr'] = float(_g['lr']) / _rs
+                if _do_eps and 'eps' in _g:
+                    _g['eps'] = float(_g['eps']) * _rs * _rs
+            _g0 = self.optimizer.param_groups[0]
+            self.opt_compensation = {'net_scale': _rs, 'lr': float(_g0['lr']),
+                                     'eps': float(_g0.get('eps', float('nan'))),
+                                     'lr_comp': bool(_do_lr), 'eps_comp': bool(_do_eps)}
+            print(f"  [WMBResidual] optimiser compensation: net_scale={_rs:.6g} -> "
+                  f"lr={_g0['lr']:.6g} eps={_g0.get('eps', float('nan')):.6g} "
+                  f"(lr_comp={_do_lr}, eps_comp={_do_eps})")
+
         # Compute global_max_targets for UKL numerical stability
         # CRITICAL: This must be computed ONCE from all training data and used for ALL batches
         # Using per-batch max causes gradient inconsistency and training divergence

@@ -55,6 +55,17 @@ NESTED_SECTIONS = OrderedDict([
         #   the inner output by ln_range_r/ln_range_y so the loss still sees y_hat in
         #   y-normalised units (doc 02 section 2.2 option 3).
         'wmb_residual_norm':       _field('wmb_residual_norm', default='message'),
+        # Arm 5: compensate the optimiser for the wrapper's output multiplier
+        # s = net_scale (only meaningful with wmb_residual_norm='residual').
+        # The inner net's objective is exactly s^2 times the weighted MSE it would
+        # face trained directly on r_norm, so Adam sees every gradient scaled by
+        # s^2 -- which is exactly equivalent to replacing eps by eps/s^2 and
+        # changes nothing else. Hence
+        #   eps_compensate: eps -> s^2*eps  (the exact, derived compensation)
+        #   lr_compensate:  lr  -> lr/s     (doc 20's literal proposal; under Adam a
+        #                                    1/s LR rise equalising reconstruction motion)
+        'wmb_residual_eps_compensate': _field('wmb_residual_eps_compensate', default=False),
+        'wmb_residual_lr_compensate':  _field('wmb_residual_lr_compensate', default=False),
     }),
     ('nn', {
         'hidden_sizes':              _field('hidden_sizes', default=[]),
