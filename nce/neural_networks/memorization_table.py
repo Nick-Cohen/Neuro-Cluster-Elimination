@@ -187,9 +187,27 @@ def build_memorization_table(bucket, trainer, config):
     rng.manual_seed(int(config.get('seed', 42)) * 1000003 + int(bucket.label))
     nr_samples, _, _ = tree.sample_no_replacement_v3_recursive(
         n_samp, M=1, rng=rng, mode='save')
-    assignments = torch.stack([nr_samples[v] for v in scope], dim=1).to(device)
+    # The proposal tree does not always span the whole separator (its variables
+    # come from the upstream/downstream factors). proposal_in_elim.py raises a
+    # KeyError in that case; here the missing coordinates are filled uniformly
+    # at random instead. Correctness is unaffected -- the TRUE value is still
+    # evaluated at whatever assignment comes out, and the top-K is still by true
+    # value -- but the candidate pool for those variables is not proposal-guided
+    # and no-repeat is no longer guaranteed (duplicates are dropped below).
+    missing = [v for v in scope if v not in nr_samples]
+    n_rows = int(next(iter(nr_samples.values())).shape[0]) if nr_samples else n_samp
+    cols = []
+    for v, d in zip(scope, domain_sizes):
+        if v in nr_samples:
+            cols.append(nr_samples[v].to(device))
+        else:
+            cols.append(torch.randint(0, int(d), (n_rows,), generator=rng,
+                                      device=device))
+    assignments = torch.stack(cols, dim=1).to(device)
     t_sample = time.time() - t0
     stats['n_samples_actual'] = int(assignments.shape[0])
+    stats['n_scope_vars_not_in_tree'] = len(missing)
+    stats['n_scope_vars'] = len(scope)
 
     # ---- 2. TRUE message values at those assignments --------------------- #
     t0 = time.time()
