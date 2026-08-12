@@ -16,61 +16,34 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 NCE is a Python package implementing neural network-based inference for graphical models. It combines variable elimination with neural network approximations to perform approximate inference on probabilistic graphical models (PGMs), particularly using Weighted Mini-Bucket elimination (WMB).
 
-## GPU Execution Requirements
+## Knowledge Base & Retrieval
 
-**ALL GPU experiments must run on the `deepreasoning` server.**
+A durable Obsidian Zettelkasten lives in `knowledge-base/`. Consult it BEFORE answering
+questions about algorithms, terminology, citations, or "why did we do X". Retrieval order:
 
-GSD 2.x runs locally on `circinus-6`, but GPU resources are on `deepreasoning`. Any experiment requiring CUDA must execute remotely.
+- **Citations / correct terminology / how to describe a method** → `knowledge-base/`:
+  - `references.bib` = single source of truth for citations; one literature note per
+    source in `knowledge-base/literature/@<key>.md`.
+  - `knowledge-base/project/terminology-map.md` = NCE code terms ↔ standard terms +
+    citation gotchas (e.g. NeuroBE is UAI 2022, not AAAI). Read this before writing prose.
+  - `knowledge-base/glossary/glossary.md`, and concept notes in `knowledge-base/concepts/`.
+  - Start at `knowledge-base/00-maps/MOC-home.md`.
+- **Where is X in the code?** → `knowledge-base/project/codebase-map.md`.
+- **Current status / what changed / open problems** → `knowledge-base/progress/`
+  (weekly summaries + advisor updates), `knowledge-base/project/open-questions.md`,
+  then `lab_notebook.txt` (daily raw log) and `.gsd/`/`.planning/` (project mgmt).
 
-**Full documentation:** See `scripts/README.md` for complete guide with examples and troubleshooting.
+Maintenance (do this as work happens, not in a batch later):
+- New source cited anywhere → add to `references.bib` AND create
+  `knowledge-base/literature/@<key>.md`, then link it from the relevant concept note's
+  `## Sources`. Never invent citation fields; mark uncertainty in "Citation confidence".
+- New concept/decision worth keeping → atomic note in `knowledge-base/concepts/`
+  (one idea, own words, densely `[[wikilinked]]`).
+- End of week → synthesize `lab_notebook.txt` into
+  `knowledge-base/progress/weekly/<YYYY>-W<NN>.md` (template in `knowledge-base/templates/`).
 
-### Method 1: Automatic GPU Guard (Recommended for Python scripts)
-
-Add this at the top of any GPU-requiring Python script:
-
-```python
-import sys
-import os
-# Add project root to path if not already there
-sys.path.insert(0, '/home/cohenn1/NCE')
-
-from scripts.gpu_guard import ensure_gpu_server
-ensure_gpu_server()  # Auto-redirects to deepreasoning if not already there
-```
-
-This will automatically re-execute the script on deepreasoning via SSH if run locally.
-
-### Method 2: Manual SSH Wrapper
-
-For ad-hoc execution or when you need explicit control:
-
-```bash
-./scripts/run_on_gpu.sh path/to/experiment.py [args...]
-```
-
-This handles:
-- Syncing code to deepreasoning
-- Executing the script remotely
-- Syncing results back
-
-### Method 3: Direct SSH (Manual)
-
-```bash
-ssh deepreasoning
-cd /home/cohenn1/NCE
-source venv/bin/activate
-python notebooks/March-2026/my_experiment.py
-```
-
-### Pre-Flight Checklist for Experiments
-
-Before running ANY GPU experiment:
-
-1. **Device check:** Verify config specifies `device='cuda'`
-2. **Location check:** If running from GSD/Claude, use Method 1 (gpu_guard) or Method 2 (wrapper)
-3. **Never override `device='cuda'` to `device='cpu'`** without explicit user approval
-
-The gpu_guard will detect when you're not on deepreasoning and handle the SSH redirect automatically.
+Note: the old hidden `.knowledge/` graph was migrated here and is deprecated — edit the
+copies in `knowledge-base/`, not `.knowledge/`.
 
 ## Core Architecture
 
