@@ -85,6 +85,7 @@ and neural network approximation.
 |---|---|---|---|---|
 | `exact_computation_limit` | `ecl` | `int` | `0` | Maximum bucket complexity (product of variable domain sizes) for exact computation. Buckets exceeding this limit use NN approximation instead. `0` means all buckets use NNs. |
 | `i_bound` | `iB` | `int` | `0` | Mini-bucket i-bound for Weighted Mini-Bucket (WMB) elimination. Limits the width of mini-buckets. `0` means no WMB splitting. |
+| `ib2` | `ib2` | `int` | `None` | Induced width threshold for binary domains. Sets both `iB` (width limit) and `ecl` (message size threshold = 2^ib2 - 1). Example: `ib2: 23` sets iB=23 and ecl=8388607. Mutually exclusive with `i_bound` and `exact_computation_limit`. |
 | `approximation_method` | `approximation_method` | `str` | `'nn'` | Which approximation method to use for large buckets. See [Approximation Method Values](#approximation-method-values). |
 | `dope_factors` | `dope_factors` | `bool` | `False` | Replace `-inf` values in factor tensors with a finite floor (`-5`). Prevents numerical issues from zero-probability entries in the original model. |
 | `device` | `device` | `str` | `'cuda'` | PyTorch device for tensor computation. `'cuda'` for GPU, `'cpu'` for CPU. |
@@ -212,9 +213,37 @@ loss functions (e.g., `approx_smg`, `elp_recompute`).
 |---|---|---|---|---|
 | `use_backward_approximation` | `use_bw_approx` | `bool` | `False` | Enable backward message approximation using WMB. Required for loss functions that use message gradients (`approx_smg`, `elp_recompute`, etc.). |
 | `populate_backward_factors` | `populate_bw_factors` | `bool` | `False` | Pre-compute approximate backward factors using WMB during initialization. These are stored on each bucket and reused across training, avoiding repeated backward message computation. |
-| `backward_ecl` | `bw_ecl` | `int` \| `None` | `None` | Exact computation limit for backward message computation. Falls back to the forward `ecl` if not set. Controls when backward messages use WMB vs exact computation. |
-| `backward_i_bound` | `backward_iB` | `int` \| `None` | `None` | Mini-bucket i-bound for backward WMB elimination. Falls back to the forward `iB` if not set. |
+| `bw_ib2` | `bw_ib2` | `int` | `None` | Induced width threshold for backward approximation in binary domains. Sets both `bw_iB` and `bw_ecl` (2^bw_ib2 - 1). Mutually exclusive with `backward_i_bound` and `backward_ecl`. |
+| `backward_i_bound` | `bw_iB` | `int` | `None` | Mini-bucket i-bound for backward messages. Limits the width of backward mini-buckets. Mutually exclusive with `bw_ib2` and `backward_ecl`. |
+| `backward_ecl` | `bw_ecl` | `int` \| `None` | `None` | Exact computation limit for backward message computation. Falls back to the forward `ecl` if not set. Controls when backward messages use WMB vs exact computation. Mutually exclusive with `bw_ib2`. |
 | `forward_diff_barrier` | `fdb` | `bool` | `False` | Apply a forward-difference barrier (stop-gradient) on normalizing constants in loss computation. Prevents gradients from flowing through the log-sum-exp normalization, stabilizing training. |
+
+## Width-Based Thresholds
+
+For binary-domain problems (all variables have domain size 2), the width-based parameters `ib2` and `bw_ib2` provide a cleaner interface than specifying message size thresholds directly.
+
+**Equivalence for binary domains:**
+- `ib2: N` sets `iB: N` and `ecl: 2^N - 1`
+- `bw_ib2: N` sets `bw_iB: N` and `bw_ecl: 2^N - 1`
+
+The off-by-one (`2^N - 1`) follows NCE's dispatch convention: buckets with `message_size > ecl` use approximation. For binary buckets with width > N to be approximated, we need `ecl = 2^N - 1`.
+
+**Common binary width values:**
+
+| ib2/bw_ib2 | ecl/bw_ecl | Message size (binary) |
+|---|---|---|
+| 18 | 262143 | 2^18 variables |
+| 20 | 1048575 | 2^20 variables |
+| 23 | 8388607 | 2^23 variables |
+| 25 | 33554431 | 2^25 variables |
+
+**Mutual exclusivity:**
+- Forward thresholds: Use only ONE of `i_bound`, `ib2`, or `exact_computation_limit`.
+- Backward thresholds: Use only ONE of `backward_i_bound`, `bw_ib2`, or `backward_ecl`.
+- Configs specifying multiple thresholds in the same direction raise `ValueError` at preparation time.
+
+**Non-binary domains:**
+Width-based parameters assume binary domains (domain size = 2). For problems with domain size ≥ 3, use the direct threshold parameters (`ecl`, `bw_ecl`) instead. The schema accepts `ib2` for any problem, but the translation formula `ecl = 2^ib2 - 1` only matches the intended width-based semantics for binary variables.
 
 ## Output Section
 
@@ -231,6 +260,12 @@ Controls debugging output, error tracking, plotting, and diagnostic data collect
 | `gather_message_stats` | `gather_message_stats` | `bool` | `False` | Collect forward/backward message statistics (variance, correlation) during elimination. Required for `approx_smg` loss functions that use global statistics. Results stored in `FastGM.message_stats`. |
 | `complexity_limit` | `complexity_limit` | `int` | `0` | Skip training for buckets whose message complexity exceeds this limit. `0` disables the limit (no buckets skipped). |
 | `log_file` | `log_file` | `str` \| `None` | `None` | Path to a JSONL file for structured training event logging. When set, emits per-bucket events (`bucket_training_start`, `epoch_loss`, `bucket_training_end`, `early_stopping`, `val_loss`) with timestamps. `None` disables logging (default). |
+| `time_sample_gen` | `time_sample_gen` | `bool` | `False` | Print a `[GammaTiming] bucket=... T_gen=... m=... r=... e=... k=... w_scope=...` line for each cluster's NBE validation-set generation. Human-readable only; prefer `gamma_trace_path` for analysis. |
+| `gamma_trace_path` | `gamma_trace_path` | `str` \| `None` | `None` | **Master switch for gamma-v2 instrumentation.** Path to a JSONL file receiving one structured row per cluster's sample generation: `T_gen_s`, phase split, `m`, `r`, **`n_nn`**, the true `prod k_v` over eliminated vars, separator sizes, streaming path/chunking, and the git revision that produced the row. `None` (default) disables tracing entirely — no file is opened and the traced code path is identical to the untraced one. See `nce/utils/gamma_trace.py`. |
+| `gamma_trace_per_factor` | `gamma_trace_per_factor` | `bool` | `False` | Additionally time each factor in the cluster individually, yielding `t_nn_factors_s` / `t_table_factors_s` and a per-factor list. Requires a CUDA synchronize between factors, which inflates `T_gen_s` by roughly 10%; run a separate untraced-per-factor pass if you need a clean `T_gen`. No effect unless `gamma_trace_path` is set. |
+| `gamma_trace_sync` | `gamma_trace_sync` | `bool` | `True` | Call `torch.cuda.synchronize()` at timing boundaries so wall times reflect completed GPU work rather than queue depth. Set `False` only if you specifically want async-dispatch timings. |
+| `gamma_trace_run_id` | `gamma_trace_run_id` | `str` \| `None` | `None` | Tag stamped on every row so rows from one sweep can be selected. Defaults to a per-process random id. |
+| `gamma_trace_strategy` | `gamma_trace_strategy` | `str` \| `None` | `None` | Explicit merge-strategy tag (`rnn`, `sub`, `nomerge`, ...) recorded on each row. When unset it is inferred from `experiment_name`, which is only best-effort. |
 
 ---
 

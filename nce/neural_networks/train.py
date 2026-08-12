@@ -3,6 +3,7 @@ from collections import deque
 from nce.data import *
 from nce.sampling import *
 from nce.training_logger import log_epoch_loss, log_val_loss, log_early_stopping
+from nce.utils import gamma_trace
 # from NCE.inference.graphical_model import *
 import torch
 import torch.nn.functional as F
@@ -283,18 +284,17 @@ class Trainer:
             nbe_val_set = self.dataloader.load_all()
         else:
             nbe_val_size = max(1, self.config['num_samples'] // 9)
-            if self.config.get('time_sample_gen', False):
-                import time as _time
-                _g0 = _time.time()
-                nbe_val_set = self._generate_validation_set_nbe(nbe_val_size)
-                _gt = _time.time() - _g0
-                b = self.bucket
-                _scope = b.get_message_scope()
-                _states = [v.states for v in b.gm.vars if v.label in set(_scope)]
-                print(f"[GammaTiming] bucket={b.label} T_gen={_gt:.4f} "
-                      f"m={len(nbe_val_set[0]['x'])} r={len(b.factors)} "
-                      f"e={len(b.elim_vars)} k={max(_states) if _states else 2} "
-                      f"w_scope={len(_scope) + len(b.elim_vars)}", flush=True)
+            _print_gt = self.config.get('time_sample_gen', False)
+            if _print_gt or gamma_trace.trace_enabled(self.config):
+                # Same timing mechanism as before; gamma_trace.timed_generate
+                # subsumes the legacy [GammaTiming] print and adds the
+                # structured row when gamma_trace_path is configured.
+                nbe_val_set = gamma_trace.timed_generate(
+                    self.bucket,
+                    lambda: self._generate_validation_set_nbe(nbe_val_size),
+                    phase_name='trainer.nbe_val',
+                    print_line=_print_gt,
+                )
             else:
                 nbe_val_set = self._generate_validation_set_nbe(nbe_val_size)
         self.nbe_val_set = nbe_val_set  # Store for later use (plotting, etc.)
