@@ -143,7 +143,19 @@ class WMBResidualNet(nn.Module):
     along as the LAST column of the input ``x`` (appended by
     ``DataLoader.load``), already scaled into the same normalized units.
 
-    forward(x) = inner(x[:, :-1]) + x[:, -1:]
+    forward(x) = self.scale * inner(x[:, :-1]) + x[:, -1:]
+
+    ``scale`` is 1.0 under ``wmb_residual_norm='message'`` (the normaliser stays
+    fitted to y, so the inner net's units already are y's units). Under
+    ``wmb_residual_norm='residual'`` a second normaliser is fitted to the
+    residual r, the inner net outputs ``r_norm`` in *residual* units, and
+
+        y_norm = (r*ln10 + base*ln10 - off_y)/scale_y
+               = r_norm*(scale_r/scale_y) + (off_r + base*ln10 - off_y)/scale_y
+
+    so ``scale = scale_r/scale_y`` and the trailing column carries the whole
+    affine offset. ``DataLoader.load`` sets both, once, on the first load.
+    Note the 'message' case is the special case scale_r=scale_y, off_r=off_y.
 
     Because every ``self.net(...)`` call site in ``Trainer`` receives batches
     built by ``DataLoader.load``, wrapping the net makes *all* losses, all
@@ -158,9 +170,12 @@ class WMBResidualNet(nn.Module):
     alongside it.
     """
 
-    def __init__(self, inner: nn.Module):
+    def __init__(self, inner: nn.Module, scale: float = 1.0):
         super().__init__()
         self.inner = inner
+        # Plain float, not a buffer/parameter: it is a fixed unit conversion set
+        # once from the fitted normaliser stats, never trained.
+        self.scale = float(scale)
 
     @property
     def masked_net(self):
@@ -179,6 +194,8 @@ class WMBResidualNet(nn.Module):
         out = self.inner(x[:, :-1])
         if out.dim() == 1:
             out = out.unsqueeze(-1)
+        if self.scale != 1.0:
+            out = out * self.scale
         return out + base.reshape(out.shape)
 
 

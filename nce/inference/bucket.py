@@ -461,6 +461,12 @@ class FastBucket:
             t = Trainer(net=train_net, bucket=self, stats=self.stats)
             if wmb_residual:
                 t.dataloader.base_factors = base_factors
+                # 'message' = pilot arms 2/3 (normaliser fitted to y);
+                # 'residual' = arm 4 (a second normaliser fitted to r).
+                t.dataloader.residual_norm = self.config.get('wmb_residual_norm', 'message')
+                # load() installs the unit-conversion scale on the wrapper after
+                # it fits the residual normaliser on the first (training) load.
+                t.dataloader.residual_net = train_net
 
             # Handle use_bw_approx mode
             if self.config.get('use_bw_approx', False):
@@ -576,7 +582,11 @@ class FastBucket:
             # NOTE: under wmb_residual this wraps the INNER net, so the factor it
             # represents is the residual r = log10(exact) - log10(wmb) alone. The
             # base factors are emitted alongside it (see the return below).
-            nn_message_factor = FactorNN(net, t.data_preprocessor, losses=t.losses)
+            # Under wmb_residual_norm='residual' the inner net was trained in the
+            # RESIDUAL's normalized units, so the emitted factor must be undone with
+            # the residual's preprocessor; otherwise it is the message's (arms 2/3).
+            _dp_out = getattr(t.dataloader, 'residual_dp', None) or t.data_preprocessor
+            nn_message_factor = FactorNN(net, _dp_out, losses=t.losses)
 
             if wmb_residual and getattr(t.dataloader, 'residual_stats', None):
                 self.gm.wmb_residual_stats[-1].update(t.dataloader.residual_stats)
@@ -585,6 +595,9 @@ class FastBucket:
                       f"r_std={_rs['r_std']:.4g}, sd_y={_rs['sd_y']:.4g}, "
                       f"ratio={_rs['sd_y'] / _rs['r_std'] if _rs['r_std'] > 0 else float('inf'):.3g}, "
                       f"frac_r>0={_rs['frac_positive']:.3g}", flush=True)
+                print(f"[WMBResidual] bucket {self.label}: norm={_rs.get('norm_mode')} "
+                      f"net_scale={_rs.get('net_scale')} "
+                      f"scale_y={_rs.get('scale_y')} scale_r={_rs.get('scale_r')}", flush=True)
 
             # Save error tracking data to FastGM (bucket gets destroyed after elimination)
             if hasattr(t, 'error_tracking_data') and t.error_tracking_data:

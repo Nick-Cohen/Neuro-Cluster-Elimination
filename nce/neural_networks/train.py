@@ -292,8 +292,13 @@ class Trainer:
                             final_linear = layer
                             break
                     if final_linear is not None and final_linear.bias is not None:
-                        final_linear.bias.data += delta
-                        print(f"  [WMBResidual] epoch-0 bias calibration: shifted final bias by {delta:.4f}")
+                        # delta is measured on the WRAPPER output (y-normalised units);
+                        # the bias lives on the INNER net, whose contribution is scaled
+                        # by wrapper.scale. Divide so the applied shift is exactly delta.
+                        _s = float(getattr(self.net, 'scale', 1.0)) or 1.0
+                        final_linear.bias.data += delta / _s
+                        print(f"  [WMBResidual] epoch-0 bias calibration: shifted final bias by "
+                              f"{delta:.4f} (inner shift {delta / _s:.4f}, scale {_s:.4g})")
 
         # Compute global_max_targets for UKL numerical stability
         # CRITICAL: This must be computed ONCE from all training data and used for ALL batches

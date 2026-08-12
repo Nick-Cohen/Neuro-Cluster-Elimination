@@ -35,6 +35,15 @@ class DataLoader:
         self.base_factors = None
         # Diagnostics filled in by load(): stats of the log10 residual r = y - base.
         self.residual_stats = None
+        # 'message' (default) keeps the normaliser fitted to y; 'residual' fits a
+        # SECOND DataPreprocessor to r itself (doc 02 s2.2 option 3).
+        self.residual_norm = 'message'
+        # Set on the first load() when residual_norm == 'residual'. This is the
+        # preprocessor that FactorNN must use to undo-normalise the emitted factor.
+        self.residual_dp = None
+        # The WMBResidualNet wrapper, so load() can install the unit-conversion
+        # scale once the residual normaliser has been fitted. Set by bucket.py.
+        self.residual_net = None
         
     # def __len__(self):
     #     """Required: Returns the total number of samples"""
@@ -96,27 +105,66 @@ class DataLoader:
         # One-hot encode assignments
         x = self.data_preprocessor.one_hot_encode(self.bucket, assignments)
 
-        # WMB residual learning: append the WMB base value as an extra trailing
-        # column of x, converted into the SAME normalized units the network
-        # outputs, so that WMBResidualNet can simply add it to the net output.
+        # WMB residual learning: append an extra trailing column of x carrying the
+        # affine offset that turns the inner net's output into the RECONSTRUCTED
+        # message in y-normalised units, so WMBResidualNet computes
+        #     y_hat_norm = scale * inner(x[:, :-1]) + x[:, -1:]
+        # and every loss / validation / early-stopping site in Trainer compares
+        # y_hat_norm against y_norm. The importance weights of neurobe_weighted_mse
+        # therefore stay keyed on the message mass, never on the correction.
         #
-        #   minmax_01:      y_norm = (y*ln10 - ln_min) / ln_range
-        #   logspace_mean:  y_norm = y*ln10 - normalizing_constant
+        # Write the two normalisers as affine maps in natural-log space:
+        #     y_norm = (y*ln10 - off_y) / scale_y
+        #     r_norm = (r*ln10 - off_r) / scale_r
+        # with (off, scale) = (ln_min, ln_range) for minmax_01 and
+        #      (off, scale) = (normalizing_constant, 1) for logspace_mean.
+        # Since y = r + base (log10 space, D1),
+        #     y_norm = r_norm*(scale_r/scale_y) + (off_r + base*ln10 - off_y)/scale_y
+        # =>  net scale  = scale_r/scale_y
+        #     trailing col = (off_r + base*ln10 - off_y)/scale_y
         #
-        # In both cases y_norm = residual_norm + base*ln10/scale with
-        # scale = ln_range (minmax_01) or 1 (logspace_mean), and the network's
-        # own undo_normalization() then maps its raw output back to exactly
-        # r = log10(exact) - log10(wmb), i.e. the residual factor.
+        # wmb_residual_norm='message' is the special case scale_r=scale_y,
+        # off_r=off_y  ->  scale = 1, col = base*ln10/scale_y  (the pilot's arms
+        # 2 and 3). wmb_residual_norm='residual' fits a second preprocessor to r.
+        # In BOTH cases FactorNN(inner, dp_out).undo_normalization recovers
+        # exactly r = log10(exact) - log10(wmb), where dp_out is the preprocessor
+        # whose (off, scale) the inner net was trained against.
         if self.base_factors is not None:
             import math
             base_values = self.sample_generator.sample_tensor_product(self.base_factors, assignments)
             dp = self.data_preprocessor
             ln10 = math.log(10.0)
-            if dp.normalization_mode == 'minmax_01':
-                scale = dp.ln_range
+
+            def _affine(p):
+                if p.normalization_mode == 'minmax_01':
+                    return float(p.ln_min), float(p.ln_range)
+                nc = p.normalizing_constant
+                return float(nc), 1.0
+
+            off_y, scale_y = _affine(dp)
+
+            if self.residual_norm == 'residual':
+                if self.residual_dp is None:
+                    # Fit the second normaliser to r, once, on this (training) load.
+                    from nce.data.data_preprocessor import DataPreprocessor
+                    r_fit = (mess_values.reshape(-1) - base_values.reshape(-1))
+                    rdp = DataPreprocessor(
+                        y=None, bw=None, lower_dim=dp.lower_dim, device=dp.device,
+                        use_bw_approx=False, normalization_mode=dp.normalization_mode,
+                        dtype=dp.dtype,
+                    )
+                    rdp._initialize_normalizing_constant(r_fit, None)
+                    self.residual_dp = rdp
+                off_r, scale_r = _affine(self.residual_dp)
+                net_scale = scale_r / scale_y
+                if self.residual_net is not None:
+                    self.residual_net.scale = float(net_scale)
+                col = ((base_values.reshape(-1) * ln10) + (off_r - off_y)) / scale_y
             else:
-                scale = 1.0
-            base_col = (base_values * (ln10 / scale)).reshape(-1, 1).to(dtype=x.dtype, device=x.device)
+                net_scale = 1.0
+                col = base_values.reshape(-1) * (ln10 / scale_y)
+
+            base_col = col.reshape(-1, 1).to(dtype=x.dtype, device=x.device)
             x = torch.cat([x, base_col], dim=1)
             # Diagnostics: the log10 residual actually being learned.
             with torch.no_grad():
@@ -133,6 +181,12 @@ class DataLoader:
                         'y_range': float(yf.max() - yf.min()),
                         'n': int(rf.numel()),
                         'frac_positive': float((rf > 1e-6).float().mean()),
+                        # Normaliser bookkeeping (arm 4 diagnostics).
+                        'norm_mode': self.residual_norm,
+                        'net_scale': float(net_scale),
+                        'off_y': float(off_y), 'scale_y': float(scale_y),
+                        'off_r': float(_affine(self.residual_dp)[0]) if self.residual_dp else None,
+                        'scale_r': float(_affine(self.residual_dp)[1]) if self.residual_dp else None,
                     }
 
         return x, normalized_y, normalized_bw

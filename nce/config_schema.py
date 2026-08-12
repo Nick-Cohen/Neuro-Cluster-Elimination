@@ -48,6 +48,13 @@ NESTED_SECTIONS = OrderedDict([
         # and the cluster emits [*wmb_base_factors, residual_NN].
         'wmb_residual':            _field('wmb_residual', default=False),
         'wmb_residual_bias_init':  _field('wmb_residual_bias_init', default=False),
+        # 'message' (default): the normaliser stays fitted to the message y, so the
+        #   residual net must output (r*ln10 - ln_min_y)/ln_range_y  -- location and
+        #   scale both wrong, see doc 14 section 3.5.
+        # 'residual': fit a SECOND normaliser to r itself; the wrapper then rescales
+        #   the inner output by ln_range_r/ln_range_y so the loss still sees y_hat in
+        #   y-normalised units (doc 02 section 2.2 option 3).
+        'wmb_residual_norm':       _field('wmb_residual_norm', default='message'),
     }),
     ('nn', {
         'hidden_sizes':              _field('hidden_sizes', default=[]),
