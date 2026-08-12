@@ -1,0 +1,409 @@
+{
+  "schema_version": 1,
+  "note": "Every value here was MEASURED by running the case. Provenance is per case because these numbers are only meaningful relative to a code state.",
+  "cases": {
+    "cpu_grid_plain": {
+      "tier": "cpu",
+      "covers": "plain binary grid; reduce-NN merge (D=4, backtracking); doped; 1 NN cluster; nbe sample budget; unchunked exact path",
+      "config": {
+        "neurobe_mode": true,
+        "ecl": 1025,
+        "sampling_scheme": "uniform",
+        "stream_nn_exact": true,
+        "device": "cpu",
+        "seed": 42,
+        "use_reduce_nn_merge": true,
+        "reduce_nn_backtrack": true,
+        "problem_key": "grids/grid10x10.f10",
+        "iB": 10,
+        "max_merge_bound": 4,
+        "dope_factors": true,
+        "num_samples": "nbe,0.1",
+        "num_epochs": 10
+      },
+      "golden": {
+        "log_z_repr": "304.2255859375",
+        "epochs": [
+          10
+        ],
+        "n_nn_clusters": 1,
+        "local_errors": [],
+        "bucket_order_digest": "5e354a03ac73569d"
+      },
+      "measured_wall_s": 4.21,
+      "provenance": {
+        "branch": "fix/determinism",
+        "commit": "d5cca0e",
+        "dirty": false,
+        "device": "cpu",
+        "device_name": "cpu",
+        "torch": "2.0.1+cu117",
+        "threads": 1,
+        "host": "deepreasoning.ics.uci.edu",
+        "python": "3.11.7",
+        "date": "2026-08-12 03:08:53"
+      }
+    },
+    "cpu_grid_merged": {
+      "tier": "cpu",
+      "covers": "wrapped grid (induced width 21 vs 12); reduce-NN merge D=8 -> genuinely merged clusters; 3 NN clusters",
+      "config": {
+        "neurobe_mode": true,
+        "ecl": 1025,
+        "sampling_scheme": "uniform",
+        "stream_nn_exact": true,
+        "device": "cpu",
+        "seed": 42,
+        "use_reduce_nn_merge": true,
+        "reduce_nn_backtrack": true,
+        "problem_key": "grids/grid10x10.f10.wrap",
+        "iB": 10,
+        "max_merge_bound": 8,
+        "dope_factors": true,
+        "num_samples": 2048,
+        "num_epochs": 5
+      },
+      "golden": {
+        "log_z_repr": "324.2785339355469",
+        "epochs": [
+          5,
+          5,
+          5
+        ],
+        "n_nn_clusters": 3,
+        "local_errors": []
+      },
+      "measured_wall_s": 4.31,
+      "provenance": {
+        "branch": "fix/determinism",
+        "commit": "d5cca0e",
+        "dirty": false,
+        "device": "cpu",
+        "device_name": "cpu",
+        "torch": "2.0.1+cu117",
+        "threads": 1,
+        "host": "deepreasoning.ics.uci.edu",
+        "python": "3.11.7",
+        "date": "2026-08-12 03:08:58"
+      }
+    },
+    "cpu_pedigree_plain": {
+      "tier": "cpu",
+      "covers": "real pedigree (mixed domain sizes k in {2,3,4}, 334 vars); 10 NN clusters -> 10 independent early-stopping decisions",
+      "config": {
+        "neurobe_mode": true,
+        "ecl": 1025,
+        "sampling_scheme": "uniform",
+        "stream_nn_exact": true,
+        "device": "cpu",
+        "seed": 42,
+        "use_reduce_nn_merge": true,
+        "reduce_nn_backtrack": true,
+        "problem_key": "pedigree/pedigree1",
+        "iB": 8,
+        "max_merge_bound": 6,
+        "dope_factors": true,
+        "num_samples": 2048,
+        "num_epochs": 5
+      },
+      "golden": {
+        "log_z_repr": "-10.624578475952148",
+        "epochs": [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        "n_nn_clusters": 10,
+        "local_errors": [],
+        "bucket_order_digest": "e1a7570f4cfb36f1"
+      },
+      "measured_wall_s": 3.8,
+      "provenance": {
+        "branch": "fix/determinism",
+        "commit": "d5cca0e",
+        "dirty": false,
+        "device": "cpu",
+        "device_name": "cpu",
+        "torch": "2.0.1+cu117",
+        "threads": 1,
+        "host": "deepreasoning.ics.uci.edu",
+        "python": "3.11.7",
+        "date": "2026-08-12 03:09:02"
+      }
+    },
+    "cpu_pedigree_masked": {
+      "tier": "cpu",
+      "covers": "masked_net arm (two-head trunk, BCE mask loss, boolean-mask indexing backward, no AMP) on undoped factors so -inf targets are exercised; mixed domains; 5 NN clusters",
+      "config": {
+        "neurobe_mode": true,
+        "ecl": 1025,
+        "sampling_scheme": "uniform",
+        "stream_nn_exact": true,
+        "device": "cpu",
+        "seed": 42,
+        "use_reduce_nn_merge": true,
+        "reduce_nn_backtrack": true,
+        "problem_key": "pedigree/pedigree1",
+        "iB": 10,
+        "max_merge_bound": 8,
+        "dope_factors": false,
+        "masked_net": true,
+        "num_samples": 2048,
+        "num_epochs": 5
+      },
+      "golden": {
+        "log_z_repr": "-13.409982681274414",
+        "epochs": [
+          4,
+          5,
+          5,
+          5,
+          5
+        ],
+        "n_nn_clusters": 5,
+        "local_errors": [],
+        "bucket_order_digest": "034785624c22f57f"
+      },
+      "measured_wall_s": 4.87,
+      "provenance": {
+        "branch": "fix/determinism",
+        "commit": "d5cca0e",
+        "dirty": false,
+        "device": "cpu",
+        "device_name": "cpu",
+        "torch": "2.0.1+cu117",
+        "threads": 1,
+        "host": "deepreasoning.ics.uci.edu",
+        "python": "3.11.7",
+        "date": "2026-08-12 03:09:08"
+      }
+    },
+    "cpu_local_error": {
+      "tier": "cpu",
+      "covers": "compute_local_error=True -> FastGM.local_errors is POPULATED, which also exercises get_backward_message (the second site of the identity-hash bug) and an exact WMB backward at iB=100",
+      "config": {
+        "neurobe_mode": true,
+        "ecl": 1025,
+        "sampling_scheme": "uniform",
+        "stream_nn_exact": true,
+        "device": "cpu",
+        "seed": 42,
+        "use_reduce_nn_merge": true,
+        "reduce_nn_backtrack": true,
+        "problem_key": "grids/grid10x10.f10",
+        "iB": 10,
+        "max_merge_bound": 4,
+        "dope_factors": true,
+        "num_samples": "nbe,0.1",
+        "num_epochs": 10,
+        "compute_local_error": true
+      },
+      "golden": {
+        "log_z_repr": "304.2255859375",
+        "epochs": [
+          10
+        ],
+        "n_nn_clusters": 1,
+        "local_errors": [
+          "1.13958740234375"
+        ]
+      },
+      "measured_wall_s": 0.7,
+      "provenance": {
+        "branch": "fix/determinism",
+        "commit": "d5cca0e",
+        "dirty": false,
+        "device": "cpu",
+        "device_name": "cpu",
+        "torch": "2.0.1+cu117",
+        "threads": 1,
+        "host": "deepreasoning.ics.uci.edu",
+        "python": "3.11.7",
+        "date": "2026-08-12 03:09:09"
+      }
+    },
+    "cuda_grid_plain": {
+      "tier": "cuda",
+      "covers": "study cell grid10x10f10_iB10_rnn4_s42; plain grid, 1 NN cluster, full 500-epoch cap so early stopping actually binds",
+      "config": {
+        "problem_key": "grids/grid10x10.f10",
+        "neurobe_mode": true,
+        "iB": 10,
+        "ecl": 1025,
+        "num_samples": "nbe,0.1",
+        "sampling_scheme": "uniform",
+        "stream_nn_exact": true,
+        "dope_factors": true,
+        "device": "cuda",
+        "seed": 42,
+        "use_reduce_nn_merge": true,
+        "max_merge_bound": 4,
+        "reduce_nn_backtrack": true
+      },
+      "golden": {
+        "log_z_repr": "302.54974365234375",
+        "epochs": [
+          245
+        ],
+        "n_nn_clusters": 1,
+        "local_errors": []
+      },
+      "measured_wall_s": 23.61,
+      "provenance": {
+        "branch": "fix/determinism",
+        "commit": "d5cca0e",
+        "dirty": false,
+        "device": "cuda",
+        "device_name": "NVIDIA TITAN RTX",
+        "torch": "2.0.1+cu117",
+        "threads": 1,
+        "host": "deepreasoning.ics.uci.edu",
+        "python": "3.11.7",
+        "date": "2026-08-12 03:13:08"
+      }
+    },
+    "cuda_grid_merged": {
+      "tier": "cuda",
+      "covers": "study cell grid10x10f10wrap_iB10_rnn8_s42; wrapped grid, merged clusters, 3 NN clusters",
+      "config": {
+        "problem_key": "grids/grid10x10.f10.wrap",
+        "neurobe_mode": true,
+        "iB": 10,
+        "ecl": 1025,
+        "num_samples": "nbe,0.1",
+        "sampling_scheme": "uniform",
+        "stream_nn_exact": true,
+        "dope_factors": true,
+        "device": "cuda",
+        "seed": 42,
+        "use_reduce_nn_merge": true,
+        "max_merge_bound": 8,
+        "reduce_nn_backtrack": true
+      },
+      "golden": {
+        "log_z_repr": "332.5823669433594",
+        "epochs": [
+          203,
+          181,
+          316
+        ],
+        "n_nn_clusters": 3,
+        "local_errors": []
+      },
+      "measured_wall_s": 84.28,
+      "provenance": {
+        "branch": "fix/determinism",
+        "commit": "d5cca0e",
+        "dirty": false,
+        "device": "cuda",
+        "device_name": "NVIDIA TITAN RTX",
+        "torch": "2.0.1+cu117",
+        "threads": 1,
+        "host": "deepreasoning.ics.uci.edu",
+        "python": "3.11.7",
+        "date": "2026-08-12 03:14:33"
+      }
+    },
+    "cuda_rbm": {
+      "tier": "cuda",
+      "covers": "study cell rbm_21_iB20_rnn10_s42; RBM family, iB=20, 12 NN clusters -- the cell doc 23 measured as most artefact-sensitive",
+      "config": {
+        "problem_key": "dbn/rbm_21",
+        "neurobe_mode": true,
+        "iB": 20,
+        "ecl": 1048577,
+        "num_samples": "nbe,0.1",
+        "sampling_scheme": "uniform",
+        "stream_nn_exact": true,
+        "dope_factors": true,
+        "device": "cuda",
+        "seed": 42,
+        "use_reduce_nn_merge": true,
+        "max_merge_bound": 10,
+        "reduce_nn_backtrack": true
+      },
+      "golden": {
+        "log_z_repr": "62.513248443603516",
+        "epochs": [
+          41,
+          40,
+          43,
+          39,
+          37,
+          35,
+          78,
+          99,
+          59,
+          36,
+          45,
+          137
+        ],
+        "n_nn_clusters": 12,
+        "local_errors": []
+      },
+      "measured_wall_s": 188.28,
+      "provenance": {
+        "branch": "fix/determinism",
+        "commit": "d5cca0e",
+        "dirty": false,
+        "device": "cuda",
+        "device_name": "NVIDIA TITAN RTX",
+        "torch": "2.0.1+cu117",
+        "threads": 1,
+        "host": "deepreasoning.ics.uci.edu",
+        "python": "3.11.7",
+        "date": "2026-08-12 03:17:41"
+      }
+    },
+    "cuda_pedigree_masked": {
+      "tier": "cuda",
+      "covers": "study cell pedigree19_iB20_rnn16_masked_s42; pedigree (max domain 5, induced width 27), masked_net, undoped, iB=20",
+      "config": {
+        "problem_key": "pedigree/pedigree19",
+        "neurobe_mode": true,
+        "iB": 20,
+        "ecl": 1048577,
+        "num_samples": "nbe,0.1",
+        "sampling_scheme": "uniform",
+        "stream_nn_exact": true,
+        "dope_factors": false,
+        "masked_net": true,
+        "device": "cuda",
+        "seed": 42,
+        "use_reduce_nn_merge": true,
+        "max_merge_bound": 16,
+        "reduce_nn_backtrack": true
+      },
+      "golden": {
+        "log_z_repr": "-59.3199348449707",
+        "epochs": [
+          107,
+          76,
+          60
+        ],
+        "n_nn_clusters": 3,
+        "local_errors": []
+      },
+      "measured_wall_s": 185.33,
+      "provenance": {
+        "branch": "fix/determinism",
+        "commit": "d5cca0e",
+        "dirty": false,
+        "device": "cuda",
+        "device_name": "NVIDIA TITAN RTX",
+        "torch": "2.0.1+cu117",
+        "threads": 1,
+        "host": "deepreasoning.ics.uci.edu",
+        "python": "3.11.7",
+        "date": "2026-08-12 03:20:46"
+      }
+    }
+  }
+}

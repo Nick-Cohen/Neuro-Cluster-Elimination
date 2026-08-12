@@ -7,11 +7,54 @@ Hand-built problem fixtures provide analytically known partition functions for
 exact inference tests, NN training tests, and robustness tests.
 """
 import math
+import os
+
 import pytest
 import torch
 
 from nce.config_schema import prepare_config
 from nce.inference.factor import FastFactor
+
+
+# ---------------------------------------------------------------------------
+# Tier selection for the bit-exact regression suite (test_determinism_regression).
+#
+#   default          -> CPU tier only (seconds; safe for every change)
+#   --gpu            -> also the CUDA tier (minutes; for changes touching numerics)
+#   --det-algos      -> also the torch.use_deterministic_algorithms(True) probe
+#                       (2.5x slower again; requires CUBLAS_WORKSPACE_CONFIG)
+#
+# Env equivalents: NCE_TEST_GPU=1, NCE_TEST_DET_ALGOS=1.
+# ---------------------------------------------------------------------------
+def pytest_addoption(parser):
+    parser.addoption('--gpu', action='store_true', default=False,
+                     help='run the CUDA tier of the determinism regression suite')
+    parser.addoption('--det-algos', action='store_true', default=False,
+                     help='run the torch.use_deterministic_algorithms(True) probe '
+                          '(implies --gpu; needs CUBLAS_WORKSPACE_CONFIG)')
+
+
+def pytest_configure(config):
+    config.addinivalue_line('markers', 'gpu: needs a CUDA device; opt in with --gpu')
+    config.addinivalue_line('markers', 'det_algos: enables torch deterministic '
+                                       'algorithms in a subprocess; opt in with --det-algos')
+
+
+def _opt(config, flag, env):
+    return bool(config.getoption(flag)) or os.environ.get(env) == '1'
+
+
+def pytest_collection_modifyitems(config, items):
+    want_det = _opt(config, '--det-algos', 'NCE_TEST_DET_ALGOS')
+    want_gpu = _opt(config, '--gpu', 'NCE_TEST_GPU') or want_det
+    skip_gpu = pytest.mark.skip(reason='CUDA tier not selected (pass --gpu or NCE_TEST_GPU=1)')
+    skip_det = pytest.mark.skip(reason='det-algos probe not selected '
+                                       '(pass --det-algos or NCE_TEST_DET_ALGOS=1)')
+    for item in items:
+        if 'det_algos' in item.keywords and not want_det:
+            item.add_marker(skip_det)
+        elif 'gpu' in item.keywords and not want_gpu:
+            item.add_marker(skip_gpu)
 
 
 # ---------------------------------------------------------------------------
