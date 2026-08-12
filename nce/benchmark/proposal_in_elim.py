@@ -135,7 +135,10 @@ def train_bucket_with_proposal_sampling(bucket, fastgm, trainer, config):
     device = config['device']
     dtype = next(trainer.net.parameters()).dtype
     proposal_ecl = config.get('bw_ecl', 0)
-    num_proposal_samples = config.get('num_samples', 10000)
+    # Per-bucket resolution: config['num_samples'] may be the per-cluster formula
+    # string "nbe,<eps>[,<n_min>]" (it is no longer frozen into an int by the first
+    # NN bucket -- see FastBucket.resolve_num_samples).
+    num_proposal_samples = bucket.get_num_samples()
     proposal_mix = config.get('proposal_mix', 'full')
     proposal_temperature = float(config.get('proposal_temperature', 1.0))
 

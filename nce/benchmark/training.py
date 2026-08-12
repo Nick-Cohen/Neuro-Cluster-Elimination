@@ -494,7 +494,10 @@ def train_single_bucket(bucket_pt_path, nn_config, time_limit_seconds,
         import math as _math
 
         proposal_ecl = config.get('bw_ecl', 0)
-        num_proposal_samples = config.get('num_samples', 10000)
+        # Per-bucket resolution: config['num_samples'] may be the per-cluster formula
+        # string "nbe,<eps>[,<n_min>]" (it is no longer frozen into an int by the
+        # first NN bucket -- see FastBucket.resolve_num_samples).
+        num_proposal_samples = bucket.get_num_samples()
         proposal_mix = config.get('proposal_mix', 'full')  # 'full', 'half', 'no_replacement'
         proposal_temperature = float(config.get('proposal_temperature', 1.0))
 

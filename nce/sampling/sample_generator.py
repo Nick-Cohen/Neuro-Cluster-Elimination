@@ -53,6 +53,9 @@ class SampleGenerator:
         self.bucket = bucket
         self.random_seed = random_seed if random_seed is not None else 0
         self.factors = bucket.factors
+        # Raw config entry: may be an int OR the per-cluster formula string
+        # "nbe,<epsilon>[,<n_min>]".  Currently unread -- do not use it as a count.
+        # For a resolved per-bucket integer use bucket.get_num_samples().
         self.num_samples = self.config.get('num_samples')
         self.sampling_scheme = self.config['sampling_scheme']
         self.message_scope, self.domain_sizes = self.get_message_scope_and_dims()

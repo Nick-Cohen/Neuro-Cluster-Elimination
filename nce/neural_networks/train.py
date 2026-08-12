@@ -253,7 +253,7 @@ class Trainer:
             init_batches = self.dataloader.load_all()
         else:
             batch_size = self.config['batch_size']
-            init_set_size = self.config.get('set_size') or self.config['num_samples']
+            init_set_size = self.config.get('set_size') or self.bucket.get_num_samples()
             num_batches_per_set = init_set_size // batch_size
             stratify = self.config.get('stratify_samples', False)
             init_batches = self.dataloader.load_batches(batch_size, num_batches_per_set, stratify_samples=stratify)
@@ -283,7 +283,8 @@ class Trainer:
         if self.dataloader.sample_generator.sampling_scheme == 'all':
             nbe_val_set = self.dataloader.load_all()
         else:
-            nbe_val_size = max(1, self.config['num_samples'] // 9)
+            # Per-bucket: config['num_samples'] may be the per-cluster "nbe,<eps>" formula.
+            nbe_val_size = max(1, self.bucket.get_num_samples() // 9)
             _print_gt = self.config.get('time_sample_gen', False)
             if _print_gt or gamma_trace.trace_enabled(self.config):
                 # Same timing mechanism as before; gamma_trace.timed_generate
@@ -314,7 +315,8 @@ class Trainer:
             print(f"Validation-based early stopping enabled: checking every 10 epochs on {len(val_set[0]['x'])} samples")
 
         traced_losses_data = []
-        num_samples = self.config['num_samples']
+        # Per-bucket: config['num_samples'] may be the per-cluster "nbe,<eps>" formula.
+        num_samples = self.bucket.get_num_samples()
         batch_size = self.config['batch_size']
         if override_epochs >= 0:
             num_epochs = override_epochs
