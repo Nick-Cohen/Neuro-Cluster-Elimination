@@ -47,6 +47,7 @@ NESTED_SECTIONS = OrderedDict([
         # WMB residual learning: the NN learns log10(exact) - log10(wmb_base)
         # and the cluster emits [*wmb_base_factors, residual_NN].
         'wmb_residual':            _field('wmb_residual', default=False),
+        'wmb_residual_bias_init':  _field('wmb_residual_bias_init', default=False),
     }),
     ('nn', {
         'hidden_sizes':              _field('hidden_sizes', default=[]),

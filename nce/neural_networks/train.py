@@ -263,6 +263,38 @@ class Trainer:
         if self.data_preprocessor.bw_normalizing_constant is not None:
             print(f"  bw_normalizing_constant (bw at argmax(y+bw)): {self.data_preprocessor.bw_normalizing_constant:.4f}")
 
+        # --- WMB residual: epoch-0 output-bias calibration -------------------
+        # Fairness fix, not a tweak. In the baseline arm the minmax_01 map is fitted
+        # to the target, so a zero-output net is already a sensible constant estimator.
+        # In the residual arm the map is still fitted to y (decision D3 keeps the loss
+        # and its importance weights on y), so the net must additionally learn the
+        # large constant -ln_min/ln_range before it can express anything. Shifting the
+        # final layer's bias makes the epoch-0 prediction unbiased on the training
+        # sample, i.e. epoch 0 is "WMB + mean correction" -- the starting point the
+        # design doc claims for the method. Without this, the comparison partly
+        # measures how fast Adam can move a bias under tiny IS weights.
+        if self.config.get('wmb_residual_bias_init', False) and \
+                getattr(self.dataloader, 'base_factors', None) is not None:
+            with torch.no_grad():
+                deltas, counts = 0.0, 0
+                for b in init_batches:
+                    pred = self.net(b['x']).reshape(-1)
+                    tgt = b['y'].reshape(-1)
+                    fin = torch.isfinite(tgt) & torch.isfinite(pred)
+                    if fin.any():
+                        deltas += float((tgt[fin] - pred[fin]).sum())
+                        counts += int(fin.sum())
+                if counts:
+                    delta = deltas / counts
+                    final_linear = None
+                    for layer in reversed(list(self.net.modules())):
+                        if isinstance(layer, torch.nn.Linear):
+                            final_linear = layer
+                            break
+                    if final_linear is not None and final_linear.bias is not None:
+                        final_linear.bias.data += delta
+                        print(f"  [WMBResidual] epoch-0 bias calibration: shifted final bias by {delta:.4f}")
+
         # Compute global_max_targets for UKL numerical stability
         # CRITICAL: This must be computed ONCE from all training data and used for ALL batches
         # Using per-batch max causes gradient inconsistency and training divergence
