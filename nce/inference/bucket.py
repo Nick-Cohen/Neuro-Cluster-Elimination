@@ -559,6 +559,12 @@ class FastBucket:
                     'losses': t.losses,           # list of (epoch, loss_value) tuples
                     'val_losses': t.val_losses,    # list of (epoch, loss_value) tuples, may be empty
                 }
+                # doc 35 observability: None/None when neurobe_restore_best is off.
+                if getattr(t, 'neurobe_restore_stop_epoch', None) is not None:
+                    entry['restored_from_epoch'] = getattr(t, 'neurobe_restored_from_epoch', None)
+                    entry['restore_stop_epoch'] = t.neurobe_restore_stop_epoch
+                    entry['restore_param_delta'] = getattr(t, 'neurobe_restore_param_delta', None)
+                    entry['restore_param_scale'] = getattr(t, 'neurobe_restore_param_scale', None)
                 if self.config.get('save_nn_weights', False):
                     entry['nn_state_dict'] = {k: v.cpu().clone() for k, v in net.state_dict().items()}
                     entry['normalizing_constant'] = t.data_preprocessor.normalizing_constant.cpu().item()

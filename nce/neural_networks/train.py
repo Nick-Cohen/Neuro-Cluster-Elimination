@@ -245,6 +245,48 @@ class Trainer:
         neurobe_patience_count = 0
         neurobe_prev_best = float('inf')
 
+        # doc 35: optional best-weight restoration for the patience rule above.
+        # Default False == historical behaviour, byte-for-byte: nothing below is
+        # entered, no tensor is allocated, no RNG is touched. When True, the net's
+        # state_dict is snapshotted on the SAME epoch the patience rule already
+        # decides is an improvement (no second evaluation, no extra forward pass)
+        # and reloaded when training ends. Snapshot lives on the net's own device,
+        # so no host<->device sync is introduced.
+        neurobe_restore_best = self.config.get('neurobe_restore_best', False)
+        neurobe_best_state = None
+        neurobe_best_epoch = None
+        neurobe_last_epoch = None
+        self.neurobe_restored_from_epoch = None
+        self.neurobe_restore_stop_epoch = None
+        self.neurobe_restore_param_delta = None
+        self.neurobe_restore_param_scale = None
+
+        def _neurobe_snapshot():
+            return {k: v.detach().clone() for k, v in self.net.state_dict().items()}
+
+        def _neurobe_restore(stop_epoch):
+            """Reload the best-validation weights. Returns True if anything changed."""
+            self.neurobe_restore_stop_epoch = stop_epoch
+            if neurobe_best_state is None or neurobe_best_epoch == stop_epoch:
+                return False
+            # Measure how far the weights actually move, so "restoration happened"
+            # is evidence rather than an assumption. Float params only.
+            cur = self.net.state_dict()
+            d, nrm = 0.0, 0.0
+            for k, v in neurobe_best_state.items():
+                if not torch.is_floating_point(v):
+                    continue
+                d = max(d, float((cur[k] - v).abs().max()))
+                nrm = max(nrm, float(v.abs().max()))
+            self.net.load_state_dict(neurobe_best_state)
+            self.neurobe_restored_from_epoch = neurobe_best_epoch
+            self.neurobe_restore_param_delta = d
+            self.neurobe_restore_param_scale = nrm
+            print(f'[RESTORE-BEST] rewound {stop_epoch - neurobe_best_epoch} epoch(s): '
+                  f'epoch {stop_epoch} -> {neurobe_best_epoch} '
+                  f'(val {neurobe_prev_best:.6e}, max|dW| {d:.3e}, max|W| {nrm:.3e})', flush=True)
+            return True
+
         # IMPORTANT: Initialize normalizing constant from TRAINING data, not validation data
         # This ensures that max(y + bw) from training is used to prevent overflow in UKL loss
         # We load a small training sample first just to trigger the normalization computation
@@ -953,6 +995,7 @@ class Trainer:
                         # and is useless as a convergence diagnostic (doc 16 section 5).
                         # This changes no control flow.
                         self.val_losses.append((global_epoch_nb, neurobe_val_loss_value))
+                        neurobe_last_epoch = global_epoch_nb
                         if self.bucket.gm._training_logger:
                             log_val_loss(self.bucket.gm._training_logger, self.bucket.label,
                                          global_epoch_nb, neurobe_val_loss_value)
@@ -961,6 +1004,11 @@ class Trainer:
                         if neurobe_val_loss_value < neurobe_prev_best:
                             neurobe_prev_best = neurobe_val_loss_value
                             neurobe_patience_count = 0
+                            if neurobe_restore_best:
+                                # doc 35: same condition the patience rule just took,
+                                # so this costs one state_dict clone and no evaluation.
+                                neurobe_best_state = _neurobe_snapshot()
+                                neurobe_best_epoch = global_epoch_nb
                         else:
                             neurobe_patience_count += 1
 
@@ -968,6 +1016,8 @@ class Trainer:
                             print(f'NeuroBE patience early stopping at epoch {global_epoch_nb}: '
                                   f'count {neurobe_patience_count} > stop_iter {neurobe_stop_iter}, '
                                   f'best_val_loss={neurobe_prev_best:.6e}, current={neurobe_val_loss_value:.6e}')
+                            if neurobe_restore_best:
+                                _neurobe_restore(global_epoch_nb)
                             self.bucket.gm.traced_losses_data.append((self.bucket.label, traced_losses_data))
                             if self.bucket.gm._training_logger:
                                 log_early_stopping(self.bucket.gm._training_logger, self.bucket.label, global_epoch_nb, "neurobe_patience", neurobe_val_loss_value)
@@ -1015,6 +1065,13 @@ class Trainer:
         if use_neurobe_early_stopping:
             self.neurobe_patience_count = neurobe_patience_count
             self.neurobe_prev_best = neurobe_prev_best
+            # doc 35: training ran to the num_epochs cap without patience firing.
+            # Restore here too, so "best weights" means the same thing however
+            # training ended. Doc 29 measured 0/216 clusters reach the cap on
+            # these cells, so this branch is inert there -- it is here for
+            # correctness, not for the measurement.
+            if neurobe_restore_best and neurobe_last_epoch is not None:
+                _neurobe_restore(neurobe_last_epoch)
 
         # for retraining after one loss, reverts config back
         if new_loss_fn is not None:

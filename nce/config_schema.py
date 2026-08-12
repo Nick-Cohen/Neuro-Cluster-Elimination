@@ -130,6 +130,10 @@ NESTED_SECTIONS = OrderedDict([
         'normalization_mode':            _field('normalization_mode', default='logspace_mean'),
         'neurobe_early_stopping':        _field('neurobe_early_stopping', default=False),
         'neurobe_stop_iter':             _field('neurobe_stop_iter', default=2),
+        # doc 35: restore the best-validation weights when the patience rule stops.
+        # Default False = historical behaviour (the net is left at the stopping
+        # epoch, which is neurobe_stop_iter+1 epochs past the best one).
+        'neurobe_restore_best':          _field('neurobe_restore_best', default=False),
         'use_amp':                       _field('use_amp', default=True),
         'training_time_limit':           _field('training_time_limit', default=None),
     }),
