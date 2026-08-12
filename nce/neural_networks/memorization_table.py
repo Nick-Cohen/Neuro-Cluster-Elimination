@@ -121,6 +121,53 @@ class HybridMemorizerNet(nn.Module):
 # --------------------------------------------------------------------------- #
 # table construction
 # --------------------------------------------------------------------------- #
+def _proposal_tree_over_scope(bucket, gm, scope, ecl=0, temperature=1.0):
+    """`build_proposal_for_bucket`, but over the scope WE ask for.
+
+    The shipped function picks the scope itself via `proposal_scope_for_bucket`,
+    which for a bucket with a SINGLE elim var reads the pre-merge
+    `gm.message_scopes` cache. That cache is computed before any merge pass, so
+    once a neighbour has been merged the messages actually arriving at an
+    unmerged bucket can span variables the cache never predicted, and
+    `build_proposal_tree` then raises `KeyError: <label>` on the missing domain
+    size. Measured on `dbn/rbm_20` under reduce-NN: 11/11 NN clusters raise.
+    Doc 10's defect-4 fix covered the MERGED branch of the same function and
+    left this one alone.
+
+    We already know the correct scope -- `bucket.get_message_scope()`, which is
+    recomputed from the bucket's current factors -- so pass it in. Everything
+    else mirrors `proposal_sampler.build_proposal_for_bucket` verbatim.
+    """
+    from nce.inference.factor import FastFactor
+    from nce.sampling.proposal_sampler import ProposalTree, build_proposal_tree
+
+    up = bucket.approximate_upstream_factors or []
+    down = bucket.approximate_downstream_factors or []
+    all_factors = list(up) + list(down)
+    if not all_factors or not scope:
+        return ProposalTree([], gm.device)
+    if temperature != 1.0:
+        all_factors = [FastFactor(f.tensor / temperature, list(f.labels))
+                       for f in all_factors]
+
+    elim_var_labels = sorted({getattr(v, 'label', v) for v in bucket.elim_vars})
+    domain_sizes = {v: gm.matching_var(v).states for v in scope}
+    for lab in elim_var_labels:
+        domain_sizes[lab] = gm.matching_var(lab).states
+    # Any label the backward chain carries that is neither in the separator nor
+    # an elim var still needs a domain size for the WMB step below.
+    for f in all_factors:
+        for lab in f.labels:
+            if lab not in domain_sizes:
+                domain_sizes[lab] = gm.matching_var(lab).states
+
+    msg_factors = gm._wmb_eliminate_to_scope(
+        all_factors, list(scope), gm.matching_var(elim_var_labels[0]))
+    return build_proposal_tree(
+        factors=msg_factors, message_scope=list(scope),
+        domain_sizes=domain_sizes, ecl=ecl, device=gm.device, reference_gm=gm)
+
+
 def _budget(msg_size, abs_cap, frac, floor_at_least=1):
     """Resolve a budget that is expressed as an absolute cap and/or a fraction."""
     cands = [msg_size]
@@ -180,8 +227,8 @@ def build_memorization_table(bucket, trainer, config):
 
     # ---- 1. no-repeat samples from the WMB proposal tree ------------------ #
     t0 = time.time()
-    tree = build_proposal_for_bucket(
-        bucket, gm, ecl=config.get('bw_ecl', 0),
+    tree = _proposal_tree_over_scope(
+        bucket, gm, scope, ecl=config.get('bw_ecl', 0),
         temperature=float(config.get('proposal_temperature', 1.0)))
     rng = torch.Generator(device=device)
     rng.manual_seed(int(config.get('seed', 42)) * 1000003 + int(bucket.label))
