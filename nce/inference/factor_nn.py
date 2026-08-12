@@ -1,9 +1,43 @@
+import os
 import torch
 import time
 from torch import nn
 from typing import List
 from .factor import FastFactor
 import torch.nn.functional as F
+
+# ----------------------------------------------------------------------------
+# Stage 2b: fold the first Linear into the one-hot encoding.
+#
+# Multiplying a one-hot block matrix by W0 only SELECTS and SUMS the matching
+# columns of W0, so the whole thing is
+#     F.embedding_bag(cols, emb, mode='sum') + b0
+# with `emb[c] == W0[:, c]` and one extra all-zero row for the dropped category
+# under `lower_dim`.  The one-hot matrix is never materialised.
+#
+# THE HAZARD: `emb` is DERIVED from W0.  If W0 changes and `emb` is not rebuilt,
+# every downstream number is silently wrong.  The only key that is safe against
+# *every* way W0 can change is "no key at all": `emb` is rebuilt from the live
+# parameter on every call of `_get_slices` / `_eval_elim_block`, which costs one
+# `cat` of a (width, h) matrix -- amortised over the whole chunk loop.
+#
+# `_FUSE_CACHE_MODE` exists so that the alternatives can be *tested*, not
+# because they should be used:
+#   'none'        (default) rebuild per call -- staleness impossible by construction
+#   'ptr_version' cache keyed on (data_ptr, _version, dtype, device, shape)
+#                 -- the originally proposed key; MISSES `.data` writes
+#   'never'       cache once and never invalidate -- deliberately broken, used to
+#                 prove the invalidation tests are not passing vacuously
+# ----------------------------------------------------------------------------
+_FUSE_CACHE_MODE = os.environ.get('NCE_FUSE_CACHE_MODE', 'none')
+# Master kill switch.  '0' restores the stage-2a one-hot path exactly.
+_FUSE_FIRST_LINEAR = os.environ.get('NCE_FUSE_FIRST_LINEAR', '1') != '0'
+
+# Modules the fused tail is allowed to contain.  Anything else (dropout,
+# batchnorm, a custom masking module, ...) disables the fusion rather than
+# risking a semantic difference.
+_FUSE_ALLOWED_TAIL = (nn.Linear, nn.Tanh, nn.ReLU, nn.Identity)
+
 
 class FactorNN(FastFactor):
     """
@@ -148,6 +182,110 @@ class FactorNN(FastFactor):
             return torch.zeros((n_rows, n_labels), dtype=torch.int64, device=src.device)
         return src.index_select(1, sel)
 
+    # ------------------------------------------------------------------
+    # Stage 2b: fold the first Linear into the encoding (embedding_bag)
+    # ------------------------------------------------------------------
+    def _fusable_first_linear(self, width):
+        """Return ``(W0, b0, tail_modules)`` if this net's first operation is a
+        plain ``nn.Linear`` applied to the one-hot block matrix, else ``None``.
+
+        Deliberately conservative: anything that is not a stock ``Net`` running a
+        stock ``nn.Sequential`` of Linear/Tanh/ReLU is refused, because the
+        fusion *replaces* ``net(one_hot)`` and must not change semantics.
+        """
+        if not _FUSE_FIRST_LINEAR:
+            return None
+        net = self.net
+        try:
+            from nce.neural_networks.net import Net as _Net
+        except Exception:
+            return None
+        # Subclasses that override forward (Memorizer, BitVectorLookup) never
+        # run self.network, so folding its first layer would be meaningless.
+        if type(net).forward is not _Net.forward:
+            return None
+        seq = getattr(net, 'network', None)
+        if not isinstance(seq, nn.Sequential) or len(seq) == 0:
+            return None
+        first = seq[0]
+        if type(first) is not nn.Linear or first.in_features != width:
+            return None
+        if first.bias is None:
+            return None
+        for m in list(seq)[1:]:
+            if not isinstance(m, _FUSE_ALLOWED_TAIL):
+                return None
+        return first.weight, first.bias, list(seq)[1:]
+
+    @staticmethod
+    def _first_layer_embedding(W0):
+        """``(width + 1, h)`` table with ``emb[c] == W0[:, c]``.
+
+        The extra final row is all zeros: it absorbs the dropped category under
+        ``lower_dim`` (which contributes no one-hot column at all), exactly as
+        the dump column does in ``_one_hot_from_cols``.
+        """
+        return torch.cat([W0.t(), W0.new_zeros(1, W0.shape[0])], dim=0)
+
+    @staticmethod
+    def _w0_key(W0):
+        """The originally proposed cache key.  Kept only so it can be tested."""
+        return (W0.data_ptr(), W0._version, str(W0.dtype), str(W0.device),
+                tuple(W0.shape))
+
+    def _fused_embedding(self, W0):
+        """Get ``emb`` for the current W0 under the active cache mode.
+
+        Default ('none') rebuilds from the live parameter every call, so a stale
+        table cannot exist.  The other modes exist for the invalidation tests.
+        """
+        mode = _FUSE_CACHE_MODE
+        if mode == 'none':
+            return self._first_layer_embedding(W0)
+        ent = getattr(self, '_emb_cache', None)
+        if mode == 'never':
+            if ent is None:
+                ent = self._emb_cache = (None, self._first_layer_embedding(W0))
+            return ent[1]
+        if mode == 'ptr_version':
+            key = self._w0_key(W0)
+            if ent is None or ent[0] != key:
+                ent = self._emb_cache = (key, self._first_layer_embedding(W0))
+            return ent[1]
+        raise ValueError(f"unknown NCE_FUSE_CACHE_MODE {mode!r}")
+
+    @staticmethod
+    def _mask_dropped(cols, offsets, width, lower):
+        """Route the dropped `lower_dim` category (value 0, which contributes no
+        one-hot column) to the all-zero embedding row.
+
+        Applied to the SMALL per-source matrices before they are broadcast into
+        the (n_elim, chunk, n_labels) cube -- masking the cube itself costs a
+        full extra int64 pass over it and measurably dominates the fusion.
+        """
+        if not lower:
+            return cols
+        return cols.masked_fill(cols == offsets, width)
+
+    def _fused_forward(self, idx, fused):
+        """``net(one_hot(idx))`` without ever materialising the one-hot.
+
+        `idx` must already have the dropped category routed to row `width`
+        (see `_mask_dropped`)."""
+        W0, b0, tail = fused
+        n_labels = idx.shape[-1]
+        idx = idx.reshape(idx.numel() // n_labels, n_labels)
+        emb = self._fused_embedding(W0)
+        x = F.embedding_bag(idx, emb, mode='sum') + b0
+        for m in tail:
+            x = m(x)
+        net = self.net
+        if getattr(net, 'use_linspace_bias', False):
+            combined = torch.stack([x, net.linspace_bias.expand(x.shape[0], 1)],
+                                   dim=-1)
+            x = torch.logsumexp(combined, dim=-1, keepdim=True)
+        return x
+
     def _get_slices(self, assignments, elim_vars, elim_domain_sizes, message_scope):
         """
         Args:
@@ -209,6 +347,11 @@ class FactorNN(FastFactor):
         is_msg_t, msg_src_t, elim_src_t = self._col_src_tensors(col_src, dev)
         elim_a = all_elim_assignments.to(dev)
         elim_cols = self._gather_cols(elim_a, elim_src_t, n_elim, n_labels) + offsets
+        # Stage 2b: if the first Linear can be folded into the encoding, the
+        # one-hot is never built at all.
+        fused = self._fusable_first_linear(oh_width)
+        if fused is not None:
+            elim_cols = self._mask_dropped(elim_cols, offsets, oh_width, oh_lower)
 
         chunks_out = []
         for start in range(0, n_assign, chunk_size):
@@ -219,11 +362,17 @@ class FactorNN(FastFactor):
             # (n_elim, chunk_n, n_labels) one-hot column indices by broadcasting.
             # Row ordering (block-major by elim: i_elim*chunk_n + a) is preserved.
             msg_cols = self._gather_cols(chunk, msg_src_t, chunk_n, n_labels) + offsets
+            if fused is not None:
+                msg_cols = self._mask_dropped(msg_cols, offsets, oh_width, oh_lower)
             cols = torch.where(is_msg_t, msg_cols.unsqueeze(0), elim_cols.unsqueeze(1))
-            one_hot = self._one_hot_from_cols(cols, offsets, oh_width, oh_lower,
-                                              param_dtype, dev)
+            if fused is not None:
+                raw = self._fused_forward(cols, fused)
+            else:
+                one_hot = self._one_hot_from_cols(cols, offsets, oh_width, oh_lower,
+                                                  param_dtype, dev)
+                raw = self.net(one_hot)
 
-            values = self.data_processor.undo_normalization(self.net(one_hot))
+            values = self.data_processor.undo_normalization(raw)
             chunks_out.append(values.view(n_elim, chunk_n).T.detach())
 
         if not chunks_out:                                 # n_assign == 0
@@ -288,16 +437,25 @@ class FactorNN(FastFactor):
         offsets, oh_width, oh_lower = self._onehot_layout(dev)
         is_msg_t, msg_src_t, elim_src_t = self._col_src_tensors(col_src, dev)
         msg_cols = self._gather_cols(assignments, msg_src_t, A, n_labels) + offsets
+        fused = self._fusable_first_linear(oh_width)
+        if fused is not None:
+            msg_cols = self._mask_dropped(msg_cols, offsets, oh_width, oh_lower)
 
         out = torch.empty((A, B), device=dev)
         for b0 in range(0, B, bchunk):
             b1 = min(B, b0 + bchunk)
             b = b1 - b0
             elim_cols = self._gather_cols(elim_coords[b0:b1], elim_src_t, b, n_labels) + offsets
+            if fused is not None:
+                elim_cols = self._mask_dropped(elim_cols, offsets, oh_width, oh_lower)
             cols = torch.where(is_msg_t, msg_cols.unsqueeze(0), elim_cols.unsqueeze(1))
-            one_hot = self._one_hot_from_cols(cols, offsets, oh_width, oh_lower,
-                                              param_dtype, dev)
-            vals = self.data_processor.undo_normalization(self.net(one_hot))
+            if fused is not None:
+                raw = self._fused_forward(cols, fused)
+            else:
+                one_hot = self._one_hot_from_cols(cols, offsets, oh_width, oh_lower,
+                                                  param_dtype, dev)
+                raw = self.net(one_hot)
+            vals = self.data_processor.undo_normalization(raw)
             out[:, b0:b1] = vals.view(b, A).T
         return out.detach()                                      # (A, B)
 
