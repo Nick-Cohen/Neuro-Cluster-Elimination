@@ -208,4 +208,4 @@ To implement this in the NCE `SampleGenerator`:
 - **NN architecture:** `/home/cohenn1/SDBE/NeuroBE/BE-sampling-project/ARP/Problem/Net.h`
 - **Config defaults:** `/home/cohenn1/SDBE/NeuroBE/BE-sampling-project/ARP/Problem/Config.h`
 - **Run scripts:** `/home/cohenn1/SDBE/NeuroBE/BE-sampling-project/BESampling/_build/grid40_f10.sh`
-- **Paper:** NeuroBE: Escalating NN Approximations to Bucket Elimination (Agarwal et al., AAAI 2022)
+- **Paper:** NeuroBE: Escalating Neural Network Approximations of Bucket Elimination (Agarwal, Kask, Ihler & Dechter, UAI 2022; PMLR 180, pp. 11–21)
