@@ -196,8 +196,19 @@ def build_proposal_tree(factors: List[FastFactor], message_scope: List[int],
     config['approximation_method'] = 'wmb'
     config['ecl'] = ecl
     config['iB'] = int(math.log2(ecl)) if ecl > 0 else 0
-    # Don't re-merge inside the proposal-tree's temporary GM
+    # Don't re-merge inside the proposal-tree's temporary GM.
+    # FastGM.__init__ dispatches FOUR independent merge passes; disabling two of
+    # them left reduce-NN and non-subsumption free to merge here. A merged temp
+    # cluster eliminates several variables at once while `levels` below records
+    # exactly one elim var per level, so a level's saved factors end up
+    # referencing variables that have not been sampled yet and the NR sampler
+    # dies with `KeyError: <label>` in `_conditional_log_probs_batch`
+    # (`no_replacement_sampler_v2.py:57`). Measured on `dbn/rbm_20` under
+    # reduce-NN: 11/11 NN clusters. Same defect class as doc 10's defect 1 in
+    # `_create_population_copy`, at a site doc 10 did not cover.
     config['use_join_tree_merge'] = False
+    config['use_reduce_nn_merge'] = False
+    config['use_non_subsumption_merge'] = False
     config['merge_degree'] = 0
 
     temp_gm = FastGM(

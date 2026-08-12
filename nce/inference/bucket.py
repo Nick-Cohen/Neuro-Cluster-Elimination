@@ -539,8 +539,10 @@ class FastBucket:
                     net.eval()
                     _mstats['ok'] = True
                 except Exception as _e:
+                    import traceback as _tb
                     _mstats = {'bucket': self.label, 'ok': False,
-                               'error': f"{type(_e).__name__}: {_e}"}
+                               'error': f"{type(_e).__name__}: {_e}",
+                               'traceback': _tb.format_exc()[-1500:]}
                     print(f"[Memorize] bucket {self.label}: FAILED ({_mstats['error']})")
                 _mstats['total_seconds'] = _mt.time() - _m0
                 self.gm.phase_times['memorize'] = \
