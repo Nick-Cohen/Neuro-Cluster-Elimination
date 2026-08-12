@@ -9,8 +9,8 @@ Phase 2: For each hard bucket, runs exact upstream elimination and caches
           factor tensors + exact forward/backward messages to .pt files.
 
 Usage:
-    python scripts/select_hard_buckets.py --top-n 0.1 --gpus 0,1,2,3
-    python scripts/select_hard_buckets.py --skip-phase1 --top-n 0.05  # reuse Phase 1 results
+    python scripts/select_hard_buckets.py --threshold 0.1 --gpus 0,1,2,3
+    python scripts/select_hard_buckets.py --skip-phase1 --threshold 0.05  # reuse Phase 1 results
 """
 import argparse
 import json
@@ -26,9 +26,9 @@ from pathlib import Path
 NUM_PROBLEMS = 24  # small_problems has exactly 24 models
 
 
-# --- Phase 1: Selection ------------------------------------------------------
+# ─── Phase 1: Selection ──────────────────────────────────────────────────────
 
-def _spawn_worker(problem_index, gpu_id, tmp_dir):
+def _spawn_worker(problem_index, gpu_id, tmp_dir, threshold):
     """Spawn a single worker subprocess on the specified GPU. Returns (problem_index, gpu_id, proc, output_path)."""
     output_path = os.path.join(tmp_dir, f'problem_{problem_index}.json')
 
@@ -40,7 +40,7 @@ def _spawn_worker(problem_index, gpu_id, tmp_dir):
         'scripts/select_hard_buckets_worker.py',
         '--problem-index', str(problem_index),
         '--output-path', output_path,
-        '--top-n', str(threshold),
+        '--threshold', str(threshold),
     ]
 
     proc = subprocess.Popen(
@@ -53,7 +53,7 @@ def _spawn_worker(problem_index, gpu_id, tmp_dir):
     return (problem_index, gpu_id, proc, output_path)
 
 
-def run_phase1(gpus, output_dir):
+def run_phase1(gpus, output_dir, threshold):
     """Spawn workers across GPUs (max 1 per GPU), merge results, identify hard buckets."""
     print(f"\n{'='*60}")
     print(f"Phase 1: Selection run ({NUM_PROBLEMS} problems across {len(gpus)} GPUs)")
@@ -82,7 +82,7 @@ def run_phase1(gpus, output_dir):
     for g in gpus:
         if gpu_queues[g]:
             pidx = gpu_queues[g].popleft()
-            w = _spawn_worker(pidx, g, tmp_dir)
+            w = _spawn_worker(pidx, g, tmp_dir, threshold)
             active[g] = w
             print(f"  Spawned problem {pidx} on GPU {g} (PID {w[2].pid})")
 
@@ -110,7 +110,7 @@ def run_phase1(gpus, output_dir):
                 # Launch next problem for this GPU if any remain
                 if gpu_queues[g]:
                     next_pidx = gpu_queues[g].popleft()
-                    w = _spawn_worker(next_pidx, g, tmp_dir)
+                    w = _spawn_worker(next_pidx, g, tmp_dir, threshold)
                     active[g] = w
                     print(f"  Spawned problem {next_pidx} on GPU {g} (PID {w[2].pid})")
                 else:
@@ -141,7 +141,7 @@ def run_phase1(gpus, output_dir):
     selection_results_path = os.path.join(output_dir, 'selection_results.json')
     with open(selection_results_path, 'w') as f:
         json.dump({
-            'selection_strategy': f'top-{top_n}',
+            'threshold': threshold,
             'selection_date': datetime.now().isoformat(),
             'num_problems': NUM_PROBLEMS,
             'gpus': gpus,
@@ -152,12 +152,11 @@ def run_phase1(gpus, output_dir):
     return all_results
 
 
-def identify_hard_buckets(all_results, top_n):
-    """Select top-N hardest buckets by abs_log_Z_err across all problems."""
-    all_buckets = []
+def identify_hard_buckets(all_results, threshold):
+    """Filter results to find hard buckets (abs_log_Z_err > threshold)."""
+    hard_buckets = []
     total_nn_buckets = 0
 
-    # Collect all buckets with their errors
     for result in all_results:
         if 'error' in result and 'buckets' not in result:
             continue  # Skip failed problems
@@ -168,8 +167,8 @@ def identify_hard_buckets(all_results, top_n):
         for bucket in result.get('buckets', []):
             total_nn_buckets += 1
             final_err = bucket.get('final_abs_log_Z_err')
-            if final_err is not None:
-                all_buckets.append({
+            if final_err is not None and final_err > threshold:
+                hard_buckets.append({
                     'problem_index': result['problem_index'],
                     'problem_key': problem_key,
                     'model_file': model_file,
@@ -179,25 +178,22 @@ def identify_hard_buckets(all_results, top_n):
                     'auto_ecl': auto_ecl,
                 })
 
-    # Sort by error (descending) and take top N
-    all_buckets.sort(key=lambda x: x['selection_error'], reverse=True)
-    hard_buckets = all_buckets[:top_n]
-
     print(f"\n{'='*60}")
-    print(f"Hard bucket identification (top-{top_n} by abs_log_Z_err)")
+    print(f"Hard bucket identification (threshold={threshold})")
     print(f"{'='*60}")
     print(f"  Total NN buckets trained: {total_nn_buckets}")
-    print(f"  Hard buckets selected: {len(hard_buckets)}")
-    print(f"\nTop {len(hard_buckets)} hardest buckets:")
-    for i, hb in enumerate(hard_buckets, 1):
-        print(f"  {i:2d}. {hb['problem_key']:30s} bucket {hb['bucket_label']:4d}: "
-              f"abs_log_Z_err={hb['selection_error']:.6f}")
+    print(f"  Hard buckets found: {len(hard_buckets)}")
+    if len(hard_buckets) < 3:
+        print(f"  WARNING: Fewer than 3 hard buckets found. Consider lowering --threshold.")
+    for hb in hard_buckets:
+        print(f"    {hb['problem_key']} bucket {hb['bucket_label']}: "
+              f"abs_log_Z_err={hb['selection_error']:.4f}")
     print()
 
     return hard_buckets, total_nn_buckets
 
 
-# --- Phase 2: Precomputation -------------------------------------------------
+# ─── Phase 2: Precomputation ─────────────────────────────────────────────────
 
 def run_phase2(hard_buckets, output_dir):
     """For each hard bucket, compute exact messages and cache to .pt files."""
@@ -323,9 +319,9 @@ def run_phase2(hard_buckets, output_dir):
     return cached_files
 
 
-# --- Manifest generation -----------------------------------------------------
+# ─── Manifest generation ─────────────────────────────────────────────────────
 
-def write_manifest(cached_files, hard_buckets, output_dir, top_n, total_nn_buckets):
+def write_manifest(cached_files, hard_buckets, output_dir, threshold, total_nn_buckets):
     """Write bucket_list.json manifest."""
     manifest_buckets = []
     for cf in cached_files:
@@ -343,7 +339,7 @@ def write_manifest(cached_files, hard_buckets, output_dir, top_n, total_nn_bucke
         })
 
     manifest = {
-        'selection_strategy': f'top-{top_n}',
+        'threshold': threshold,
         'selection_date': datetime.now().isoformat(),
         'num_problems': NUM_PROBLEMS,
         'total_nn_buckets': total_nn_buckets,
@@ -359,14 +355,14 @@ def write_manifest(cached_files, hard_buckets, output_dir, top_n, total_nn_bucke
     return manifest_path
 
 
-# --- Main ---------------------------------------------------------------------
+# ─── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
     parser = argparse.ArgumentParser(
         description="Hard bucket selection pipeline: identify hard buckets and precompute cached data"
     )
-    parser.add_argument('--top-n', type=int, default=10,
-                        help='Number of hardest buckets to select for hard bucket selection (default: 0.1)')
+    parser.add_argument('--threshold', type=float, default=0.1,
+                        help='abs_log_Z_err threshold for hard bucket selection (default: 0.1)')
     parser.add_argument('--gpus', type=str, default='0,1,2,3',
                         help='Comma-separated GPU IDs for Phase 1 workers (default: 0,1,2,3)')
     parser.add_argument('--output-dir', type=str, default='data/hard_buckets',
@@ -381,7 +377,7 @@ def main():
     # Create output directory
     os.makedirs(output_dir, exist_ok=True)
 
-    # -- Phase 1 --
+    # ── Phase 1 ──
     if args.skip_phase1:
         selection_results_path = os.path.join(output_dir, 'selection_results.json')
         if not os.path.exists(selection_results_path):
@@ -392,22 +388,22 @@ def main():
             data = json.load(f)
         all_results = data['results']
     else:
-        all_results = run_phase1(gpus, output_dir)
+        all_results = run_phase1(gpus, output_dir, args.threshold)
 
-    # -- Identify hard buckets --
-    hard_buckets, total_nn_buckets = identify_hard_buckets(all_results, args.top_n)
+    # ── Identify hard buckets ──
+    hard_buckets, total_nn_buckets = identify_hard_buckets(all_results, args.threshold)
 
     if not hard_buckets:
-        print("\nNo hard buckets found. Consider lowering --top-n.")
+        print("\nNo hard buckets found. Consider lowering --threshold.")
         # Still write an empty manifest
-        write_manifest([], hard_buckets, output_dir, args.top_n, total_nn_buckets)
+        write_manifest([], hard_buckets, output_dir, args.threshold, total_nn_buckets)
         return
 
-    # -- Phase 2 --
+    # ── Phase 2 ──
     cached_files = run_phase2(hard_buckets, output_dir)
 
-    # -- Manifest --
-    write_manifest(cached_files, hard_buckets, output_dir, args.top_n, total_nn_buckets)
+    # ── Manifest ──
+    write_manifest(cached_files, hard_buckets, output_dir, args.threshold, total_nn_buckets)
 
     print(f"\n{'='*60}")
     print(f"Pipeline complete")

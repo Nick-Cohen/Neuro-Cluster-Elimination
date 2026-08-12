@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """Multi-GPU bucket benchmark coordinator.
 
 Orchestrates parallel training of hard buckets across multiple GPUs.
