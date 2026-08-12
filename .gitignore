@@ -40,3 +40,6 @@ tmp/
 
 # ── GSD baseline (auto-generated) ──
 .gsd
+
+# ai-ops runtime state that lands inside the knowledge vault (not knowledge)
+knowledge-base/.claude/
