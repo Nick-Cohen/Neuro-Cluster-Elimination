@@ -242,6 +242,9 @@ class Trainer:
         # NeuroBE patience-based early stopping (distinct from NBE early stopping)
         use_neurobe_early_stopping = self.config.get('neurobe_early_stopping', False)
         neurobe_stop_iter = self.config.get('neurobe_stop_iter', 2)
+        # Relative improvement required before an epoch counts as an improvement.
+        # 0.0 == historical behaviour (bare `<`, decided by the last float bit).
+        neurobe_es_min_delta = float(self.config.get('neurobe_es_min_delta', 0.0) or 0.0)
         neurobe_patience_count = 0
         neurobe_prev_best = float('inf')
 
@@ -856,8 +859,31 @@ class Trainer:
                                 neurobe_val_loss = neurobe_val_loss.mean()
                             neurobe_val_loss_value = neurobe_val_loss.item()
 
-                        # Patience counter: reset on improvement, increment otherwise
-                        if neurobe_val_loss_value < neurobe_prev_best:
+                        # Instrumentation only (doc 18/19, commit 2ae8cc1 on
+                        # feat/wmb-residual, re-applied here): record the validation loss
+                        # the patience rule is already reading, so the epoch policy can be
+                        # diagnosed from the *validation* trajectory. The training loss
+                        # underflows to exactly 0.0 under neurobe_weighted_mse at float32
+                        # and is useless as a convergence diagnostic. Changes no control flow.
+                        self.val_losses.append((global_epoch_nb, neurobe_val_loss_value))
+                        if self.bucket.gm._training_logger:
+                            log_val_loss(self.bucket.gm._training_logger, self.bucket.label,
+                                         global_epoch_nb, neurobe_val_loss_value)
+
+                        # Patience counter: reset on improvement, increment otherwise.
+                        # With neurobe_es_min_delta == 0.0 (the default) this is the
+                        # historical bare `<` comparison, which is decided by the last
+                        # bit of the validation loss and therefore turns any float-level
+                        # nondeterminism into a different stopping epoch. A positive
+                        # relative threshold requires a real improvement instead.
+                        # abs() so a negative loss (e.g. unnormalized_kl) still needs to
+                        # get *smaller* by the same relative amount.
+                        # math.isfinite guard: prev_best starts at +inf and inf - inf is nan.
+                        _nb_thresh = (neurobe_prev_best
+                                      - abs(neurobe_prev_best) * neurobe_es_min_delta
+                                      if math.isfinite(neurobe_prev_best)
+                                      else neurobe_prev_best)
+                        if neurobe_val_loss_value < _nb_thresh:
                             neurobe_prev_best = neurobe_val_loss_value
                             neurobe_patience_count = 0
                         else:
