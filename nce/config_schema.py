@@ -93,6 +93,12 @@ NESTED_SECTIONS = OrderedDict([
         'loss_fn_phase2':                _field('loss_fn2', default=None),
         'loss_fn2':                      _field('loss_fn2', default=None),
         'optimizer':                     _field('optimizer', default='adam'),
+        # Adam's numerical guard. None => leave torch's constructor default (1e-8)
+        # untouched, so every existing config reproduces bit-for-bit. Exposed for
+        # doc 26's control: eps is the ONLY channel through which a uniform rescale
+        # of the loss reaches Adam's update, so "is the residual result really an
+        # eps-tuning result?" is answered by tuning eps on the baseline directly.
+        'adam_eps':                      _field('adam_eps', default=None),
         'learning_rate':                 _field('lr', default=0.001),
         'lr':                            _field('lr', default=0.001),
         'learning_rate_decay':           _field('lr_decay', default=1.0),

@@ -1628,16 +1628,22 @@ class Trainer:
     def set_optimizer(self, name):
         if name == 'adam' or name == 'Adam':
             wd = float(self.config.get('weight_decay', 0.0))
+            # Adam's numerical guard. Left absent unless the config names it, so the
+            # constructor call is byte-identical to before for every existing config.
+            _eps = self.config.get('adam_eps', None)
+            _ekw = {} if _eps is None else {'eps': float(_eps)}
             if wd > 0:
                 self.optimizer = optim.AdamW(
                     self.net.parameters(),
                     lr=self.config['lr'],
                     weight_decay=wd,
+                    **_ekw,
                 )
             else:
                 self.optimizer = optim.Adam(
                     self.net.parameters(),
-                    lr=self.config['lr']
+                    lr=self.config['lr'],
+                    **_ekw,
                 )
         elif name == 'muon':
             from muon import SingleDeviceMuonWithAuxAdam
