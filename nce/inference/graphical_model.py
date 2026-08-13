@@ -80,6 +80,12 @@ class FastGM:
             self.seed = self.config.get('seed')
             self.gather_message_stats = self.config.get('gather_message_stats', False)
 
+        # Deterministic-algorithms guard (warning mode). Off unless asked for by
+        # config['deterministic_guard'] or NCE_DETERMINISM_GUARD=1; it costs
+        # ~2.5x wall time (see nce/utils/determinism.py).
+        from nce.utils import determinism as _determinism
+        _determinism.maybe_enable_from_config(self.config)
+
         # Set up training logger (JSONL file) if log_file is configured
         log_file_path = self.config.get('log_file')
         if log_file_path:

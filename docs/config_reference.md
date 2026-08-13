@@ -89,6 +89,7 @@ and neural network approximation.
 | `approximation_method` | `approximation_method` | `str` | `'nn'` | Which approximation method to use for large buckets. See [Approximation Method Values](#approximation-method-values). |
 | `dope_factors` | `dope_factors` | `bool` | `False` | Replace `-inf` values in factor tensors with a finite floor (`-5`). Prevents numerical issues from zero-probability entries in the original model. |
 | `device` | `device` | `str` | `'cuda'` | PyTorch device for tensor computation. `'cuda'` for GPU, `'cpu'` for CPU. |
+| `deterministic_guard` | `deterministic_guard` | `bool` | `False` | Enable `torch.use_deterministic_algorithms(True, warn_only=True)` for the process. Nondeterministic ops warn instead of raising, so a run completes and reports every offender. Costs roughly 2.5x wall time, so it is off by default. Equivalent env var: `NCE_DETERMINISM_GUARD=1`. See `nce/utils/determinism.py`. |
 | `neurobe_mode` | `neurobe_mode` | `bool` | `False` | Master flag for NeuroBE-faithful training mode. When enabled, activates NeuroBE-specific defaults (min-max normalization, weighted MSE loss, ReLU activation, patience-based early stopping). |
 
 ## NN Section
@@ -182,6 +183,7 @@ Controls how training data is generated from the graphical model buckets.
 |---|---|---|---|---|
 | `sampling_scheme` | `sampling_scheme` | `str` | `'uniform'` | How to generate training samples. See [Sampling Scheme Values](#sampling-scheme-values). |
 | `num_samples` | `num_samples` | `int` \| `str` | **required** | Number of training samples to generate. See [num_samples Polymorphic Values](#num_samples). |
+| `common_random_numbers` | `common_random_numbers` | `bool` | `False` | Common random numbers for `sampling_scheme='uniform'`. When `True`, separator assignments are a pure function of (`seed`, separator, train/val, draw index) instead of the global RNG, so two runs that produce the same separator draw byte-identical assignments in the same order regardless of merge strategy or elimination order, and a larger draw extends a smaller one. Use it for paired strategy comparisons. Changes the numbers, so it is off by default. See `nce/sampling/crn.py`. |
 | `set_size` | `set_size` | `int` \| `None` | `None` | Size of each sample set (training data is generated in sets). If `None`, all samples are generated as one set. `num_batches_per_set` is computed internally as `set_size // batch_size`. |
 | `val_set` | `val_set` | `bool` \| `str` \| `None` | `True` | Validation set configuration. See [val_set Polymorphic Values](#val_set). |
 | `stratify_samples` | `stratify_samples` | `bool` | `False` | Use stratified sampling to ensure coverage of the variable domain. Generates samples that cover all combinations of elimination variable values. |

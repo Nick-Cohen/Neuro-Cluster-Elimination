@@ -74,6 +74,16 @@ class SampleGenerator:
         # Each call to sample_assignments increments this to get unique but reproducible samples
         self._training_sample_counter = 0
         self._validation_sample_counter = 0
+        # Draw index actually used by the most recent _compute_seed() call. The
+        # counters above are POST-increment, so they cannot be read back to
+        # discover which draw a given call was; CRN needs that number as part of
+        # its stream key.
+        self._last_draw_index = 0
+
+        # Common random numbers (see nce/sampling/crn.py). OFF by default: it
+        # changes which assignments are drawn, so switching it on moves every
+        # number in the pipeline. Turn it on for the paired strategy comparison.
+        self.use_crn = bool(self.config.get('common_random_numbers', False))
 
     def reset_sample_counters(self):
         """Reset sampling counters to reproduce the same samples.
@@ -113,6 +123,7 @@ class SampleGenerator:
             counter = self._training_sample_counter
             self._training_sample_counter += 1
 
+        self._last_draw_index = counter
         seed = bucket_id + self.random_seed * 10000 + counter * 100 + validation_offset
         return seed
 
@@ -144,9 +155,17 @@ class SampleGenerator:
         # cluster trace is in flight; the seeding below is untouched by it.
         with gamma_trace.phase('assign'):
             if sampling_scheme == 'uniform':
-                # Set deterministic seed before sampling
+                # Set deterministic seed before sampling.
+                # NOTE: this is kept even under CRN. It does not feed the CRN
+                # stream (which touches no global state), but it is also what
+                # pins the GLOBAL torch/numpy RNG at the start of every bucket's
+                # data load, and therefore what makes NN weight init and batch
+                # shuffling reproducible. Removing it under CRN would have
+                # silently de-seeded training.
                 seed = self._compute_seed(is_validation=is_validation)
                 self._set_seed(seed)
+                if self.use_crn:
+                    return self.sample_uniform_crn(num_samples, is_validation=is_validation)
                 return self.sample_uniform(num_samples)
             elif sampling_scheme == 'all':
                 return self.sample_all()
@@ -182,7 +201,46 @@ class SampleGenerator:
             )
             samples.append(column_samples)
         return torch.stack(samples, dim=1)
-    
+
+    def crn_stream_payload(self, is_validation: bool = False, draw_index: int = None) -> str:
+        """The CRN stream identity string for this bucket's separator.
+
+        Exposed so tests (and a puzzled human) can see exactly which separators
+        two runs consider "the same". See nce/sampling/crn.py.
+        """
+        from nce.sampling import crn
+        if draw_index is None:
+            draw_index = self._last_draw_index
+        return crn.stream_payload(
+            seed=self.random_seed, scope=self.message_scope,
+            domain_sizes=[int(d) for d in self.domain_sizes],
+            role='val' if is_validation else 'train', draw_index=draw_index)
+
+    def sample_uniform_crn(self, num_samples, is_validation: bool = False,
+                           draw_index: int = None) -> torch.Tensor:
+        """Uniform separator assignments from the common-random-number stream.
+
+        Identical shape/dtype/device contract to `sample_uniform`, but the rows
+        are a pure function of (experimental seed, separator, role, draw index)
+        instead of of the global RNG. Two strategies that build a cluster with
+        the same separator therefore get byte-identical assignments, in the same
+        order, whichever order the clusters happen to be eliminated in; and a
+        larger draw is a strict extension of a smaller one.
+        """
+        from nce.sampling import crn
+        if draw_index is None:
+            draw_index = self._last_draw_index
+        return crn.uniform_assignments(
+            num_samples=num_samples,
+            scope=self.message_scope,
+            domain_sizes=[int(d) for d in self.domain_sizes],
+            seed=self.random_seed,
+            role='val' if is_validation else 'train',
+            draw_index=draw_index,
+            device=self.gm.device,
+        )
+
+
     def get_message_scope_and_dims(self) -> Tuple[List[int], torch.Tensor]:
         scope = set()
         for factor in self.bucket.factors:
