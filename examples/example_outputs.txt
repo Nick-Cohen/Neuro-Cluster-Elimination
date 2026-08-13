@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/home/cohenn1/NCE/examples/example_configs.py", line 91, in <module>
+    from nce.graphical_model import FastGM
+ModuleNotFoundError: No module named 'nce.graphical_model'

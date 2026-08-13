@@ -1,0 +1,32 @@
+# Same as g20f15_bucket_diag_bw_half_nr_interp_fullbatch.yaml but with
+# hidden_sizes='neurobe,5' (h = scope_size × 5) to test whether more
+# capacity helps with the overfitting pattern seen at b=1.
+
+experiment_name: 'g20f15_bdiag_half_nr_interp_fullbatch_b5'
+
+loss_fn: 'unnormalized_kl'
+use_bw_approx: True
+bw_iB: 10
+
+num_epochs: 20000
+batch_size: 1000000
+lr: 0.001
+
+hidden_sizes: 'neurobe,5'   # ← changed from 'neurobe,1'
+num_samples: 50000
+
+skip_early_stopping: False
+loss_threshold_log10_start: -6
+loss_threshold_log10_end: -1
+neurobe_early_stopping: False
+
+sampling_scheme: 'all'
+proposal_sampling: True
+proposal_mix: 'half_nr'
+proposal_temperature: 1.0
+bw_ecl: 1025
+
+device: 'cuda'
+output_subdir: 'benchmark_results'
+populate_bw_via_tree_collect: True
+populate_bw_skip_non_nn: True

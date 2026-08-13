@@ -1,0 +1,34 @@
+# Single-bucket diagnostic on bucket 47 of grid20x20.f15.
+# Same interp + UKL+bw_approx setup as the |err|=1.29 winner, BUT with
+# bw_ecl = 2^30+1 (= 1073741825) so the WMB backward message is
+# effectively exact at every step. May force CPU computation for the
+# bw factor build; training itself stays on cuda.
+experiment_name: 'g20f15_bdiag_b47_interp_bwexact'
+
+loss_fn: 'unnormalized_kl'
+use_bw_approx: True
+bw_iB: 30
+
+num_epochs: 20000
+batch_size: 256
+lr: 0.001
+
+hidden_sizes: 'neurobe,1'
+num_samples: 50000
+
+skip_early_stopping: False
+loss_threshold_log10_start: -6
+loss_threshold_log10_end: -1
+neurobe_early_stopping: False
+
+sampling_scheme: 'all'
+proposal_sampling: True
+proposal_mix: 'half_nr'
+proposal_temperature: 1.0
+bw_ecl: 1073741825
+
+device: 'cuda'
+output_subdir: 'benchmark_results'
+
+populate_bw_via_tree_collect: True
+populate_bw_skip_non_nn: True

@@ -1,0 +1,24 @@
+# Benchmark Configuration for Single-Bucket Training
+# Loss function to use
+loss_fn: 'unnormalized_kl'
+# use_bw_approx: True
+# bw_iB2: 10
+
+# Training hyperparameters
+num_epochs: 100000
+batch_size: 100000000
+# batch_size: 512
+lr: 0.001
+
+# Neural network architecture
+hidden_sizes: [64, 64]
+
+# Sampling configuration
+sampling_scheme: 'all'
+num_samples: -1
+
+# Device
+device: 'cuda'
+
+# Output directory (relative to data/hard_buckets/)
+output_subdir: 'benchmark_results'

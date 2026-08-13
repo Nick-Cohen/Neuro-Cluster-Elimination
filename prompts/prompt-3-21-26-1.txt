@@ -1,0 +1,17 @@
+The /home/cohenn1/NCE/BENCHMARK_USAGE.md is not sufficient.
+
+It needs to provide a sample config.yaml and it is fully populated and able to run.
+
+Additionally, the error tracking is insufficient when the batch size is small. I overlooked this, but when the batch size is small epochs take so long that the intervals we track error for do not suffice. It may only end up training for 1 epoch, so we see no trends.
+
+I forget what I told you as far as intervals to track error.
+
+If it turns out that the error tracking actually takes very little time (computing the local error over the full message etc), then we might as well simply move to checking after every epoch (you need to test this). IF it makes the training take more than 2x as long go with plan B. Otherwise go with plan A.
+
+Plan A: move to simply tracking the errors after every single epoch.
+
+Plan B: Whatever epochs I told you to track, multiply by (batch_size/amessage_size) and round up.
+    For example if I told you to track epochs 0, 7, 50, and 100, and the message size is 1000 and the batch size is 100
+        -> tracked epochs go to round_up((100/1000)[0,7,50,100]) = round_up([0,0.7,5,10]) = [0,1,5,10].
+    In cases with duplicates, discard the duplicates: For example if I told you to track epochs 0, 7, 10, 50, and 100, and the message size is 1000 and the batch size is 100
+        -> [0,1,1,5,10] but 1 is a duplicate, so just track [0,1,5,10]

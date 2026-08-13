@@ -1,0 +1,38 @@
+# NR-variant of the bucket-47 diagnostic. Uses proposal sampling with
+# no_replacement to match the full-sweep `bw_nr` condition, at the same
+# total-gradient-steps budget as the uniform diagnostic.
+
+experiment_name: 'g20f15_b47_bw_nr_no_es_20k_steps'
+
+loss_fn: 'unnormalized_kl'
+use_bw_approx: True
+bw_iB: 10
+
+# Compute budget
+max_steps: 20000
+num_epochs: 50000   # cap; max_steps overrides
+batch_size: 256
+lr: 0.001
+
+hidden_sizes: 'neurobe,1'
+# nbe,0.05,10000 → 25438 for w=11 (production bucket 47); hardcoded so the
+# train_single_bucket NR path doesn't need to resolve the nbe-string.
+num_samples: 25438
+
+# No early stopping
+skip_early_stopping: True
+neurobe_early_stopping: False
+
+# Proposal sampling — NR
+sampling_scheme: 'all'
+proposal_sampling: True
+proposal_mix: 'no_replacement'
+proposal_temperature: 1.0
+bw_ecl: 1025
+
+# Fast populate (else eager WMB-elim per bucket is hours for grid20)
+populate_bw_via_tree_collect: True
+populate_bw_skip_non_nn: True
+
+device: 'cuda'
+output_subdir: 'benchmark_results'

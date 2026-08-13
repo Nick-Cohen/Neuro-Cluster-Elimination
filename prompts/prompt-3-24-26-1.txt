@@ -1,0 +1,29 @@
+Two additional things I want added to everything.
+
+1. Graph of approximation
+2. Comparisons of multiple output folders
+
+More on 1).
+For the graph of the approximation, you want to call the fast_factor_comparison function in here /home/cohenn1/NCE/nce/utils/plots.py. I want this approximation graph included in the folder for each problem.
+We will probably need to iterate this.
+
+More on 2).
+We want a way of combining together experiments.
+It should look something like python combine_experiments <path_to_yaml>
+
+Then the yaml looks something like:
+
+
+experiment_name: <name_of_experiment>
+paths: <path1>, <path2>,...,<pathn>
+names: <name1>, <name2>,...,<namen>
+
+Then when everything is combined, a new folder is created: e.g. /home/cohenn1/NCE/data/hard_buckets/benchmark_results/20260324_122130_combined_<name_of_experiment>/
+
+You get folders for each problem, just like in the regular output. But in each folder you have name1_local_error.png instead of just local_error.png and name2_local_error.png etc. Also for the loss curves. Then I want a combined local errors graph.
+
+The combined local errors graph has the x axis replaced by time, not epoch number (since they are not comparible). We take the final point in the x-axis of local_error for each compared experiment and scale it to 20m
+
+So for example if the epochs recorded are 10, 500, and 1000 for experiment1 and it's the 20m experiment, then to graph the compared local_errors we change the x axis value of 10 to -> 10 * 20/1000 = 0.2 and we label the x axis time in minutes. 500 would be 10, and 1000 would be 20. The line is labeled with a legend as <name1>.
+
+Also, if a problem did not complete correctly, just ignore it in the comparison. Have a summary appear in the comparison folder that just says which problems didn't work. If there are nan values for example, it didn't work.

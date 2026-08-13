@@ -1,0 +1,26 @@
+# NeuroBE weighted-MSE loss, mini-batch 256, training set = full enumeration
+# of msg_scope assignments. Comparison against the UKL+bw_half_nr trajectories
+# on buckets 62 / 148.
+
+experiment_name: 'g20f15_bdiag_nbe_all_b256'
+
+loss_fn: 'neurobe_weighted_mse'
+normalization_mode: 'minmax_01'
+use_bw_approx: False
+
+num_epochs: 20000
+batch_size: 256
+lr: 0.001
+
+hidden_sizes: 'neurobe,1'
+num_samples: -1   # overridden by sampling_scheme='all' (uses msg_ec)
+
+skip_early_stopping: True   # run full 20k epochs (matches the full-batch UKL test)
+neurobe_early_stopping: False
+
+# Enumerate every msg_scope assignment as the training set.
+sampling_scheme: 'all'
+proposal_sampling: False
+
+device: 'cuda'
+output_subdir: 'benchmark_results'

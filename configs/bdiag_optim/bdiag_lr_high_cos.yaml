@@ -1,0 +1,31 @@
+experiment_name: 'g20f15_bdiag_lr_high_cos'
+
+loss_fn: 'unnormalized_kl'
+use_bw_approx: True
+bw_iB: 10
+
+num_epochs: 1500
+batch_size: 256
+lr: 0.01
+weight_decay: 0
+lr_schedule: 'cosine'
+
+hidden_sizes: 'neurobe,1'
+num_samples: 50000
+
+skip_early_stopping: True
+neurobe_early_stopping: False
+
+sampling_scheme: 'all'
+proposal_sampling: True
+proposal_mix: 'half_nr'
+proposal_temperature: 1.0
+bw_ecl: 1025
+
+device: 'cuda'
+output_subdir: 'benchmark_results'
+
+populate_bw_via_tree_collect: True
+populate_bw_skip_non_nn: True
+
+error_track_every: 1

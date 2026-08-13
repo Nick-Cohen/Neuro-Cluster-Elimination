@@ -1,0 +1,2 @@
+experiment_name: varied bw iB
+paths: /home/cohenn1/NCE/data/hard_buckets/benchmark_results/20260406_100213_UKL_high_precision, /home/cohenn1/NCE/data/hard_buckets/benchmark_results/20260406_100224_bw_ib2_5_high_precision, /home/cohenn1/NCE/data/hard_buckets/benchmark_results/20260406_100240_bw_ib2_10_high_precision, /home/cohenn1/NCE/data/hard_buckets/benchmark_results/20260406_100248_bw_ib2_exact_high_precision, /home/cohenn1/NCE/data/hard_buckets/benchmark_results/20260406_131556_bw_ib2_2_high_precision

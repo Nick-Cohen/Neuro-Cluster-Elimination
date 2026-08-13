@@ -1,0 +1,42 @@
+Test problem: smokers_5.uai (smallest problem)
+
+======================================================================
+EXAMPLE 1: Quick 1-Minute Test (NeuroBE mode, batch_size 2048)
+======================================================================
+Config:
+  - num_epochs: 50
+  - batch_size: 2048
+  - loss_fn: logspace_mse_fdb
+  - neurobe_mode: True
+  - skip_early_stopping: True
+
+Bucket 400: training NN
+[DataPreprocessor minmax_01] ln_min=129.4979, ln_max=131.1258, sum_ln=412725.7500
+Initialized minmax_01 normalization: ln_min=129.4979, ln_max=131.1258
+Validation set generated: 524288 samples
+Bucket 400 training:   0%|          | 0/50 [00:00<?, ?it/s]
+NeuroBE patience early stopping at epoch 19: count 3 > stop_iter 2, best_val_loss=1.652556e-04, current=1.198785e-03
+Results:
+  - log_Z: 606.229065
+  - Duration: 30.65s
+
+======================================================================
+EXAMPLE 2: Standard Training (no early stopping, error tracking)
+======================================================================
+Config:
+  - num_epochs: 10
+  - batch_size: 512
+  - loss_fn: logspace_mse_fdb
+  - skip_early_stopping: True
+
+Bucket 400: training NN
+Initialized normalizing constant from training data: 143.4712
+Validation set generated: 524288 samples
+Bucket 400 training:   0%|          | 0/10 [00:00<?, ?it/s]
+Results:
+  - log_Z: 606.281494
+  - Duration: 36.99s
+
+======================================================================
+Both examples completed successfully!
+======================================================================
