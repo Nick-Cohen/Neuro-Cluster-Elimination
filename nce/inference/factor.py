@@ -1,6 +1,37 @@
 import torch
 import math
 
+
+def _bounds_check_iter(projected_assignments, labels, shape):
+    """Yield (dim_idx, label, dim_size, column_max) for an index bounds check.
+
+    Perf: the per-column maxima are produced by ONE fused device-side reduction
+    (`max(dim=0)`) and moved to the host in ONE transfer, instead of the
+    `assignment_col.max().item()` per dimension the caller used to do. Each
+    `.item()` is a blocking device synchronisation; doc 03 sec 2.11 MEASURED the
+    per-dimension version at 1.733 ms against 0.204 ms unchecked on a
+    12-variable factor -- ~127 us of stalled queue per dimension, paid on every
+    backward-message evaluation (`_get_values` is on the `compute_backward_values`
+    path, so every `use_bw_approx` / UKL+backward configuration pays it).
+
+    Diagnostics are deliberately preserved in full: the caller still receives the
+    offending dimension index, its variable label, the dimension's size and the
+    actual out-of-range value, so the raised IndexError reads exactly as before.
+    This is why the check is not simply deleted or replaced by a bare assert --
+    a genuine out-of-bounds index must not degrade into an opaque device-side
+    CUDA assert.
+
+    An empty assignment set yields nothing: `max(dim=0)` is undefined on a
+    zero-length reduction, and a set with no rows has no index to be out of
+    bounds.
+    """
+    if projected_assignments.shape[0] == 0:
+        return
+    col_max = projected_assignments.max(dim=0).values.tolist()   # 1 kernel, 1 sync
+    for dim_idx, (label, dim_size) in enumerate(zip(labels, shape)):
+        yield dim_idx, label, int(dim_size), col_max[dim_idx]
+
+
 class FastFactor:
     def __init__(self, tensor, labels):
         self.tensor = tensor
@@ -384,9 +415,8 @@ class FastFactor:
 
                 # Validate indices are within bounds before indexing
                 overlap_shape = tensor.shape[:n_overlap]
-                for dim_idx, (label, tensor_dim) in enumerate(zip(overlap_labels, overlap_shape)):
-                    assignment_col = projected_assignments[:, dim_idx]
-                    max_val = assignment_col.max().item()
+                for dim_idx, label, tensor_dim, max_val in _bounds_check_iter(
+                        projected_assignments, overlap_labels, overlap_shape):
                     if max_val >= tensor_dim:
                         raise IndexError(f"Assignment index {max_val} out of bounds for dimension {dim_idx} (label {label}) with size {tensor_dim}")
 
@@ -405,9 +435,8 @@ class FastFactor:
             else:
                 # Full overlap: all tensor labels are in message_scope
                 # Validate indices are within bounds before indexing
-                for dim_idx, (label, tensor_dim) in enumerate(zip(tensor_labels, tensor.shape)):
-                    assignment_col = projected_assignments[:, dim_idx]
-                    max_val = assignment_col.max().item()
+                for dim_idx, label, tensor_dim, max_val in _bounds_check_iter(
+                        projected_assignments, tensor_labels, tensor.shape):
                     if max_val >= tensor_dim:
                         raise IndexError(f"Assignment index {max_val} out of bounds for dimension {dim_idx} (label {label}) with size {tensor_dim}")
 
