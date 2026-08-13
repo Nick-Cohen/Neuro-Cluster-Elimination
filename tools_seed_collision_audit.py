@@ -360,6 +360,9 @@ if __name__ == '__main__':
     ap.add_argument('--audit', action='store_true')
     ap.add_argument('--device', default='cpu')
     ap.add_argument('--out')
+    ap.add_argument('--only', help='substring filter on problem key')
+    ap.add_argument('--no-measure', action='store_true',
+                    help='classify collisions structurally only (exact), skip generating draws')
     args = ap.parse_args()
 
     if args.validate:
@@ -376,7 +379,12 @@ if __name__ == '__main__':
         cells = [{'key': k, 'iB': ib, 'ecl': ecl, 'arm': arm, 'D': D,
                   'backtrack': bt, 'masked': mask}
                  for (k, ib, ecl, arm, D, bt, mask) in raw]
+        if args.only:
+            cells = [c for c in cells if args.only in c['key']]
+            print('[filter] %d cells matching %r' % (len(cells), args.only), flush=True)
         OUT_PATH[0] = args.out
+        if args.no_measure:
+            globals()['MEASURE_LIMIT'] = 0
         rep = cmd_audit(cells, args.device)
         if args.out:
             json.dump(rep, open(args.out, 'w'), indent=1)
