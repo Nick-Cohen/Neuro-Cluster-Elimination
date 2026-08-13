@@ -40,3 +40,4 @@ tmp/
 
 # ── GSD baseline (auto-generated) ──
 .gsd
+.model_cache/
