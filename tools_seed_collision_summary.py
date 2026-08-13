@@ -32,7 +32,8 @@ for e in rep:
     tot_coll += e['n_collisions']
     tot_ident += e['n_identical']
     for c in e['collisions']:
-        eqcol_hist[c['overlap']['eq_cols']] += 1
+        if c['overlap'] is not None:
+            eqcol_hist[c['overlap']['eq_cols']] += 1
 
 print('CELLS WITH >=1 SEED COLLISION: %d / %d' % (coll_cells, len(rep)))
 print('TOTAL COLLIDING DRAW PAIRS   : %d' % tot_coll)
@@ -46,7 +47,10 @@ for k in sorted(by_problem):
           % (k, v['nv'], v['cells'], v['coll_cells'], v['coll'], v['ident']))
 
 print()
-print('LEADING COLUMNS SHARED, over all colliding pairs:')
+n_meas = sum(1 for e in rep for c in e['collisions'] if c['overlap'] is not None)
+n_tot = sum(len(e['collisions']) for e in rep)
+print('LEADING COLUMNS SHARED (%d of %d pairs actually generated and compared; '
+      'the rest are classified structurally only):' % (n_meas, n_tot))
 for k in sorted(eqcol_hist):
     print('   eq_cols=%-3d : %d pairs' % (k, eqcol_hist[k]))
 
@@ -71,8 +75,9 @@ for k in sorted(roles):
 excess = []
 for e in rep:
     for c in e['collisions']:
-        o = c['overlap']
-        excess.append(o['match_frac'] - o['chance_frac'])
+        if c['overlap'] is not None:
+            o = c['overlap']
+            excess.append(o['match_frac'] - o['chance_frac'])
 if excess:
     excess.sort()
     print()
@@ -93,3 +98,28 @@ else:
         print('   %s iB=%s %s D=%s : labels %s/%s draws %s/%s'
               % (e['key'], e['iB'], e.get('arm'), e['D'],
                  c['a'][0], c['b'][0], c['a'][1], c['b'][1]))
+
+
+# --- does the structural rule predict the measured sharing? --------------
+viol = []
+for e in rep:
+    for c in e['collisions']:
+        o = c['overlap']
+        if o is None:
+            continue
+        # rule: equal row count AND equal domain tuple  <=>  identical matrices
+        #       otherwise at most the FIRST column can agree
+        if c['identical'] != o['full_equal']:
+            viol.append(('identical != full_equal', e['key'], c))
+        elif not c['identical'] and o['eq_cols'] > 1:
+            viol.append(('non-identical pair shares >1 column', e['key'], c))
+print()
+if viol:
+    print('STRUCTURAL RULE VIOLATED in %d measured pairs:' % len(viol))
+    for v in viol[:10]:
+        print('   %s  %s  %r' % (v[0], v[1], v[2]['a']))
+else:
+    print('STRUCTURAL RULE HOLDS on all %d measured pairs: a colliding pair is '
+          'byte-identical exactly when its two draws have the same row count and '
+          'the same domain sizes; otherwise it shares at most the first column.'
+          % n_meas)

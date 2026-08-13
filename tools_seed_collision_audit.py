@@ -19,6 +19,7 @@ notion of "this cluster gets a network", not a reimplementation.
 """
 import argparse
 import contextlib
+import os
 import io
 import itertools
 import json
@@ -41,6 +42,11 @@ torch.set_num_threads(1)
 # `is_validation=True` is never reached on this path, so the 50,000,000
 # validation offset never fires and every draw shares one counter.
 N_DRAWS_DEFAULT = 3
+
+# Max pairs per cell for which the two draws are actually generated.
+MEASURE_LIMIT = 5
+# Pairs larger than this are classified structurally only (see measure_overlap).
+MEASURE_MAX_ROWS = 50000
 
 
 # Use the main checkout's populated model cache; this worktree's own cache is
@@ -143,7 +149,20 @@ def collisions(clusters, gm, n_draws=N_DRAWS_DEFAULT):
                 if da != db:
                     break
                 shared += 1
-            overlap = measure_overlap(a, b, run_seed=int(gm.config.get('seed', 42)))
+            # measure_overlap materialises both draws, so it is capped per cell.
+            # `identical` below is STRUCTURAL (equal row count + equal domain
+            # sizes + equal seed => equal matrix) and is therefore computed for
+            # every pair regardless; only the characterisation of PARTIAL
+            # sharing is sampled.
+            # ARTEFACT WARNING, learned the hard way: an earlier version capped
+            # BOTH draws at the same number of rows, which silently made two
+            # draws with different row counts share every column -- the cap
+            # itself created the sharing it was meant to measure. The draws are
+            # now generated at their TRUE length or not at all.
+            if len(out) < MEASURE_LIMIT and max(a['n'], b['n']) <= MEASURE_MAX_ROWS:
+                overlap = measure_overlap(a, b, run_seed=int(gm.config.get('seed', 42)))
+            else:
+                overlap = None
             out.append({'seed_part': seed_part, 'a': a, 'b': b,
                         'same_n': same_n, 'shared_cols': shared,
                         'identical': same_n and a['doms'] == b['doms'],
@@ -182,12 +201,10 @@ def measure_overlap(a, b, run_seed):
     # all (equal row count + equal domain sizes + equal seed == equal matrix). The cap only exists because the nbe formula
     # asks for millions of rows on grid40x40 and materialising that is pointless
     # here. `full_equal` is still reported honestly as unknown-beyond-the-cap.
-    ROW_CAP = 20000
     seed = 10000 * run_seed + a['seed_part']
-    na, nb = min(a['n'], ROW_CAP), min(b['n'], ROW_CAP)
-    capped = (a['n'] > ROW_CAP) or (b['n'] > ROW_CAP)
-    xa = _legacy_draw(seed, na, a['doms'])
-    xb = _legacy_draw(seed, nb, b['doms'])
+    capped = False
+    xa = _legacy_draw(seed, a['n'], a['doms'])
+    xb = _legacy_draw(seed, b['n'], b['doms'])
     rows = min(xa.shape[0], xb.shape[0])
     cols = min(xa.shape[1], xb.shape[1])
     if rows == 0 or cols == 0:
@@ -267,7 +284,16 @@ OUT_PATH = [None]
 
 def cmd_audit(cells, device):
     report = []
+    done = set()
+    if OUT_PATH[0] and os.path.exists(OUT_PATH[0]):
+        report = json.load(open(OUT_PATH[0]))
+        done = {(e['key'], e['iB'], e.get('arm'), e['D'],
+                 e.get('backtrack'), e.get('masked')) for e in report}
+        print('[resume] %d cells already in %s' % (len(report), OUT_PATH[0]), flush=True)
     for cell in cells:
+        if (cell['key'], cell['iB'], cell.get('arm'), cell['D'],
+                cell.get('backtrack'), cell.get('masked')) in done:
+            continue
         over = dict(neurobe_mode=True, iB=cell['iB'], ecl=cell['ecl'],
                     num_samples='nbe,0.1', sampling_scheme='uniform',
                     stream_nn_exact=True, dope_factors=True, device=device,
@@ -315,7 +341,9 @@ def cmd_audit(cells, device):
                  entry['n_nn'], entry['n_collisions'], entry['n_identical']),
               flush=True)
         for c in entry['collisions']:
-            o = c['overlap']
+            o = c['overlap'] or {'full_equal': c['identical'], 'eq_cols': -1,
+                                 'cols': -1, 'match_frac': float('nan'),
+                                 'chance_frac': float('nan')}
             print('      seed_part=%-6d  (label %s, draw %d, n=%d, w=%d)  vs  '
                   '(label %s, draw %d, n=%d, w=%d)  full_equal=%s eq_cols=%d/%d '
                   'match=%.4f chance=%.4f'
