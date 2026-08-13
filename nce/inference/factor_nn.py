@@ -269,6 +269,51 @@ class FactorNN(FastFactor):
             else:
                 raise ValueError(f"Label {l} not in message_scope or elim_var_labels")
 
+        # Perf: project the elim block onto ONLY the elim columns this net reads.
+        # The net's input row is a pure function of (msg cols, elim cols in
+        # col_src), so two elim rows that agree on those columns produce the
+        # identical one-hot row and hence the identical value. The caller hands
+        # us the coordinates of ALL of the cluster's elim vars, so a factor
+        # holding e_f of e elim vars otherwise repeats every value
+        # elim_prod / k^e_f times. Evaluate the distinct rows and gather back --
+        # same projection FastFactor._eval_elim_block and _get_slices already do,
+        # here expressed as a dedup because the block is an arbitrary slice of
+        # the elim grid rather than a full grid. No cache, no memory growth.
+        eval_coords = elim_coords
+        inv = None
+        used_cols = sorted({s for m, s in col_src if not m})
+        if B > 0 and len(used_cols) < elim_coords.shape[1]:
+            sub = elim_coords[:, torch.tensor(used_cols, dtype=torch.int64, device=dev)] \
+                if used_cols else elim_coords[:, :0]
+            if sub.shape[1] == 0:
+                # net reads no elim var at all -> one distinct row
+                inv = torch.zeros(B, dtype=torch.int64, device=dev)
+                eval_coords = elim_coords[:1]
+            else:
+                radix = (sub.amax(dim=0) + 1).to(torch.int64)
+                total = 1
+                for r in radix.tolist():
+                    total *= int(r)
+                if total <= 2 ** 62:
+                    strides = torch.ones_like(radix)
+                    acc = 1
+                    for i in range(radix.numel() - 1, -1, -1):
+                        strides[i] = acc
+                        acc *= int(radix[i])
+                    key = (sub * strides).sum(dim=1)
+                    uniq, inv = torch.unique(key, return_inverse=True)
+                    n_u = int(uniq.numel())
+                else:                                   # pathological radix
+                    _, inv = torch.unique(sub, dim=0, return_inverse=True)
+                    n_u = int(inv.max().item()) + 1
+                if n_u < B:
+                    rep = torch.empty(n_u, dtype=torch.int64, device=dev)
+                    rep.scatter_(0, inv, torch.arange(B, dtype=torch.int64, device=dev))
+                    eval_coords = elim_coords.index_select(0, rep)
+                else:
+                    inv = None                          # nothing to gain
+        B_eval = eval_coords.shape[0]
+
         # Hard safety net: chunk over the elim-block dim B so the (b*A, n_labels)
         # int64 coord cube + one-hot expansion never exceed a memory bound, no
         # matter how large a block the caller passed. Result is identical.
@@ -289,16 +334,18 @@ class FactorNN(FastFactor):
         is_msg_t, msg_src_t, elim_src_t = self._col_src_tensors(col_src, dev)
         msg_cols = self._gather_cols(assignments, msg_src_t, A, n_labels) + offsets
 
-        out = torch.empty((A, B), device=dev)
-        for b0 in range(0, B, bchunk):
-            b1 = min(B, b0 + bchunk)
+        out = torch.empty((A, B_eval), device=dev)
+        for b0 in range(0, B_eval, bchunk):
+            b1 = min(B_eval, b0 + bchunk)
             b = b1 - b0
-            elim_cols = self._gather_cols(elim_coords[b0:b1], elim_src_t, b, n_labels) + offsets
+            elim_cols = self._gather_cols(eval_coords[b0:b1], elim_src_t, b, n_labels) + offsets
             cols = torch.where(is_msg_t, msg_cols.unsqueeze(0), elim_cols.unsqueeze(1))
             one_hot = self._one_hot_from_cols(cols, offsets, oh_width, oh_lower,
                                               param_dtype, dev)
             vals = self.data_processor.undo_normalization(self.net(one_hot))
             out[:, b0:b1] = vals.view(b, A).T
+        if inv is not None:
+            out = out.index_select(1, inv)                        # (A, B)
         return out.detach()                                      # (A, B)
 
 
