@@ -143,8 +143,11 @@ Not merged, not pushed. Additive only — no shared inference code touched.
 - **`notebooks/_August-2026/claude_experiments/49_bench_eval_block.py`** — the gpu0 cost split
   (encode vs forward) of the real `_eval_elim_block`.
 
-Raw output: `/tmp/claude-58902/-home-cohenn1-NCE/4a4f80a3-b352-42de-90d5-8b50eff6b71a/scratchpad/survey49_g*.json`.
+Raw output: `/home/cohenn1/NCE/notebooks/_August-2026/claude_experiments/49-survey-raw/*.json`
+(one file per benchmark group / problem shard).
 
-Environment note: `.model_cache` resolves relative to the *package* directory, so a worktree gets
-its own empty cache and silently re-downloads (rbm_22 then fails — the DBN `statistics.csv` in
-the cache index no longer lists the rbm models). Symlinked the worktree cache to the main repo's.
+Environment note, fixed in 40c7bd9: `.model_cache` resolves relative to the *package* directory,
+so a worktree gets its own partial cache and silently re-downloads — `dbn/rbm_22` then 404s,
+because the cached DBN `statistics.csv` no longer lists the rbm models at all. `build_gm` /
+`survey_problem` now take `cache_dir`; the runner points at the main checkout's cache. Anything
+else run from a worktree against the catalogue will hit the same trap.
