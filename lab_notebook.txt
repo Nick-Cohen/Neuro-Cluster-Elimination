@@ -1,24 +1,1273 @@
-2026-03-19
-- Quick task 26: Fix gsd-pi text module crash on GLIBC 2.31 (Native function not available)
-  - Root cause: gsd-pi text/index.js had no JS fallbacks unlike json-parse and xxhash modules
-  - Key insight: typeof-based detection fails because native.js Proxy returns arrow fn for ALL props
-  - Fix: try/catch detection (native.visibleWidth("", 3) in try block) correctly detects availability
-  - Added JS fallbacks for all 6 functions: visibleWidth, sanitizeText, wrapTextWithAnsi,
-    truncateToWidth, sliceWithWidth, extractSegments
-  - Created scripts/patch-gsd-text-fallback.sh: self-contained, idempotent, auto-detects install path
-  - gsd --print now exits with code 0 on Ubuntu 20.04 (GLIBC 2.31)
+2026-08-12 (doc 44)
+  * doc 44: hybrid NN + top-K memorization table -- built the splice and tested it
+- Built HybridMemorizerNet (batched one-hot -> mixed-radix key -> searchsorted, base-net
+  fallback) + build_memorization_table (NR proposal sampling -> true message values -> top-K),
+  config flags, hook in compute_message_nn, 7 CPU tests. ~350 lines, off by default.
+- Result: memorizing the top 1% of entries wins on both cells. grid10x10.f10.wrap sub10:
+  30/33 clusters better, sign p=1.4e-6, median |local error| 0.135 -> 0.030. rbm_20 reduce-NN:
+  27/33, p=3.2e-4, median 0.023 -> 0.011. Mean wall 1.05x / 1.04x.
+- The interpretive catch: benefit tracks the memorized MASS fraction, not the entry fraction.
+  Where the 1% carries >=50% of the message mass (11/44 cluster-runs) error falls 96%; below
+  that, 1.5-2%. Same 1% of entries, two different interventions.
+- Cost model in doc 01 was wrong about which term dominates: true-value evaluation is free
+  (1.9 s for 1.15M evals); the NR tree exploration is the whole cost (34-38 s on rbm).
+- Found and fixed a shipped bug doc 10 missed: build_proposal_tree disabled only 2 of the 4
+  merge passes, so its temp GM re-merged and killed 11/11 clusters on rbm_20 under reduce-NN
+  (KeyError in _conditional_log_probs_batch). Any proposal_sampling run under reduce-NN or
+  non-subsumption merging is broken today; three-line fix.
+- Branch exp/hybrid-memorization (worktree /tmp/hybmem), not merged. ~86 min of the 2 GPU-h
+  budget, gpu3 only, sequential.
 ...............
-2026-03-18
-- Quick task 25: Fix gsd CLI command not working from terminal
-  - Updated gsd-pi from 2.31.2 to 2.32.0 (npm install -g gsd-pi@latest)
-  - Root cause: gsd takes 47-52s to start on Ubuntu 20.04 due to jiti TypeScript
-    compilation of 438 extension files; jiti fsCache at /tmp/jiti/ (227 files) is used
-    but reading/executing all cached modules still takes ~45s
-  - gsd is NOT hanging - it completes successfully with timeout 90
-  - Workarounds: timeout 90 gsd --print, or claude --print (instant startup)
-  - GLIBC 2.31 < 2.33 means native addon can't load, but Proxy fallback works for
-    plain text prompts (native JSON parser only used for tool_use delta events)
+2026-08-12 (doc 43)
+  * doc 43: WHY residual learning hurts on RBM -- the per-assignment WMB vs exact distribution
+- Dumped the raw (exact message, WMB base) pairs that DataLoader.load already computes and throws
+  away: 5 cells, 109 NN clusters, ~1.5M assignments. gpu1 only, 5 runs, 474 s. 109/109 clusters
+  self-check against the run's own wmb_residual_stats to <1e-4. No library change.
+- NICK'S HYPOTHESIS REFUTED: WMB is NOT "so far off it does more harm than good" on RBM. Per
+  assignment it is TIGHTER than on the grids -- median error -0.90 dex in the bulk and -0.006 dex at
+  the mode, vs the grids' -2.2/-3.5. And 79% of the elimination mass sits in the top 1% of samples,
+  where the RBM base is near-exact.
+- THE REAL DIFFERENCE, and it is new (doc 37 only had ranges): WMB stops RANKING the message.
+  Spearman(base, exact) = 0.91/0.92 on grids, 0.52/0.51 on RBM@iB10. Decomposing base = a*y + e:
+  the grids' residual keeps 6% of the message, the RBMs' keeps 46% and adds 0.79 sigma_y of fresh
+  message-independent structure -- so sigma_r/sigma_y is 0.91 on RBM vs 0.39 on grids.
+- ACCOUNTING: gain = -log10(net_scale) predicts +0.529/+0.535 vs measured +0.550/+0.515 on the two
+  grids (a 2-point coincidence, flagged as such), and +0.010/+0.020 vs -0.206/-0.230 on the RBMs.
+  A linear/quadratic probe of target complexity supplies -0.096/-0.086 of that -0.22 gap; ~60%
+  remains unexplained.
+- TWO NEW MECHANISMS, both measured, neither quantified: (i) rank collapse (above); (ii) the RBM
+  residual is heavy-tailed (excess kurtosis +1.5), so its minmax_01 box is set by a rare deep tail
+  and the bulk occupies 21% of the net's output range vs the message's 25% -- the reparameterisation
+  makes conditioning WORSE on rbm_20, the opposite of its purpose.
+- Deliverable: notebooks/_August-2026/claude_experiments/43-wmb-vs-exact.md + 3 figures; raw arrays
+  in pairs43/. Data cannot separate "narrow message" from "badly-ranking base" -- same measurement
+  (rho_S vs net_scale, Spearman -0.891, n=109). Said so.
 ...............
+2026-08-12 (later still)
+  * doc 38: closing doc 29 sec.7.2's breadth bar for neurobe_restore_best -- STILL NOT CLOSED
+- Ran the 12 of 14 missing (cell,seed) pairs on gpu1, strictly sequential, 5828 s = 97.1 min of the
+  2-GPU-hour budget, NO overrun. Seeds now 4/5/5/5 (was 3/3/4/3).
+- BAR: 5 of 6 criteria met, same one failing. g20f10 is ONE PAIR short: the pre-committed guard fired
+  (5828+1450 > 7200), and re-checking with today's MEASURED pair cost (1288 s) still refused it,
+  5923+1288 = 7211 > 7200, short by 11 seconds. Remaining work = 1 pair, ~21.5 min.
+- The two winning cells got STRONGER: rbm20 85/100 p=4.8e-13 +0.267 dex (all 5 seeds significant);
+  ped1 80/100 p=1.1e-9 +0.107 dex (all 5 positive). Both grids still null; g20f10 +0.009 -> -0.002.
+- BUT the pooled two-stage (cells->clusters) CI WEAKENED: [+0.009,+0.250] -> [-0.005,+0.233]. It still
+  clears the -0.02 margin so criterion (f) passes, but it NO LONGER EXCLUDES ZERO. Reported up front.
+- COST CAVEAT RESOLVED: doc 36's rbm20 "+16% epochs on 4/4 seeds" does NOT survive the 5th seed --
+  ratios 1.180/1.185/1.101/1.329/0.953, 4/5, sign p=0.375; cluster-level paired median delta = 0.
+  So "free" does not need qualifying. ms/cluster-epoch unchanged on all 4 cells (0.947-1.011).
+- PREDICTOR: epochs-trained per cluster is a real WITHIN-CELL modulator -- now significant on ped1
+  (rho=-0.240, p=0.016) as well as rbm20 (rho=-0.309, p=0.0018), null on both grids. But it fails as a
+  RULE: drop the RBM and pooled rho=-0.108 (p=0.062); at matched epochs (200-350) ped1 is +0.107 while
+  the grids are -0.002/-0.018. It explains the outlier, not the family difference.
+- CORRECTION to docs 35/36: the rewind is exactly stop_iter+1 only on the PATIENCE-exit path
+  (353/354); on the num_epochs cap-exit path it can be less -- MEASURED a rewind of 1 and one
+  non-restoration on g10wrap at its 500-epoch cap.
+- Recommendation: do NOT flip the default yet (criterion c unmet, and the pooled CI now touches zero).
+  Library unchanged, worktree /tmp/wmb-residual still at d33f6f3, flag still default-OFF.
+- Deliverable: notebooks/_August-2026/claude_experiments/38-restore-bar-closed.md
+  Artefacts: notebooks/_August-2026/claude_experiments/restore_close/
+...............
+2026-08-12 (later)
+  * doc 37: net_scale survey across the benchmark -- ANSWERS doc 31 sec.7's biggest objection
+- METHOD: net_scale is fixed by DataLoader.load() BEFORE the first optimiser step, so a 1-epoch
+  forward pass records exactly what a 2000-epoch run does. Verified against full-training runs on 4
+  cells: cell median reproduced to <=3.0% (1 epoch) / <=2.3% (20 epochs). Survey cost 1.3 CPU-h +
+  36 min gpu3, vs ~30 GPU-h to train the same cells.
+- HEADLINE: net_scale is NOT a family label. 484 NN clusters over 22 cells at D=10 -- grids
+  0.050-0.543, RBM 0.036-1.089, pedigree 0.008-0.773; 56% of RBM clusters sit inside the grid range;
+  best grid/RBM threshold only 77.6% accurate (chance 61.2%). The decisive control is within-problem:
+  dbn/rbm_21 is 0.92 at iB=10 and 0.16-0.22 at iB=20 (same model, same D). doc 31's "two values"
+  were two i-bounds, not two families.
+- BUT the 88 clusters where the GAIN was measured are still perfectly confounded (grid max 0.546 <
+  RBM min 0.653, nothing in between), so the screening rule remains untested. Within grids only,
+  net_scale vs per-cluster gain rho = -0.305 (n=47, p=0.037 uncorrected) -- suggestive, not established.
+- THE EXPERIMENT TO RUN: dbn/rbm_22 @ iB=20 D=10 (net_scale 0.295, within 1% of grid20x20.f10's
+  0.292 where arm 5eps won 84/108) and dbn/rbm_21 @ iB=20 (0.218). 20-21 NN clusters => 60-63 paired
+  points, ~1 GPU-h each for baseline + arm 5eps x 3 seeds. No grid anywhere in the benchmark reaches
+  the RBM@iB10 range, so the rule is testable in one direction only.
+- MECHANISM CORRECTED: net_scale~1 does mean r_range ~ y_range (6.46 vs 6.79 dex on rbm@iB10), but
+  "RBM's WMB base is poor" is only 1.3x of it -- the RBM's WMB error is barely larger than the grids'
+  and SMALLER than the iB=20 grids'. What differs is that RBM messages span 6.8 dex vs the grids' 27.
+  net_scale = WMB error measured in units of the message's own dynamic range.
+- Deliverable: notebooks/_August-2026/claude_experiments/37-netscale-survey.md (+ 37-fig1/fig2 png,
+  netscale/37_clusters.csv, netscale/37_cells.csv, netscale/37_analysis.txt).
+...............
+2026-08-12
+  SUMMARY: determinism fix verified + regression suite; error-bar decomposition; post-fix e_max scan; residual arm 5 + the Adam-eps control; doc 29 -- the eps speedup generalises but is NOT free; doc 33 -- and the 'not free' is early stopping, which kills the win; doc 35 -- restoring best weights at early stopping is free in cost and a real gain on pedigree1; doc 36 -- the breadth test: RBM is the strongest cell yet (+0.267 dex, 46% lower error) and the bar now fails on seeds only; doc 34 -- the e_max move corroborates on a 2nd grid40 problem (DERIVED, +49-111%) and post-fix cost turns out to be potential-dependent, not just structural.
+
+  * doc 34: CORROBORATION of the moved time-optimal merge bound on a 2nd grid40 problem
+    (gpu0 only, 14,421 s = 4.006 GPU-h against a 4 GPU-h cap, PID hard stop; 2 runs, 1 censored)
+- VERDICT: the move CORROBORATES on grid40x40.f2, but DERIVED not MEASURED, and more weakly than on
+  f15. e=16 = 7,152 s MEASURED complete; e=6 = 10,657-15,121 s across three estimators = +49% to
+  +111% vs e=16, all outside doc 09's +/-45% envelope. Rate-independent work ratio (e=6/e=16) is
+  1.75x on f2 vs 2.65x MEASURED on f15.
+- THE WRAP -- the structurally distinct test the brief wanted -- IS UNAFFORDABLE: ~26.6 GPU-h for 3
+  points, one point at e=16 alone is 6.0 GPU-h. Verified rather than assumed: plain f2/f5/f10/f15 are
+  ONE structure (byte-identical Sum m from my own probe + identical structure_id in the June dedup
+  map), wrap is a genuinely distinct one. So f2 corroborates across POTENTIALS, not across STRUCTURE.
+- NEW MECHANISM, only visible with structure held exactly fixed: SETUP is potential-INDEPENDENT
+  (f2/f15 = 0.96 over all 17 buckets at e=16) while LOOP is not (1.50x), and the dependence is
+  concentrated at HIGH e_max -- 7 of 17 f2 buckets hit the 500-epoch cap vs 2 of 17 for f15, because
+  f2's weak-coupling targets are near-flat (val loss ~1.8e-9) so early stopping fires late on the big
+  merged clusters. The "easy" problem is the expensive one, and expensive exactly where merging pays.
+  Consequence: any predicted e_max* that reads only structure/Sum m is systematically wrong.
+- e=6 was censored at 31/46 buckets, so its MEASURED bound alone is -1.2% and resolves nothing. The
+  completion rests on a matched-bucket extrapolator VALIDATED out-of-sample on e=16 (where the answer
+  is known): 0.90-0.98x truth at the coverage achieved, biased LOW, never high by more than 1%.
+- Declared deviation: slot-1 cap revised 5,800 -> 7,200 -> 8,100 s as live projections crossed it;
+  the 14,400 s TOTAL never moved. It was necessary (e=16 actually took 7,220 s). Lesson: pre-commit
+  the TOTAL, leave the SPLIT adaptive -- a slot boundary computed from an estimate inherits its error.
+- Estimate was 1.35x low on the only checkable point, entirely in the one term unknowable before the
+  run (epochs demanded by the potentials); Sum m and NN-bucket counts from the CPU probe were exact.
+- Escalated the budget conflict to Nick before spending GPU time and twice during; no reply arrived,
+  so the 4 GPU-h cap was honoured. Follow-up costed exactly: ~15 GPU-h buys the first structurally
+  distinct (wrap) corroboration; ~2.5 GPU-h buys f2 at e=12 to start LOCATING f2's optimum.
+- Output: notebooks/_August-2026/claude_experiments/34-grid40-corroboration.md (+ 34-fig1-*.png,
+  emax17/34-*.{py,json,csv,sh}, emax17/results/2026081{2_053334,2_073352}_grid40x40f2_*)
+
+  * doc 36: BREADTH TEST for neurobe_restore_best against doc 29 s7.2's pre-registered bar
+    (gpu1 only, strictly sequential, 92.2 GPU-min vs a 90-min cap = 2.2 min overrun inside the last
+    in-flight run; 14 new runs + 1 smoke; CPU structure probes first, zero GPU)
+- VERDICT: the bar is NOT cleared, and it fails on SEEDS AND ONLY SEEDS. 5 of its 6 criteria are now
+  MET -- 4 cells (g20f10, ped1, rbm20, g10wrap), 3 families (grid/pedigree/RBM), 0 give-ups in 562
+  cluster-runs, no cell significantly worse, pooled CI above the -0.02 dex margin. Criterion (c),
+  >=5 seeds per cell, is not: the cells carry 3/3/4/3. 14 more runs (~112 min) would close it.
+- THE NEW FAMILY IS THE STRONGEST CELL IN THE THREAD. rbm_20 @ iB 10 (iB 20 has ZERO NN clusters --
+  doc 19's warning was load-bearing): 66/80, sign p=3.1e-9, Wilcoxon p=6.5e-8, +0.267 dex = 46%
+  LOWER per-cluster local error, CI [+0.192,+0.334]. All 4 seeds individually significant; flat
+  across the elimination chain (first half +0.244, second half +0.292).
+- 4th cell grid10x10.f10.wrap is a clean null (18/33, p=0.73, +0.019, CI [-0.038,+0.094]) -- 6/11 on
+  every seed. Pattern across all four: every GRID cell is null, every NON-GRID cell is a win.
+- POOLED on the scale-free dex statistic only (doc 35's fix; the cells' |err| span 26x, so raw-
+  difference pooling is scale-dominated and is not reported at all): 187/281, sign p=3.1e-8,
+  Wilcoxon p=2.4e-6, median +0.107 dex. NEW: a two-stage bootstrap resampling CELLS then clusters
+  gives [+0.009,+0.250] -- doc 35's [+0.009,+0.101] resampled clusters within cells only, so it did
+  not contain the cell-to-cell disagreement that is the dominant uncertainty.
+- MECHANISM, MEASURED (doc 35 had none): the rewind is a FIXED 3 epochs, so what matters is how much
+  of the run 3 epochs is. rbm_20 trains only 49 epochs/cluster (median) vs 258-299 on the other
+  three, so it loses 12.6% of validation loss to the stopping rule vs 0.3-0.4% -- 37x more -- and it
+  has by far the largest gain. Explains the outlier; does NOT separate ped1 from the grids (same gap,
+  very different gains). n=4 cells.
+- COST: doc 35's "zero cost" is correct PER EPOCH and incomplete per run. ms/cluster-epoch is
+  unchanged on all 4 cells (0.985-1.003), but on rbm_20 arm R trained +16% more epochs on 4/4 seeds
+  (~15% more wall). Restoration cannot change the epoch count of the cluster it acts on, so those
+  epochs are spent by LATER clusters whose training data changed. Not resolvable at 4 seeds against
+  doc 21's nondeterminism. One run (rbm20 restorebest s45) was 2.8x slower at equal work with its
+  arm-A partner also elevated -> host contention, excluded from the cost table only, named in the doc.
+- RECOMMENDATION: do NOT flip the default today; flip it after 5 seeds per cell. A pre-registered bar
+  that is relaxed once is not a bar. Also priced: pedigree23 as a second pedigree (25 NN clusters,
+  full coverage, ~15 min/run).
+- CARRIED FORWARD: any neurobe_stop_iter sweep MUST be run with neurobe_restore_best=True. The
+  shipped net is exactly stop_iter+1 epochs past its best (now 279/281 cluster-runs, three families),
+  so a sweep with restoration OFF conflates "trained longer" with "shipped a net further past best".
+  On a fast-converging cell like rbm_20 (49 epochs) a stop_iter of 10 would ship a net 22% of the way
+  back down its own training curve.
+- Deliverable: notebooks/_August-2026/claude_experiments/36-restore-breadth.md
+  Data/artefacts: notebooks/_August-2026/claude_experiments/restore_breadth/ (probe_*.json,
+  run_breadth{,2}.sh, results/ 14 runs, analysis_breadth.txt, gap_report.txt). Library code
+  UNCHANGED: /tmp/wmb-residual still at d33f6f3, flag still default-OFF, not merged.
+
+  * doc 35: does restoring the best-validation weights at early stopping help? (gpu1 only, 64 GPU-min under the 90 min cap; 6 new runs + 2 smokes)
+- STRUCTURAL FACT: NeuroBE ships a net that is ALWAYS exactly neurobe_stop_iter+1 = 3 epochs past its
+  own best validation epoch. Patience fires after exactly 3 consecutive non-improvements, so the last
+  improvement is always 3 epochs back. MEASURED 168/168 clusters by replaying the rule offline against
+  doc 29's recorded val_losses -- zero GPU.
+- The gap being recovered is small: median 0.41% of validation loss, worth ~0.7-1.2 epochs of late
+  training progress, and only 7.7% of doc 21's run-to-run noise amplitude. So the going assumption
+  that "last vs best is the noise amplitude" is MEASURED FALSE -- it is ~13x smaller.
+- ACCURACY: not a null and not uniform. pedigree1 46/60, sign p=4e-5, Wilcoxon p=0.0008, +0.107 dex
+  (~28% lower local error), CI [+0.056,+0.171]. grid20x20.f10 is a clean null: 57/108, p=0.63,
+  +0.009 dex, CI [-0.075,+0.067]. Pooled 103/168, sign p=0.0042, +0.052 dex, CI [+0.009,+0.101].
+- The ped1 win survives the checks that could have killed it: present on all 3 seeds (16/20, 13/20,
+  17/20) and FLAT across the elimination chain (first half +0.107, second half +0.103), so it is not
+  compounding divergence. g20f10 straddles zero in both slicings -- a genuine null.
+- COST is zero, MEASURED not assumed: 60.8 vs 61.7 and 96.3 vs 97.6 ms per cluster-epoch; wall ratio
+  0.955/0.993. Memory = one param-sized snapshot, 5.2-19.5 kB on these nets (~20% of per-net state).
+- Recommendation: MAKE IT THE DEFAULT, but clear doc 29 section 7.2's breadth bar first (RBM + a
+  second pedigree, ~35-40 min). It clears doc 29's pre-registered non-inferiority margin outright
+  (CI above zero, not merely above -0.02) and has no silent-regression channel, unlike adam_eps.
+- KEY KNOCK-ON: a neurobe_stop_iter sweep should be run WITH restoration on, otherwise stop_iter
+  conflates "train longer" with "ship an epoch further past the best" (the gap is stop_iter+1 epochs).
+- Method note: doc 29/33's POOLED Wilcoxon rows are on RAW differences across two cells whose |local
+  error| differ ~25x, so they are scale-dominated by g20f10; per-cell rows and all sign tests are fine.
+- Implemented behind config['neurobe_restore_best'] (default False, inert when absent) on
+  feat/wmb-residual @ d33f6f3, worktree /tmp/wmb-residual. Not merged, not pushed.
+
+  * doc 33: the epoch-matched control for the Adam-eps speedup (gpu1 only, 76 GPU-min, under the 90 min cap; 7 new runs)
+- ANSWER: doc 29's eps=1e-10 accuracy loss is the STOPPING POINT, not the update rule. With the epoch
+  budget pinned per cluster to the default-eps arm's own count, the loss vanishes: 88/168, sign p=0.59,
+  Wilcoxon p=0.999, +0.020 dex, bootstrap CI [-0.021, +0.095] (doc 29: -0.094 dex, p=0.010).
+- Mirror image agrees: giving the epochs back to the SAME optimiser recovers the accuracy,
+  97/168, +0.074 dex, CI [+0.001, +0.125].
+- BUT the speedup does not survive the fix: matching gives back 100% of it (clean wall ratio 0.997 on
+  grid20x20.f10, 1.021 on pedigree1), because per-cluster-epoch cost was never the saving.
+- So eps=1e-10 does NOT shift the speed/accuracy curve, it slides NeuroBE along it -- a patience
+  setting in disguise. Interpolated break-even is a 3-6% saving (ESTIMATE, two points, not measured).
+- Exploratory 4th arm (default eps truncated to the tuned arm's epochs, 1 seed): at EQUAL epochs
+  1e-10 vs 1e-8 is indistinguishable (16/36, Wilcoxon 0.108) -- eps buys nothing per epoch.
+- Recommendation UNCHANGED (do not default adam_eps), for a different reason: there is nothing to
+  adopt. The real knob to study is neurobe_stop_iter. Method note: NeuroBE's patience stop does not
+  restore best weights, so "stopped at N" == "trained N epochs" and the default arm needed no re-run.
+- Harness: run_pilot.py gained --epoch-map (no-op when absent). Library untouched (a362290).
+
+  * doc 24: bracketing grid40's post-fix time-optimal merge bound (gpu0 only, 236 GPU-min, under the 4 h cap)
+- BRACKETED. grid40x40.f15 argmin is e_max=16 and e_max=20 is resolved WORSE (>=+53.5%, outside doc
+  09's +/-45% envelope), closing doc 17's "≥ 16 and unbracketed above". NN-phase seconds MEASURED:
+  10,215 / 6,309 / 5,068 / 5,273 / >=7,781 at e = 6/12/16/18/20.
+- BUT only localized to e_max in [12,18]: e=12 (+24.5%) and e=18 (+4.0%) are both inside the noise
+  envelope of 16. One seed cannot resolve them. Doc 13's 14.8-18 contains the argmin and is the better
+  point predictor; doc 15's ~12.6 is at the low edge and is NOT excluded.
+- Doc 17 SS4 corrected: generation DOES cross training, between e=18 and 20 (32% -> >=95% of the NN
+  phase). Doc 17 only concluded otherwise because it stopped at e=16.
+- Two things nobody had modelled: (a) e_max 22 and 24 are the IDENTICAL computation (backtracker
+  saturates at e_eff=22), so nothing above 22 is a distinct point; (b) the non-NN exact tail jumps
+  14 s -> >=1,064 s from e=16 to e=18.
+- Runtime discipline: a CPU structure probe priced the workload EXACTLY (reproduced 6/12/16 to the
+  sample) and a pre-committed PID-based hard stop kept the spend at 236.3 of 240 GPU-min. The
+  per-point time estimate was still ~10x low on e=20 - per-bucket generation cost is not predictable
+  (log-log slope 0.48, R2 0.80 over 89 buckets; one bucket burned 6,756 s generating, more than the
+  whole e=16 run). The fix is the hard stop, not a better model.
+
+  * doc 29: does doc 26's "free" Adam-eps speedup generalise? -- the speedup does, the FREE does not
+- Ran the eps sweep on TWO new cells, gpu1 only, strictly sequential, 02:45->04:39 (114 min, inside
+  the 2 h cap), 12 runs. Cells chosen by a CPU structure probe FIRST, because the per-cluster local
+  error needs the cluster's exact forward message: grid20x20.f10 (36 NN clusters) and pedigree1
+  (20 clusters, mixed domains) both gave 100% local-error coverage; pedigree7/19/37 were rejected
+  because their NN clusters reach out_size 1e10 and the primary statistic would have given up.
+- SPEEDUP GENERALISES: epochs 0.750/0.778/0.706 and clean wall 0.751/0.791/0.695 on
+  g10wrap/grid20x20.f10/pedigree1, agreeing to 0.1-1.6%. Mechanism replicates too: default eps bites
+  0.476/0.382/0.598 of coordinates, 1e-10 drives it to 0.011/0.012/0.031, and across the 3 cells the
+  bite rank-orders the speedup perfectly.
+- BUT IT IS NOT FREE. Pooled over the two NEW cells: 70/168, sign p=0.037, Wilcoxon p=0.010,
+  median -0.094 dex (~24% higher local error), bootstrap 95% CI [-0.165, -0.031]. Driven by
+  grid20x20.f10 (43/108, Wilcoxon p=0.0083, -0.133 dex); pedigree1 agrees in sign, not significant.
+  Doc 26's +0.107 dex is now the only positive of three.
+- Confound flagged, not resolved: eps=1e-10 also makes patience early stopping fire sooner, so the
+  update rule and the stopping point move together. The epoch-matched control (~45 min) is the
+  highest-value follow-up and could still recover a genuinely free win.
+- RECOMMENDATION: do NOT add adam_eps to NEUROBE_DEFAULTS; keep it opt-in (no-op when absent).
+  Doc names the non-inferiority evidence that would justify flipping it.
+- Deliverable: notebooks/_August-2026/claude_experiments/29-eps-generalisation.md
+  Artefacts: notebooks/_August-2026/claude_experiments/eps_gen/ (probe, drivers, 12 runs,
+  29_analyze.py -> results/analysis_epsgen.txt). No library change; worktree /tmp/wmb-residual
+  at a362290 on feat/wmb-residual; the main checkout was not touched.
+
+  * doc 30: bit-exact regression suite -- the thing the determinism fix unlocked
+- Built and committed the regression suite doc 19/21/28 kept asking for.
+  fix/determinism @ f212869 (worktree /tmp/det-wt), on top of d5cca0e. Not merged, not pushed.
+  Files: tests/test_determinism_regression.py, tests/goldens/determinism_goldens.json,
+  plus marker/flag plumbing in tests/conftest.py. No nce/ file changed.
+- TIERS (measured): CPU tier 13 tests in 23.8 s, single-threaded, no GPU, no env setup -- run on
+  every change. CUDA tier (--gpu) 19 tests, ~8.8 min on gpu3. det-algos probe (--det-algos)
+  9 min 49 s total. Golden regen: 28 s (cpu) / 8.0 min (cuda).
+- 9 pinned goldens, ALL measured by me today, each with provenance (branch, commit, GPU model,
+  torch build, thread count, host, date). Cases: plain grid, merged wrapped grid, real pedigree
+  (pedigree1, mixed domains, 10 NN clusters), masked_net undoped, compute_local_error, plus the
+  4 CUDA study cells (grid, wrap, rbm_21 12-cluster, pedigree19 masked).
+- The 4 CUDA goldens reproduce docs 23/28 EXACTLY, in fresh processes on a new day. cuda_grid_plain
+  is now 4 bit-identical runs today alone (regen, tier, replicate test, det-algos subprocess).
+- Structural tests beyond goldens: two-build bucket-factor-ORDER digest (the doc-21 bug's own
+  cheapest reproducer, <2 s, build only); an in-process replicate that ignores the goldens so a
+  golden update cannot hide a new ordering bug; chunked-vs-unchunked exact-path equivalence
+  (forced via _EXACT_JOINT_NUMEL_LIMIT -> 16 chunked calls, bit-identical).
+- CUBLAS handled explicitly per doc 28: require_cublas_workspace_config() raises loudly, the probe
+  runs in a subprocess with CUBLAS_WORKSPACE_CONFIG=:4096:8, and a CPU-tier test asserts the guard
+  itself fires. Measured cost 2.59x (doc 28 measured 2.52x on a different cell).
+- NEW MEASUREMENTS: (a) multi-threaded CPU changes cpu_pedigree_plain by 2 float32 ULP
+  (-10.624578475952148 at 1 thread vs -10.624576568603516 at 4 and 8; stable within thread count),
+  so the CPU tier pins set_num_threads(1) and fails loudly otherwise; (b) local_errors IS populated
+  when compute_local_error: true (default False) -- doc 28's vacuous check is now non-vacuous, one
+  record, signed=1.13958740234375; (c) golden values are independent of in-process case order
+  (15 runs, solo/forward/reversed, all identical); (d) PYTHONHASHSEED and OMP/MKL env vars are not
+  needed, torch.set_num_threads(1) alone suffices.
+- Explicitly NOT covered and said so in the suite itself: grid20/grid40, sub*/nomerge/merge_degree,
+  decision trees, multi-set training, scatter_add_ samplers, cross-GPU (CUDA tests SKIP on a
+  different GPU model), concurrency, and absolute correctness.
+- GPU budget: 17.8 min of 90, gpu3 only. 7 pre-existing test failures (test_benchmark_configs,
+  test_config_docs) confirmed unrelated -- same 7 with the original conftest restored.
+- Deliverable: notebooks/_August-2026/claude_experiments/30-regression-suite.md
+
+  * doc 28: closing the two known gaps in the determinism fix
+- Doc 21 left two things unfinished: is the masked_net arm still nondeterministic, and does the
+  fix hold on pedigree (never covered -- doc 23 cut it for budget).
+- ANSWER: both clean. No new nondeterminism found. 10/10 replicate runs bit-identical.
+  * masked_net, pedigree19_iB20_rnn16_masked (3 NN clusters): 3/3 bit-identical.
+  * masked_net, pedigree7_iB20_rnn8_masked (15 NN clusters): 3/3 bit-identical.
+  * plain pedigree7_iB20_rnn8 (15 NN clusters): 3/3, logZ -67.3943862915039 x3 with the same
+    15-element per-bucket epoch vector each time.
+- KEY CODE FINDING: doc 21/23's stated reason for suspecting masked_net was a misattribution.
+  masked_net is a Linear value-head + Linear mask-head over a Linear trunk -- it contains NO
+  nn.Embedding. The tree's only nn.Embedding is in BitVectorLookup, whose sole construction site
+  FastBucket.compute_one_to_one_nn has ZERO callers anywhere in the repo. Dead code.
+  Also: the masked branch calls loss.backward() directly, bypassing the AMP GradScaler, so doc 21's
+  AMP-amplifier concern does not apply to it either.
+- CORRECTION to doc 21: use_deterministic_algorithms(True) DOES raise on CUDA here, on F.linear,
+  unless CUBLAS_WORKSPACE_CONFIG is set. With it set the full masked run completes AND returns the
+  identical logZ, at 2.52x wall time. Any future determinism regression guard must set that env var
+  or it fails for the wrong reason and tests nothing.
+- Verdict: describe the fix as COMPLETE for what is tested (3 families, both net arms, 1-15 NN
+  clusters, CPU+CUDA, doped and undoped) and PARTIAL as a codebase claim (grid20/grid40, sub*/nomerge,
+  multi-threaded CPU, the scatter_add_ sampler paths all still untested).
+- 63.1 min GPU on gpu3 against a 2h cap; runs came in 2.1-2.4x under the study's wall times, which
+  paid for the extra 15-cluster masked cell. Nothing cut.
+- Deliverable: notebooks/_August-2026/claude_experiments/28-determinism-gaps.md
+
+  * doc 26: THE CONTROL -- is the WMB residual result really an Adam-eps result?
+- Ran the control doc 22 section 8 named as "the single most important untested alternative
+  explanation": tune Adam's eps on the BASELINE itself -- no residual, no WMB, nothing else changed.
+- ANSWER (a): the residual is doing the work; eps tuning on the baseline recovers little.
+- The control FIRED, so this is not a null from a broken intervention. MEASURED: baseline's default
+  eps=1e-8 really is badly tuned -- 47.6% of coordinates end training eps-dominated and 97.3% sit
+  within a single decade of eps. Predicted the baseline's median sqrt(vhat) at 1.8e-8 BEFORE running
+  (from arm 4's 1.69e-9 / s^2); measured 1.09e-8, within 1.7x -- an independent check on doc 22's
+  s^2 algebra. Tuning eps drives the bite to 1.1% (1e-10) and 0.1% (1e-12/1e-16).
+- Yet accuracy barely moves: 34/55, sign p=0.105, Wilcoxon p=0.140, +0.177 dex, vs arm 4's +0.675
+  and arm 5's +0.511. Recovery ~26% of arm 4 -- and that 26% is itself not distinguishable from 0.
+  All three eps values agree (+0.177/+0.167/+0.149, none significant), so nothing hinges on the pick.
+- DECISIVE: with the eps regime held fixed on both sides, the residual parameterisation still wins.
+  arm 5 vs baseline+tuned-eps = 39/55, sign p=0.0027, Wilcoxon p=0.0008, +0.368 dex.
+- The 2x2 (parameterisation x eps regime) separates cleanly: eps is a COST knob, the residual
+  parameterisation is an ACCURACY knob. eps takes baseline to 0.75x and arm 4 from 3.86x to 1.13x,
+  while moving accuracy in neither parameterisation.
+- Per-cluster runs OPPOSITE to the eps story: Spearman(net_scale, arm4/base) = +0.582 but
+  Spearman(net_scale, tuned-eps/base) = -0.491. If eps were the channel both would share a sign.
+  On b18/b12/b36 (most eps-starved) tuned-eps buys nothing; its one big win is b38, the LARGEST scale.
+- Side finding, actionable on its own: eps=1e-10 makes the NeuroBE baseline 0.75x cheaper at no
+  accuracy cost. Torch's default eps is simply wrong for this loss scale.
+- Wall times CLEAN this time (nothing co-resident on gpu1): epoch- and wall-based cost agree to 0.1%.
+- 20 new runs, gpu1 only, strictly sequential, 59 min, inside the 2h cap. Committed the previously
+  uncommitted doc-22 library change (1a29570) plus config['adam_eps'] (a362290) on feat/wmb-residual.
+- Doc: notebooks/_August-2026/claude_experiments/26-eps-control.md
+
+  * doc 22: arm 5 -- arm 4's epoch appetite is an Adam-eps artefact
+- DERIVED then MEASURED: the WMB residual wrapper's output multiplier scales every inner-net
+  gradient by net_scale^2 (not net_scale) -- the residual normaliser makes (y_hat - y_norm) =
+  s*(g - r_norm) exactly, so the loss is exactly s^2 * the inner net's own weighted MSE. Under Adam
+  that is EXACTLY invariant except through eps, which it inflates to eps/s^2 (11x median, 70x worst).
+- MEASURED: at end of arm-4 training eps DOMINATES Adam's denominator on a median 92.3% of
+  coordinates. Compensating eps -> s^2*eps drops that to 27%.
+- RESULT (grid10x10.f10.wrap D=10, 2000 cap, 11 clusters x 5 seeds = 55 paired points, sequential
+  gpu1, 1h39m): arm 5 = 287 epochs/cluster vs arm 4's 978 vs baseline's 279. Cost 1.13x instead of
+  3.86x -- inside the 2x tolerance. Accuracy is NOT traded: arm5 vs arm4 29/55, sign p=0.79,
+  Wilcoxon p=0.86. arm5 vs baseline 49/55, p<1e-4, median |local err| 0.2309 -> 0.0464.
+- The lr/s variant (doc 20's literal spec) is a 3.3x LR increase, not a compensation: 105 epochs
+  (0.41x, cheaper than baseline) but 22/55 vs arm 4 (Wilcoxon p=0.087) -- it trades accuracy.
+- Zero-GPU side task confirmed doc 20 6.3: arm 4 @500 cap = 1.58x / 1.83x, both inside 2x -- but
+  arm 5 now dominates it (0.0464 @1.13x vs 0.0625 @1.83x).
+- Caveats: one cell/one problem, n=55, per-cluster split 6/5 (on the two most eps-starved clusters
+  arm 4's extra epochs do buy real accuracy). Runs predate the determinism fix d5cca0e.
+- Doc: notebooks/_August-2026/claude_experiments/22-arm5-lr-compensation.md
+
+  * doc 23: how much of the study's error bars was the determinism bug?
+- Measured the artefact/seed split on 4 cells of the June reduce-NN study, gpu3 only, 32 runs
+  sequential, 48 min GPU. Arms: fix/determinism d5cca0e (post) vs its parent 4a1f8b6 (pre), same
+  code base, so the decomposition is internal and does not depend on matching the study's absolutes.
+- MEASURED: post-fix run-to-run noise is exactly ZERO -- 12/12 replicates at a fixed seed bit-identical
+  (log Z and every per-bucket epoch count), on cells with 1, 1, 3 and 12 NN buckets. Doc 21's fix
+  extends to a 12-NN-bucket RBM config on a second GPU.
+- MEASURED split (artefact share of log Z variance): 1% / 2% / 5% (grid cells) and 31% (rbm_21 rnn10).
+  Reported sd overstated by 0.4% / 0.8% / 2.4% / 20%. Pooled: ~10% of variance, ~6% sd inflation.
+- CONCLUSION: the study's error bars were mostly HONEST. Seed variance dominates the artefact in all
+  four cells. Re-running would tighten intervals and buy reproducibility, not rewrite conclusions --
+  but it also moves point estimates by O(artefact sd), so gaps below ~0.24 log Z were never decided.
+- CAVEATS logged: n=3 everywhere (each sd worth ~a factor of 2); 4 cells of ~500; pedigree and the
+  masked_net arm CUT for cost (cheapest informative pedigree cell = 70 min alone). No extrapolation
+  to all 27 problems. Deliverable: notebooks/_August-2026/claude_experiments/23-error-bars-after-fix.md
+
+  * doc 17: post-fix e_max scan -- does the time-optimal merge bound move?
+- Ran an e_max scan on integration/aug11-fixes (092732d), gpu0+gpu3, seed 42, 12 runs.
+  Same problems/configs/runner logic as the June reduce-NN study, so it is like-for-like.
+- ANSWER: YES, the optimum moved, further than doc 15 derived.
+    grid40x40.f15   6 -> >=16 (curve falls monotonically 10247 -> 6426 -> 5107 s; NOT bracketed above)
+    grid20x20.f5   10 -> 14  (696/486/292/354 s at e=6/10/14/20 -- a genuine interior minimum)
+    grid10x10.f10.wrap  no move (e>=16 collapses to the same e_eff=14 config; null control, post==pre to 3%)
+- Doc 15's headline claim CONFIRMED: the published optima describe a binary that no longer exists.
+  Its number (~14) fits grid20 but under-predicts grid40; doc 13's 14.8-18 band fits grid40 better.
+- MECHANISM is only half doc 15's. Generation did collapse (SETUP 8.7-11.9x faster, ~18x per sample,
+  matching doc 09). But the num_samples fix ALSO raises per-bucket m by a median 2.26x -- and more at
+  low e_max (3.14x at grid40 e=6 vs 1.82x at e=16), inflating TRAINING (grid40 e=6 loop 992 -> 10164 s).
+  Both fixes push e_max* up, from opposite ends. Post-fix curves are training-dominated everywhere.
+- Runtime estimate missed badly: 76 GPU-min estimated for these 12 runs, 402 actual (5.3x); makespan
+  71 min estimated vs 256 actual. Cause: the estimate held pre-fix LOOP fixed, but m is not fixed.
+  Cut 9 of 21 planned runs mid-flight (between runs) to contain it; cuts recorded in the doc.
+- Open: grid40's optimum is a LOWER BOUND (>=16). Pinning it needs rnn20/rnn24 (~2-4 h). One seed only,
+  and training is the noisy term, so grid20's 14 is suggestive rather than established.
+- Output: notebooks/_August-2026/claude_experiments/17-postfix-emax-scan.md (+ 17-fig1/fig2, emax17/)
+...............
+2026-08-11
+  SUMMARY: four fixes built and integrated (perf, gamma-v2 instrumentation, WMB under merging, num_samples); gamma v2 sweep; WMB residual learning arms 1-4 plus mechanism and sweep-readiness analyses.
+
+  * WMB residual: MECHANISM analysis -- doc 20, zero GPU
+- Question: what actually explains arm 4's benefit? Doc 19 claimed doc 02's variance
+  premise falsified and nominated output-conditioning (1/net_scale) instead.
+- Built a per-cluster table from all 87 result.json on disk (537 cluster-runs) + a
+  build-only CPU structure pass (structure20.py, validated 3/3 on NN-cluster counts).
+  Unit of analysis = 18 structural clusters, NOT 131 cluster-runs.
+- ESTABLISHED: the benefit is in the OUTPUT PARAMETERISATION. Identical residual target,
+  arm 2 = -0.22 dex (11/30, worse than baseline), arm 3 = +0.31 dex (79/120),
+  arm 4 = +0.57 dex (109/131). Monotone conditioning ladder. Doc 19 right on this.
+- NEGATIVE RESULT: 1/net_scale and sd_y/r_std are COLLINEAR at Pearson 0.982 --
+  this data cannot separate them. Doc 19's hope that merging discriminates them is
+  refuted: merging moved both the same way (sd_y/r_std 5.15->2.30, 1/net_scale 7.11->3.30).
+- NEGATIVE RESULT: after a max-|rho| permutation test over 13 candidates, NOTHING predicts
+  the per-cluster benefit at p<0.05. Best = residual dynamic range, family-wise p=0.065,
+  leave-one-CLUSTER-out CV R^2 ~ 0.30. The offset predicts nothing (rho=-0.06); the epoch
+  appetite is not predicted by 1/net_scale (family-wise p=0.47).
+- ROBUST FINDING: cluster size sets the ABSOLUTE error (separator size -> baseline error
+  rho=+0.72, fw p=0.012; e -> arm4 error rho=+0.71, fw p=0.015) but cancels in the ratio.
+- Honest synthesis: target smallness sets the size of the prize, output conditioning decides
+  whether you collect it. Doc 02's premise is necessary-but-not-sufficient, not false.
+- COMMERCIAL: "condition without the residual" is a NO-OP -- baseline's minmax_01 already
+  fills [0,1], net_scale == 1 by construction. But arm 4 at the 500 cap universally costs
+  1.55x / 1.85x (inside D8's 2x) and BEATS every <=2x selective policy at the 2000 cap.
+  The D8 breach is a property of the 2000-epoch cap, not of residual learning.
+- Named but NOT run: "arm 5" = arm 4 with lr/eps compensated for net_scale (~1.5 GPU-h).
+- Deliverable: notebooks/_August-2026/claude_experiments/20-residual-mechanism.md
+  Artefacts + 4 figures: .../wmb_residual/results/ (figs/, analysis_mechanism.txt,
+  mechanism_rows.csv, mechanism_clusters.csv, mechanism_contrasts.csv, mechanism_policy.csv)
+
+  * WMB residual: sweep readiness -- cost + coverage -- doc 19
+- COST, MEASURED SEQUENTIALLY (gpu1 only, one run at a time; doc 18's wall times were all
+  invalid because those runs were 5-in-parallel). Arm 4 at the 2000-epoch cap vs baseline
+  self-stopping: 5.56x end-to-end on grid10x10.f10 (2 seeds) and 4.12x on grid10x10.f10.wrap
+  merged (1 seed). BREACHES Nick's "2x or less" tolerance by 2-3x. Not marginal, not fixable
+  by optimisation: per-epoch overhead is only 1.10-1.13x, so ~90% of the cost is extra epochs.
+  Flagged to Nick as his decision; deliberately did NOT redesign around it.
+- Timing rig validated against prior independent measurements: baseline 124s vs doc 16's 125.2s;
+  wrap baseline 218s vs doc 18's isolated probe 218.9s.
+- NEW: arm 4 CONVERGES on merged wrap (0/11 clusters hit the 2000 cap, mean 1045 epochs) but not
+  on grid10x10.f10 (8/12 hit it). So "2000 is not convergence" is problem-specific; 4.1x is arm 4's
+  true converged cost under merging.
+- COVERAGE, build-only CPU pass over 116 (problem, merge) cells -> results/structure19.csv.
+  Predictor validated 4/4 against real runs, and it CORRECTS doc 18: grid10x10.f10.wrap no-merge
+  has 26 NN clusters, not 24 (the 24 has no run behind it anywhere).
+  Useless problems: grid10x10.f10 under any merging (1 NN cluster => n=5, floor p=0.0625 -- the
+  exact trap doc 18 fell into) and rbm_20 / rbm_ferro_20 at iB=20 (ZERO NN clusters, method never
+  engages). Raising the merge bound NEVER rescues a collapsed problem (n_NN non-increasing in D).
+  grid20x20.f2/f5/f10/f15 are structurally IDENTICAL to each other -- correlated replicates, not
+  four problems. Same for the grid40x40 variants.
+- Power arithmetic: sign test needs n>=6 to reach p<0.05 at all; n>=67 for 80% power against the
+  epoch-matched control (p_win~0.67). Proposed design: grid10x10.f10.wrap + grid20x20.f10 +
+  rbm_20@iB10, D=10, 2000 cap, 4 arms x 5 seeds => 335 pooled paired points for ~34 GPU-h
+  (predicted; cost model validated to 1.33x against doc 16's independent grid20x20 measurement).
+  Also: do NOT cap baseline_noes at 2000 -- it would cost 2000 epochs/cluster, MORE than arm 4.
+- LANDED: commit 2ae8cc1 on feat/wmb-residual -- Trainer.val_losses now records the NeuroBE
+  validation loss the patience rule already computes. Matters because the training loss underflows
+  to exactly 0.0 on 82-99% of epochs (float32, neurobe_weighted_mse), so this was the project's only
+  possible convergence diagnostic. Verified inert by static argument (write-only wrt computation).
+- SEPARATE PROBLEM FOUND: runs are not bit-reproducible even single-threaded on CPU with
+  PYTHONHASHSEED pinned (same seed -> log Z spread 0.051, epochs 355-500). So the project cannot
+  currently write an exact regression test for ANY change. Worth tracking.
+- Loose end: doc 02's variance premise is FALSIFIED, not just unexplanatory -- arms 2/3/4 share an
+  identical residual target (identical sd_y/r_std), yet plain residual is 11/30 and 2.4x WORSE than
+  baseline while arm 4 wins. The effect lives entirely in the output normaliser. Likely mechanism is
+  output dynamic-range conditioning (net_scale median 0.139, range [0.008, 0.286]); testable at zero
+  GPU cost from data already on disk. Not run, per instruction.
+- GPU used: 45.9 min (6 sequential runs), 0.9 min over the 45-min cap. gpu0/gpu3 left alone (e_max
+  scan); gpu2 never touched.
+- Deliverable: notebooks/_August-2026/claude_experiments/19-residual-sweep-readiness.md
+
+  * WMB residual: epoch policy + rung 2b merging — doc 18
+- TASK 1 (epoch policy). Root cause of arm 4 never early-stopping: it is GENUINELY still improving.
+  Had to instrument first -- Trainer.val_losses was plumbed all the way into result.json but NOTHING
+  EVER WROTE TO IT; NeuroBE's patience rule computed a val loss every epoch and discarded it. Added
+  the append + log_val_loss in the use_neurobe_early_stopping block (train.py). No control flow
+  change. This matters beyond this experiment: training loss underflows to exactly 0.0 under
+  neurobe_weighted_mse at float32, so val loss is the ONLY convergence diagnostic available.
+- MEASURED (grid10x10.f10, no merge, seeds 42-46, num_epochs=2000 vs the reused 500-epoch pilot):
+  at epoch 500 arm 4's val loss is still a median 2.60x above the best it eventually reaches
+  (range 1.47-4.93); epochs 500->2000 cut it a further 61%. Ground truth agrees -- |local error|
+  improves 22/30, sign p=0.016, Wilcoxon p=0.0008, median 0.0259 -> 0.0138. No divergence between
+  val loss and local error. 19/30 clusters still improving AT the 2000 cap, so 2000 is not
+  convergence either. So doc 16's arm-4 numbers were a LOWER BOUND.
+- CONTROL: baseline under the same 2000 cap self-stops at ~365 (only 1/30 cluster-runs ever reaches
+  epoch 500), so it is a pure re-execution -> 15/30, p=1.000. That doubles as a measurement of
+  run-to-run non-determinism: directionally unbiased but magnitudes move a lot (median 0.084->0.137).
+- RESOLVED doc 16's open question. Ran bias-init at 2000 too: it is SATURATED (uses only 475 epochs,
+  1/30 hits the cap, gains nothing -- 13/30 p=0.58). At a matched 2000 cap arm 4 beats bias-init
+  25/30, p=0.0003, median 0.0138 vs 0.0551. At 500 they were 17/30 p=0.58. The 500 cap was hiding it.
+  Honest framing: matched CAP, not matched compute -- arm 4 spends 3.6x bias-init's epochs.
+- COST: arm 4 at its own convergence needs 4.75x baseline's epochs. D8 tolerance is 2x. Wall time was
+  NOT measurable today (runs were parallel on gpu1); needs a sequential re-measure before sizing.
+- TASK 2 (rung 2b, merging on, max_merge_bound=10). Merging collapses grid10x10.f10 from 6 NN
+  clusters to 1 => n=5 paired points, whose best attainable two-sided sign-test p is 0.0625. The
+  rung as literally specified CANNOT reach significance on that problem. Ran it anyway (cheap, 20s
+  /run): flat, nothing established. Explanation is a selection effect -- the single surviving cluster
+  is the LEAST favourable one in the whole no-merge set (sd_y/r_std 2.76 vs range [2.73, 92.18]).
+- Probed and switched to grid10x10.f10.wrap, which keeps 11 NN clusters under merging => 55 paired
+  points (1.8x the pilot) and a second problem. Arm 4 beats baseline 48/55, p<0.0001, median
+  0.231 -> 0.062, 11/11 clusters. Bias-init 37/55 p=0.0145. Arm 4 vs bias-init 35/55 p=0.058.
+- Epoch-matched control on wrap flips a doc 16 generalisation: extra epochs DO help baseline here
+  (baseline_noes 38/55, p=0.0065), unlike grid10x10.f10 where they bought nothing. Against that
+  control arm 4 still clears (37/55, p=0.0145) but BIAS-INIT DOES NOT (30/55, p=0.59) -- a second
+  independent separation of the two conditioned arms.
+- TWO NEGATIVES, stated: (1) doc 16's 4.2x across-seed logZ spread reduction did NOT reproduce on
+  wrap (baseline 0.677, arm 4 0.737); it is not a general property. (2) sd_y/r_std -- doc 02's own
+  premise quantity -- got WORSE under merging (median 5.04 -> 2.30) while the benefit got BIGGER
+  (3.2x -> 3.7x on the median). The variance-reduction story does not explain the effect.
+- Reused all 25 pilot runs unchanged; regression check reproduces doc 16's 0.7557 baseline spread
+  exactly. 55 new runs total, all gpu1. Deliverable:
+  notebooks/_August-2026/claude_experiments/18-wmb-residual-next.md
+
+  * WMB residual learning: arm 4 = residual-fitted normalisation — doc 16
+- Built arm 4 on feat/wmb-residual (3rd commit 0403969, worktree /tmp/wmb-residual, NOT merged/pushed):
+  config key wmb_residual_norm in {'message','residual'}. 'residual' fits a SECOND DataPreprocessor
+  to r itself, fixing the residual net's output SCALE as well as its location (doc 02 §2.2 option 3).
+- New algebra, worked out explicitly so the loss weighting cannot silently revert to keying off the
+  residual: y_norm = r_norm*(scale_r/scale_y) + (off_r + base*ln10 - off_y)/scale_y, so
+  WMBResidualNet becomes scale*inner(x[:,:-1]) + x[:,-1:]. Target stays y_norm, so
+  neurobe_weighted_mse's weights are bit-identical to baseline's. Arms 2/3 are the special case
+  scale=1, so one code path. Emitted factor is FactorNN(inner, dp_residual) -> undo gives exactly r.
+- MEASURED how wrong the scale was: net_scale = ln_range_r/ln_range_y median 0.139, range
+  [0.0079, 0.286] -- arms 2/3 asked the net to answer in units 3.5x to 127x too large.
+- RESULT (grid10x10.f10, iB=10 ecl=1025, no merge, seeds 42-46, 30 paired clusters, gpu1):
+  arm 4 beats baseline 22/30, sign test p=0.016 -- first arm here to clear 0.05. Median per-cluster
+  |local err| 0.084 -> 0.026, mean 0.143 -> 0.041, max 0.443 -> 0.194. Wins on all 6 clusters.
+  Across-seed logZ spread 0.756 -> 0.180 (4.2x). Local errors still sum to total signed logZ err
+  to <=2.0e-4 (best of all arms), so routing is clean.
+- CONFOUND FOUND AND MEASURED AWAY: arm 4 never early-stops (0/30 cluster-runs vs baseline 29/30),
+  so it trains 500 vs 357 epochs. Added a 5th arm baseline_noes (neurobe_early_stopping=False,
+  500 forced epochs). That control is 15/30 vs baseline, p=1.000 -- extra epochs alone buy NOTHING --
+  while arm 4 beats it 25/30, p=0.0003. The win is the parameterisation, not the budget.
+- NOT ESTABLISHED: arm 4 vs bias init is 17/30, p=0.58. Better on every magnitude (median 0.026 vs
+  0.038, mean 0.041 vs 0.071) but a coin flip on paired wins. 30 points cannot separate them.
+- Cost: 1.55x baseline = 1.43x (epochs) x 1.08x (residual machinery at matched epochs). WMB base
+  still 0.018 s/run. Early-stop count falls monotonically with better conditioning: 29 -> 28 -> 21 -> 0.
+- Second problem NOT run: grid20x20.f10 MEASURED at 6 NN clusters in 164 s => ~27 s/cluster =>
+  ~49 min/run => ~8 GPU-h for 2 arms x 5 seeds. 10x over the 45-min budget; probe killed, budget
+  spent on the epoch-matched control instead (better science than an underpowered 2nd problem).
+- Incidental: under neurobe_weighted_mse at float32 the reported TRAINING loss underflows to exactly
+  0.0 for most of training in EVERY arm (baseline 382/425 epochs on one cluster). Those curves are
+  useless as a convergence diagnostic. Early stopping reads val loss (~1e-8), which is fine.
+- Confirmed both doc-14 crash fixes still in place and load-bearing (they fire on every run past the
+  first NN cluster; also survived a 400-var / 108-NN-cluster model in the g20 probe). Recorded
+  durably in knowledge-base/concepts/weighted-mini-bucket.md ("Gotcha" section) + new note
+  knowledge-base/concepts/wmb-residual-learning.md.
+- Recommendation: worth a full sweep, but carry BOTH conditioned arms; settle arm 4's epoch policy
+  first (one 2000-epoch run, ~13 min); then rung 2b (merging) before rung 3.
+- Deliverable: notebooks/_August-2026/claude_experiments/16-wmb-residual-arm4.md
+  Harness + raw results: notebooks/_August-2026/claude_experiments/wmb_residual/
+  (run_sweep.sh, analyze_arms.py, results/analysis_5arms.txt, results/pilot/ = 25 runs)
+
+  * WMB residual learning: build + pilot — doc 14
+- Built branch feat/wmb-residual from safety/worktree-snapshot-2026-08-11 (worktree /tmp/wmb-residual,
+  2 commits, NOT merged, NOT pushed). Main checkout left on perf/nn-eval-fixes, untouched.
+- Implemented config['wmb_residual']: an NN cluster builds the forward WMB estimate with the same
+  iB/ecl that decided NN-vs-exact, trains on the LOG-RATIO residual r = log10(exact) - log10(wmb),
+  and emits [*wmb_base_factors, residual_NN] as a list. Zero FactorNN changes (doc 02's §2.1 route).
+- Loss fix (D3) done by construction: WMBResidualNet carries the base as an extra x column and adds
+  it to the net output, so every loss/val/early-stopping site compares y_hat = NN_residual + wmb
+  against the original y. neurobe_weighted_mse therefore keeps weighting by message mass, not by the
+  residual. No duplicate y-stats needed.
+- Found + fixed two pre-existing bugs: compute_wmb_message crashed on incoming FactorNN messages
+  (tensor is None, _create_mini_buckets sorts on tensor.numel()) -- this fires on the 2nd NN cluster
+  of any real elimination, which is why doc 02's probe only ran with exact upstream; and FactorNN had
+  no _get_values, needed by sample_tensor_product for NN pass-through base factors.
+- Pilot: grid10x10.f10, iB=10 ecl=1025, no merge, 3 arms x 5 seeds (42-46), 15 sequential runs on
+  gpu1, ~33 min. Primary metric = per-cluster signed local error (compute_local_error).
+- RESULT. As literally specified in D3 the residual arm is WORSE: 11/30 paired clusters, median
+  |local err| 0.084 -> 0.197. Cause measured, not guessed: with minmax_01 still fitted to y the
+  residual net must first learn a constant of -3.23 in normalized units (the calibration prints it).
+- Adding a 9-line epoch-0 output-bias calibration (wmb_residual_bias_init) FLIPS it: 19/30 clusters,
+  median 0.084 -> 0.038, mean 0.143 -> 0.071, across-seed logZ spread 0.756 -> 0.335. Cluster 4, the
+  one with the largest variance reduction (sd_y/r_std ~ 82), is the biggest win (0.28x baseline).
+- No convergence speedup: 360 vs 357 epochs. Doc 02 §4.2's convergence hypothesis is measured false.
+- WMB base construction costs 0.017 s/run = 0.012% of wall time (D4 confirmed: basically free).
+  Total overhead 1.08x wall, inside D8's 2x tolerance.
+- Sign check under APPROXIMATE upstream context (R3): max r = 3.05e-5 (float32 round-off) over 30
+  cluster-runs -- Hoelder bound survives. sd_y/r_std median 4.73 here, weaker than doc 02's ~11.
+- Validity: sum of per-cluster local errors reproduces the run's total signed logZ error to <=3.6e-4
+  in all 15 runs, incl. both residual arms -- confirms [*base, residual_NN] routes with no
+  double-counting (retires R5 for the FactorNN case).
+- Caveat: 1 problem, 6 NN clusters, 5 seeds, no merging, binary only. Sign test p=0.20. Directional.
+- Deliverable: notebooks/_August-2026/claude_experiments/14-wmb-residual-pilot.md
+  Harness + raw results: notebooks/_August-2026/claude_experiments/wmb_residual/
+
+  * integration of the four fixes + gamma v2 sweep — doc 13
+- Built branch integration/aug11-fixes (commit 092732d, worktree /home/cohenn1/NCE-wt-integration;
+  NOT merged to main, NOT pushed). Base = safety/worktree-snapshot-2026-08-11 (perf fixes + the
+  full uncommitted working tree); merged in instr/gamma-v2, fix/wmb-under-merging,
+  fix/num-samples-per-cluster in that order. 13 conflicted files; every one resolved by first
+  diffing each side against the source branch's own baseline, so no side was picked blindly.
+  Only 4 hunks needed judgement (bucket.py x3, train.py x1) where the n_min parse, the gamma
+  hook and the num_samples fix all touch the same lines.
+- Had to repair two consumers outside all four branches: proposal_in_elim.py:138 and
+  training.py:497 did config.get('num_samples', 10000) and needed an int — they only worked
+  BECAUSE of the mutation being fixed. Both now use bucket.get_num_samples(). Doc 11 flagged
+  this; without it the integrated branch breaks the proposal-sampling path.
+- Verified on 092732d, not inherited: WMB build matrix 12/12 (BAD_upstream=0, BAD_scope=0);
+  log Z decomposition 7.205e-05 / n_bad=0 on all 10 merged combinations; pytest 54 passed
+  6 skipped; num_samples PASS (config still 'nbe,0.1', m in {6386,7730,9223}); one-hot unit
+  ALL BIT-EXACT; in-situ _get_slices A/B 8/8 bit-exact max diff 0.0 at 31.7x; gamma tracing
+  numerically inert (log Z 317.5226135253906 identical off/A/B). Rest of the suite 7 failed /
+  145 passed = the same 7 pre-existing config-bookkeeping failures.
+- NEW: ran the first trained elimination under reduce-NN merging WITH populate_bw_factors,
+  both routes (doc 10 sec 5.4 listed this as unmade). Both complete; bucket 9 consumes 23
+  pre-computed WMB backward factors.
+- RAN THE GAMMA V2 SWEEP on gpu0 only (never cuda:2). 41 runs / 656 rows / 24 min, zero
+  failures, one git commit on every row. Passes: A rep1 (v1's 12 configs), B (per-factor),
+  E (dense e_max scan on one problem at a time), M (m scan at FIXED structure), N (nomerge),
+  A rep2 (held out of every fit). Doc 12's 27-min estimate for pass A came in at 6.7 min —
+  the perf fixes.
+- Chosen defaults for doc 12's six open questions, all stated in doc 13 sec 2.1:
+  num_epochs=1; 2 reps of pass A; yes to the m-scan; nomerge on the smallest problem only;
+  NO e_max 20/24 (cost not derivable) but a dense scan inside the costed range instead;
+  verifier not extended — answered empirically (every row is sg_path='small' /
+  call_site='trainer.nbe_val', so the uncovered paths never fire).
+- RESULT (negative, reported plainly): e_max* moved UP, AWAY from the observed optima.
+  Structure-dependent marginal cost gives e_max* = 14.8 / 16.3 / 18.0 over the E_eff band vs
+  published 9.7 / 11.2 / 12.9, observed median 10 (27 problems) and 6 (all eight grid40).
+  The prior expectation (higher in-situ gamma -> smaller e_max*) is refuted: the marginal
+  gamma is 19x SMALLER, because ~60% of the published gamma was intercept (T0 = 4.73 ms on a
+  7.8 ms median T_gen) and the post-perf-fix per-factor NN:table ratio is 8.1x, not 400-800x.
+- FITTED cost model, R2 = 0.9960 on 330 rows:
+  T_gen = 4.73 ms + 6.93e-11*(m*n_table*||E||) + 2.01e-08*(m*sum_NN||E_f||).
+  Pass B INDEPENDENTLY MEASURES the same two coefficients at 8.45e-11 and 2.09e-08 (within
+  1.2x and 4%). Pass M is an out-of-sample check: 13 fixed-structure clusters, median
+  measured/predicted slope 0.90, measured intercept 5.49 ms vs fitted T0 4.73 ms.
+- "gamma falls with e" SURVIVES the prod-k_v correction (627x over e=1..14, unchanged by it)
+  but is a functional-form artefact: the model's residual ratio is 0.93-1.16 for every e>=4.
+  d(e_f)/d(e) = 0.537 for NN factors; table factors have median e_f = 1 yet the full-grid
+  regressor still fits better (the += accumulation is full-grid even though the gather is a view).
+- Conclusion: sample generation is NOT what caps e_max. Next measurement should be delta
+  (training cost), the exact-path densification, or the memory guard.
+- Deliverable: notebooks/_August-2026/claude_experiments/13-gamma-v2-results.md, with
+  gamma_v2/13-gamma-v2-rows.csv (656 rows), gamma_v2/13-gamma-v2-analysis.json, the six
+  per-pass JSONL files, and gamma_v2/verification/.
+
+  * WMB backward-factor population under merging — repaired
+- Branch fix/wmb-under-merging in a worktree at /tmp/wmb-fix (NOT merged, NOT pushed);
+  main checkout left on perf/nn-eval-fixes untouched. 2 commits: 171d554 checks in the
+  pre-existing uncommitted nce/ working state as a baseline (factor_nn.py taken from
+  1a8287e so the two perf optimisations are EXCLUDED and stay revertible), 93f6a06 = the
+  repair (+295 graphical_model.py, +46 proposal_sampler.py, +186 tests/test_wmb_merge_repair.py).
+- BLOCKER FOUND FIRST: no branch in the repo (incl. gsd/M004/S02, main) contains
+  merge_join_tree / reduce_nn_merge / merge_non_subsumption / tree-collect populator /
+  proposal_sampler.py — they exist only as uncommitted working-tree files. Branching from
+  S02 and patching was impossible; hence the baseline commit.
+- Fixed all four defects from doc 01 sec 0a / doc 02 sec 0.3: (1) _create_population_copy
+  disabled only 1 of 4 merge passes so the copy re-merged; (2) get_senders_receivers
+  raw-indexed self.buckets over the full elim_order and discarded only the key var;
+  (3) both populators read a merged cluster's upstream off the key var's single-variable
+  copy bucket — now assembled across ALL members' forward snapshots with cluster-internal
+  messages dropped; (4) build_proposal_for_bucket derived a cluster's proposal scope by
+  unioning the whole backward chain. Plus: tree-collect now honours populate_bw_skip_non_nn.
+- MEASURED (build-only, CPU, no training, no cuda:2): build matrix 2/12 -> 12/12 across
+  6 merge strategies x 2 population routes; reduce-NN (the acceptance criterion) works on
+  grid10x10.f10 and grid20x20.f10. Cluster upstream missing elim vars 5/5 -> 0/5.
+  Proposal scope 14/16/17 vs true separator 1/1/0 -> exactly the separator (beats doc 01's
+  regression target). upstream+downstream reproduces exact log10 Z to 7.2e-05 for every
+  merged cluster in all 12 combinations when bw_ecl makes WMB exact.
+- MEASURED, the number doc 02 said was unmeasured: at a realistic bw_ecl=1024 the old
+  single-var-surrogate upstream was off by 2.699 log10 on cluster 60's forward message
+  (grid10x10.f10, subsumption+tree_collect); post-fix 0.0.
+- Two of doc 01's four listed sites turned out to be non-issues once the copy is guaranteed
+  unmerged (has_elim_var, the bucket_var logging arg). Tree-collect's DOWNSTREAM was already
+  correct — only its upstream was wrong. Estimate was 80-120 lines; actual ~340, because
+  cluster upstream cannot be patched at the point of use, it has to be accumulated across
+  the whole copy sweep.
+- NOT done: no trained run, no proposal TREE built (only its scope asserted), pedigrees
+  untouched. Deliverable: notebooks/_August-2026/claude_experiments/10-wmb-merge-repair.md
+  (+ wmb_merge_repair_{check,logz,fwquality}.py beside it).
+
+  * gamma v2 instrumentation — built, smoke-tested, sweep NOT run
+- Branch instr/gamma-v2 from gsd/M004/S02 (NOT merged, NOT pushed), in a worktree so the
+  main checkout stays on perf/nn-eval-fixes untouched. 2 commits: 08950f3 snapshots the
+  uncommitted nce/ working state (gsd/M004/S02 has no time_sample_gen flag to extend, so
+  there was no hook point; this also pulls in the two factor_nn.py perf commits);
+  734595d = the instrumentation (new nce/utils/gamma_trace.py, 543 lines, + ~95/-41 across
+  train.py / bucket.py / sample_generator.py / config_schema.py / docs/config_reference.md).
+- Deliverable: notebooks/_August-2026/claude_experiments/12-gamma-instrumentation.md
+  (+ 12_gamma_sweep.py, 12_gamma_verify_inert.py, gamma_v2/*.jsonl beside it).
+- Structured JSONL row per cluster, off unless config sets gamma_trace_path. Records the
+  key missing field n_nn, plus true prod(k_v) over elim vars, per-factor e_f and timings,
+  separator/scope state products, streaming path + chunk counts, and git commit/branch/dirty.
+- NEW FINDING (MEASURED): v1's gamma_benchmark.py never called eliminate_variables, so all
+  163 v1 clusters held original model factors only — n_nn was structurally ZERO. gamma =
+  4.35e-8 is a table-factor-only rate that was then used in a model whose clusters contain
+  NN inputs at 400-800x a table factor. Re-analysis of the old CSV cannot fix this.
+- NEW FINDING (MEASURED): v1's k_max^e overcounts the true elim grid by up to 38.4x on
+  pedigree13 e_max=12 (177147 vs 4608), 11.4x on pedigree7 e_max=12. Biases gamma
+  preferentially at high e — i.e. exactly where the "gamma falls with e" claim lives.
+- Numerically inert (MEASURED): log Z bit-identical with tracing off / on / on+per-factor
+  (318.3162841796875), verified independently on gpu0 and gpu1.
+- Smoke test grid10x10.f10.wrap e_max=8, 3 rows in ~5 s. n_nn (1,1,0 for buckets 29,9,92)
+  and e_f (5,2) reproduce doc 03 sections 2.1/2.6 exactly. Per-factor timing costs ~12% on T_gen,
+  hence the sweep is 2 passes (A clean T_gen, B attribution).
+- Sweep specified but NOT RUN: v1's same 12 configs x 2 passes, est. ~30 min/pass (~1 h total)
+  from measured 1-epoch phase_times_s in the June-2026 archive; pedigree7 e_max=12 alone is
+  ~17 min of it. 6 open questions left for Nick (num_epochs=1, repetitions, sweeping m at
+  fixed structure, extra strategies, extra e_max values, verifier coverage).
+
+  * applied the two factor_nn.py perf fixes from doc 03
+- Branch perf/nn-eval-fixes (NOT merged, NOT pushed). 3 commits: 1a8287e checks in the
+  pre-existing uncommitted factor_nn.py working state so the two perf commits are clean;
+  2b99709 = fix 1 (one-hot via a single scatter_, doc 03 4.2 stage 2a, +94/-34);
+  280eba7 = fix 2 (restrict NN elim enumeration to elim vars in scope, doc 03 4.1, +33/-12).
+  Deliverable: notebooks/_August-2026/claude_experiments/09-perf-fixes-applied.md
+  (+ 09_{t_onehot,t_batchshape,ab_slices,ref_impl,run_impl,probe_eval_block}.py beside it).
+- MEASURED FactorNN._get_slices on grid10x10.f10.wrap iB10:
+  D=8 115.95 -> 4.54 ms/call (25.5x); rnn12/D=12 205.96 -> 10.53 ms/call (19.6x, 3+3 reps);
+  sub20 2.30 -> 1.52 ms/call (1.51x, fix 2 a pure no-op there as doc 06 predicted).
+  Row redundancy at D=8 reproduced exactly: 15,773,696 -> 1,109,088 = 14.22x.
+- Numerics: fix 1 bit-identical in all 33 in-situ calls + 8/8 unit cases (max diff 0.0).
+  Fix 2 bit-identical on 26/27; one call off by EXACTLY 1 float32 ULP (7.63e-06 on a value
+  of 86.70). Cause is cuBLAS GEMM tiling, not the math - the smaller enumeration enlarges
+  chunk_size, and pushing identical rows through identical weights in different batch sizes
+  already disagrees by up to 8 ULP on its own (verified separately). Doc 03's "zero numerical
+  risk" holds for the enumeration change but not for the batching change it implies.
+- End-to-end log_Z bit-identical old vs new on the 1-epoch config (318.3162841796875, x2 each).
+- IMPORTANT side finding: end-to-end log_Z is NOT reproducible at num_epochs=500. Five runs of
+  the UNMODIFIED code, same config, same seed 42, span 333.4752-333.9194 (spread 0.44) because
+  early stopping lands on different epochs. That is ~78x the gpu2 nondeterminism doc 07 found,
+  and it happens on gpu0/1/3. End-to-end log_Z cannot be a regression target for trained configs.
+- All verification on gpu0/gpu1/gpu3. Never gpu2.
+- Not done (deliberately): stage 2b embedding_bag fusion, the ln10 constant cache (doc 03 4.3,
+  1.34x, data_preprocessor.py:86/161/202 untouched), memory-derived MAX_QUERY_ROWS, fix 2 for
+  _eval_elim_block. Also: no grid10x10 config reaches FactorNN._eval_elim_block at all
+  (0 calls at D=8/12/20 and sub20), so it was verified by direct probe only.
+...............
+2026-08-10
+  SUMMARY: feasibility/design reviews (hybrid memorization table, convergence-speed prediction, e_f survey); found the num_samples freeze and the WMB-under-merging blocker. Nothing launched.
+
+  * e_f survey: how general is the FactorNN._get_slices redundancy?
+- Answered "does the 14.2x redundant NN evaluation generalise?" with a structure-only
+  CPU pass. Deliverable:
+  notebooks/_August-2026/claude_experiments/06-ef-survey.md (+ 06-ef-survey.png,
+  06-ef-survey-rows.csv / -configs.csv, 06_ef_{survey,merge,analyze}.py).
+- 261 structures (29 problem/iB configs x nomerge + reduce-NN/subsumption at
+  e_max 4/8/12/16), 158,359 clusters, 10,029 NN messages, ~11 min on CPU, 0 failures.
+- Method validated 3 ways: 0 scope mismatches vs bucket._scope_at_elim over all
+  158k clusters; message routing identical to gm.find_next_bucket on 4 spot checks;
+  and it reproduces p5's real-run measurement exactly (grid10x10.f10.wrap, iB10,
+  reduce-NN e_max=8 -> e=8, e_f=2 and 5, 64x and 8x, aggregate 14.22x).
+- Answer: 86% of NN factors have e_f = e (74% among clusters eliminating >=2 vars),
+  so the fix is worthless for most individual factors. Per-factor redundancy is a
+  spike at 1x with a heavy tail (median 1.0, harmonic 1.13, p90 4, max 82,944).
+  Aggregate rows-before/after: median merged config 1.50x, pooled 2.07x; 30% of
+  merged configs gain <1.05x, 18% gain >=10x. Reduce-NN pooled: 1.25x/1.69x/2.64x/
+  4.06x at e_max 4/8/12/16; subsumption-only ~1.0-1.1x throughout. rbm is the
+  extreme (32,768x at e_max=16); pedigree and grid40x40 ~4x.
+- So 14.2x is real but ~80th percentile, not typical. Still worth applying: the cost
+  is k^(e-e_f), unbounded, and grows with exactly the merge bound reduce-NN pushes up.
+
+  * convergence-speed prediction study
+- Answered "can we predict NN convergence speed from separator dimensionality and
+  cluster mass?" using the completed reduce-NN sweep. Deliverable:
+  notebooks/_August-2026/claude_experiments/04-convergence-speed-prediction.md
+  (+ fig1..fig8 PNGs and 4 reproducible scripts in the same folder).
+- Data: 53,536 trained NN buckets from 1,647 production runs, 27 problems,
+  21 merge strategies, 478 (problem,strategy) cells, seeds 42-49.
+- Neither predictor is logged, so wrote a build-only CPU structure pass (478 FastGM
+  builds, 266k clusters, ~14 min, 0 failures) that symbolically simulates elimination
+  and recovers log2(separator size) and sum-of-numel cluster mass. Validated against
+  the logs: separator var count == hidden_sizes[0]/3 for 53,536/53,536 rows (100%),
+  and the structurally-predicted NN bucket set matches the trained set in 471/478 cells.
+- Result: predictive WITHIN a family, not universally. Held-out-by-problem R^2 = 0.50
+  at event level / 0.63 at cluster level (best model: 2-var GBM); seed noise caps any
+  structure-only model at R^2 = 0.721. Within-family transfer: grid 0.88, rbm 0.78,
+  pedigree -0.08. The SIGN FLIPS: grids larger separator -> FEWER epochs (rho=-0.86),
+  rbm larger mass -> MORE epochs (rho=+0.26).
+- Of the requested forms: linear 0.17, quadratic 0.26, exponential 0.34, saturating
+  logistic (L=500) 0.40 (best closed form), GBM 0.50 (all event-level LOPO R^2). Adding
+  3 more structural variables buys +0.002, so these two really are the right pair.
+- Hypothesis for the negative sign (untested): the num_samples logging/config bug
+  (bucket.py:419) makes every bucket in a run train on the SAME sample count, so wide
+  separators = more parameters on the same samples from an exponentially sparser space
+  -> the net memorises fast and patience fires early. If so, "epochs_trained" in this
+  study measures memorisation speed, not message accuracy. Re-running with per-bucket
+  sample counts fixed would change the interpretation of every epoch number.
+
+  * rev 2
+- RE-VERIFIED the backward-factor merge-safety claim from rev 1 and it was WRONG.
+  populate_bw_via_tree_collect is NOT a sufficient workaround. Tested on grid10x10.f10
+  (cuda:2, build only): with use_non_subsumption_merge set, _create_population_copy
+  re-merges (graphical_model.py:1828 disables only use_join_tree_merge, not the other
+  3 passes), so copy.get_senders_receivers() KeyErrors at :1097. Even subsumption-only,
+  where it does run, tree-collect gives merged clusters a SINGLE-VAR upstream (:2129)
+  and an un-eliminated downstream list that blows the proposal scope from 0-1 vars to
+  14-17 (proposal_sampler.py:304-316 branches on cluster size). 3 defects, ~80-120 line
+  fix, now a prerequisite blocker for any proposal sampling under merging.
+- Merge-cap rule resolved by Nick: prod(domain sizes of elim vars) <= 1025, NOT a count.
+  Binary grids -> e_max = 10 exactly (was assuming 12; corrected). Code caps a COUNT
+  (:613-614, :678-679) so the rule is inexpressible for pedigrees (max_states 3/4/5 ->
+  e in 6/5/4, mixed domains so no single count works). ~15-line fix using the existing
+  states_prod helper at :878-885. grid20x20f10 unaffected, can run today.
+- "Only sample for NN-approximated messages" confirmed free: compute_message_nn's only
+  live caller is the else-branch of the gate at graphical_model.py:457.
+- Found a pre-existing bug: num_samples 'nbe,eps' resolution writes back into the shared
+  gm.config (bucket.py:410-419), so after the first NN bucket the isinstance(str) guard
+  never fires. ALL 36 NN buckets in sub10/sub12 train on 6386 samples (the w=11 value);
+  all 108 in nomerge on 7730. Affects the whole June study. Cost estimate revised from
+  ~2-4x to ~3-6x wall time (5.3x aggregate extra true-value evaluations).
+- Doc updated to rev 2. Still nothing launched.
+
+  * (session start)
+- Feasibility review for the hybrid NN + memorization-table architecture (WMB no-repeat sampling ->
+  true message values -> top-K table spliced in at inference). Wrote
+  notebooks/_August-2026/claude_experiments/01-hybrid-memorization-table.md
+- Found 3 of 4 stages already exist: no-replacement WMB tree sampler
+  (nce/sampling/no_replacement_sampler_v3.py:590, used via nce/benchmark/proposal_in_elim.py:154-168),
+  proposal tree (proposal_sampler.py:263), true-value-at-assignments
+  (sample_generator.py:193). Missing: a usable splice mechanism -- the existing Memorizer
+  (net.py:137) is all-or-nothing and has an O(N) Python-loop forward.
+- Two blockers raised with Nick: (a) "elimination size 1025" is not a valid e_max (e_max is a
+  COUNT of eliminated vars, 2..24; 1025 is the ecl for sB=10); (b) 29 of the 36 NN buckets on
+  grid20x20f10 @ ecl=1025/e_max=12 have 2^w < 100k, and 12 have 2^w = 2048 -- so "100k samples,
+  top 1000" would memorize ~half the message on those buckets.
+- Latent issues found: merge_non_subsumption re-inits _scope_at_elim from stale message_scopes
+  (graphical_model.py:661-663), so chaining subsumption+non-subsumption merges (never done in the
+  2198-config June study) makes merge decisions on an under-estimated scope; and
+  populate_backward_factors_wmb (:1984) KeyErrors on merged-away vars, so proposal sampling with
+  merges requires populate_bw_via_tree_collect.
+- Cost estimate (derived, not measured): extra sample-gen ~0.3x-4.5x existing per bucket -> ~2-4x
+  wall time. Currently all of it would be hidden inside phase_times['nn_path'].
+- Nothing launched.
+...............
+2026-08-02
+- grid40 D=6/D=8 fill-in sweep finished (48 runs, 8 problems x 2 D x 3 seeds, gpu0/1/3): all valid, no NaNs
+- Resolved the "time-optimal D=4 for grid-hard" question: D=6 and D=8 had never been run for grid40
+  (locked plan restricted grid-hard to D in {4,12,16}). True optimum is D=6 for ALL 8 grid40 problems.
+  Time is non-monotone in D: regular 26/17/29/21/171 min at D=4/6/8/12/16; wrap 39/27/43/48/450.
+- Rebuilt results_table.csv, problem_overview_table.{csv,tex,pdf,png}; regenerated all figures and
+  redeployed to results_for_writeup/ and July-2026/claude_experiments/reduce_nn_writeup/
+- New plot_family_overlay.py: all problems of a family on one accuracy+time axis pair, one marker per
+  problem (grid-hard: filled=unwrapped, open=wrap), blue=reduce-NN / red=subsumption.
+  Four y-scalings emitted per family: signed / symlog / relnm / abslog (16 PNGs).
+- Known pre-existing breakage: plot_reduce_nn.py (June one-off, not deployed) crashes sorting
+  max_merge_bound=None from nomerge runs.
+...............
+2026-07-11
+- Dense-D sweep (441 runs, D=2/6/10/14 x 19 problems) COMPLETE; grid40 subsumption tail
+  COMPLETE (24 total 30h-cap kills = cliff data). results_table.csv now 477 rows.
+- comparison_* graphs: added saturation X-markers (from structure-pass dedup map) +
+  pooled-average flat continuation for D past merge-max-out; both NBE/noNBE variants.
+- grid40x40f15wrap signed-error analysis: estimates rise monotonically with merging,
+  crossing ref 8230 (nomerge -187 -> rnn16 +134 avg); most-exact configs cluster
+  ~8330-8390 -> pseudo-ground-truth likely ~100-130 too LOW.
+- Launched P4 seed-hardening: 163 runs (pedigree51+rbm_ferro_22 all-strat seeds 45-49;
+  grid40 wraps rnn4/12/16+sub16 seeds 45-47; 4 low-seed top-ups) on gpu0/1/3.
+...............
+2026-07-08
+- Structure pass COMPLETE (27 probs x 10 D x {rnn,sub} + nomerge, build-only, 0 fails):
+  dedup only 6% (507/540 distinct structures; D=2 never dups D=4) -> deduped dense-D
+  core list = 147 cells. Outputs: structure_dedup_map/nn_vs_D_table/p3_enabling_counts.
+- P3 FINDING: of 2900 free (subsumption) steps used by reduce-NN at D=12, ZERO were
+  enabled by prior scope-growing merges -> enabling hypothesis falsified; reduce-NN's
+  advantage = scope-growing steps directly chaining NN buckets (625 such steps).
+- Pedigree doped sub-D {4,8,12,20,24} COMPLETE (90/90) -> four-arm table now complete.
+- Added phase timers (gm.phase_times: exact / nn_path) -> result.json for stacked
+  time-decomposition figure; launched dense-D {2,6,10,14} sweep (441 runs) on gpu0/1/3.
+...............
+2026-06-28
+- Subsumption-only D-sweep queued to match merge-to-bound coverage: extended sub from
+  D=16 to D={4,8,12,16,20,24}. Non-pedigree (21 probs x 5 new D x 3 seeds = 315) running
+  on gpu0/1/3; pedigree (masked, 102 configs, pedigree51 D20/24 skipped) queued behind it
+  (auto-starts when non-ped finishes, avoids grid40+ped OOM). Output -> NeuroCTE/results/
+  via build_subsumption_table.py (same format as results_table.csv; pedigree=masked,
+  others=doped, neurobe cols carried from original table). Early signal: subsumption
+  saturates at a higher NN floor than reduce-NN (e.g. grid20x20f2 stuck at 36 NN for D>=12).
+...............
+2026-06-26
+- Built new NN-count-keyed charts from results_table.csv (new_charts/):
+  Set 1 error-vs-NN-count and Set 2 time-vs-NN-count, one chart per family
+  (grid-small/grid-hard/pedigree/rbm); points labelled with merge bound D,
+  colored by strategy (no-merge gray / merge-to-bound-D blue / subsumption red),
+  per-problem trajectory lines. Set 3: per-problem dual-axis (error left/time
+  right) vs NN count, gridded by family (exploratory). Script: plot_nn_count_charts.py.
+- Full-D-sweep local-error tests running on GPU2 (72 configs, auto-retry).
+...............
+2026-06-24
+- Found the viability sweep had stalled ~6 days: the 12h/30h cap watcher DIED Jun 18
+  (bg-task kill), nothing enforcing caps -> grid20x20 rnn24 ran 28h. Killed runaways,
+  relaunched cap. Built viability D-sweep curves (viability_<fam>.png: err+time vs
+  D=4..24) -> clear time cliff (grid20x20 time shoots up at D=20/24).
+- Per Nick: GPU2 reserved for SMALL/new-thing experiments, NOT long data-gathering.
+- Stopped the viability sweep (results preserved) and launched the PEDIGREE MASKED-NET
+  sweep: 6 pedigrees x {nomerge,rnn4/8/12/16/20/24,sub16} x 3 seeds = 138 configs
+  (masked_net=true, dope_factors=false), on gpu0/1/3 only. setsid cap watcher caps
+  masked runs at 12h. Skipped pedigree51 D20/24 (proven infeasible).
+- refreshed all comparison_*.png + comparison_SUMMARY.png.
+...............
+2026-06-22
+- Implemented the NeuroBE masked net (gated by config masked_net, default off):
+  net.py = shared trunk + value head + sigmoid mask head; eval forward returns the
+  value with -inf where sigmoid(mask)<0.5 (true zeros), so factor_nn inference sites
+  work unchanged. train.py = BCE mask loss (is-nonzero label) + value MSE on FINITE
+  targets only. data_preprocessor.py = finite-aware minmax (ignore -inf). config flags
+  masked_net / masked_net_lambda.
+- Bug found+fixed: TWO validation-loss paths (nbe_val_loss AND neurobe_val_loss that
+  drives 'patience early stopping') both went -inf on masked outputs vs -inf zero
+  targets -> instant early-stop at epoch 3. Both now compute on nonzero targets via a
+  train-mode (unmasked) forward.
+- Validated end-to-end on pedigree13 (CPU, doping OFF): runs clean, finite normalization
+  (ln_min=-87 not -inf), 0 -inf early stops, sane log_Z=-32.90 vs ref -31.18. abs_err
+  1.72 is just undertraining (8 eff epochs vs baseline's hundreds), NOT a masking error.
+- Only the 6 pedigree problems have zeros -> only they need masked-net reruns.
+- Confirmed GPU2 throws errors (masked test died there w/ no output) -> validated on CPU.
+- Built results_for_writeup/ (5 figures + results_table.csv + RESULTS.md) as a context
+  package for the writing agent.
+...............
+2026-06-15
+- Reduce-NN sweep COMPLETE (master finished 06-14 18:14): 435 runs = 29 problems x 5
+  merge-configs x 3 seeds. All 4 comparison figures done (comparison_<group>.png):
+  per-problem accuracy bars (no-merge / reduceNN D=4/12/16 / subsumption-16, mean over
+  3 seeds, #NN labels) + a TIME row + NeuroBE-paper avg error AND avg time as dashed
+  reference lines (neurobe_avg.csv, neurobe_time.csv; hours->min).
+- Re-ran the 9 grid40 transient-CUDA failures + the 8 misdiagnosed pedigree D16 configs.
+  The pedigree D16 cells were NOT infeasible (my error) -- they are the BEST pedigree
+  results (pedigree34 rnn16 err 0.015-0.14 beats its D12; pedigree7 rnn16 0.49-0.97).
+- Cleaned up duplicate grid40 reruns from an over-eager 4-GPU relaunch (two run_trials
+  driver sets double-ran configs -> result.json count 441 > 435; plots dedup by latest
+  mtime so unaffected). Only grid40x40f5wrap rnn16 s44 (3rd seed) still finishing.
+- Headline: merging cuts #NN ~10-50x and error up to ~80x; merge configs beat the
+  NeuroBE error line on most problems and are far below the NeuroBE time line. Exceptions:
+  pedigree51 (merging hurts), rbm_ferro_22, the hardest grid40 wraps.
+...............
+2026-06-14
+- CORRECTION: the 8 "infeasible" high-k pedigree merge-16 configs are NOT infeasible.
+  My k^16 estimate was wrong -- the benchmark "k" is the MAX cardinality, but pedigree
+  vars are mostly binary/ternary, so a 16-var cluster's elim space is the PRODUCT of
+  actual cardinalities (~1e6, not 5^16). Verified: pedigree34 rnn16 max-NN cluster
+  elim_prod=1.5e6 (cards {2,3,4}), pedigree7 rnn16=3.3e5. Their original failure was the
+  48GiB OOM cube (now fixed), not compute. Re-ran all 8 -- they train in minutes.
+- Built 5-way comparison plots (comparison_<group>.png): per problem, accuracy bars
+  (no-merge / reduceNN D=4/12/16 / subsumption-16, mean abs_err over 3 seeds, #NN labels)
+  + a TIME row below + the NeuroBE-paper avg error as a dashed reference line
+  (neurobe_avg.csv/.json). Fixed a log-axis blowup (height-0 infeasible bars -> 300k-px
+  image) by skipping missing bars and pinning y-limits.
+- Finding: our no-merge is often WORSE than the published NeuroBE avg, but the merge
+  configs beat the NeuroBE line on most problems. pedigree51 is the counter-example
+  (merging hurts). Sweet spot ~D=12 for several pedigrees.
+...............
+2026-06-13
+- Extended the knowledge base (now 91 link-checked notes, 0 unresolved wikilinks).
+- Backfilled verified citations + literature notes for the research-direction surrogates:
+  curriculum learning (Bengio 2009), adversarial/GAN (Goodfellow 2014), optimal
+  quantization (Lloyd 1982 / Max 1960 / Wu 1991 DP-SMAWK), decision trees (Breiman CART
+  1984). Added a learned-inference concept note + anchors for amortized/neural inference
+  (Kingma&Welling VAE 2014, Mnih&Gregor NVIL 2014, Yoon GNN 2019, Satorras NEBP 2021).
+  Wired all into references.bib and the relevant concept notes' Sources sections.
+- Filled the paper's Related Work (writeup/paper.md S8) with proper citations + a
+  References list keyed to references.bib; resolved the S2.3 NeuroBE/DBE citation TODO.
+  Remaining paper TODOs are experiment/figure decisions (reference-Z, canonical run set,
+  publication figures, S7 discussion limits) -- left for author input.
+...............
+2026-06-12d
+- Built a project knowledge base as an Obsidian Zettelkasten/slip-box at knowledge-base/
+  (79 notes). Goals: (1) writing/citation/terminology support for papers + advisors,
+  (2) a weekly-synthesis + advisor-update layer so each week is easy to summarize.
+- Verified academic citations for the project's lineage and foundations (web-checked
+  against DBLP/JAIR/JMLR/PMLR/IJCAI). references.bib is now the single source of truth;
+  one literature note per source under knowledge-base/literature/.
+- CAUGHT A MIS-CITATION: NeuroBE is UAI 2022 (PMLR 180, pp.11-21), title "Escalating
+  Neural Network Approximations OF Bucket Elimination", authors Agarwal/Kask/Ihler/
+  Dechter -- NOT "AAAI 2022 / NN Approximations to". docs/neurobe_sample_allocation_
+  algorithm.md L211 still has the wrong version (fix proposed, awaiting OK).
+- Wrote concept notes (bucket/variable elim, induced width, junction/join/clique trees,
+  tree decomposition, AND/OR, mini-bucket, WMB, IJGP, super-bucket, DBE, NeuroBE, error
+  accumulation) + project notes (method overview, bucket-merging, merge-bound,
+  terminology-map NCE<->literature, codebase-map, open-questions) + glossary + 5 MOCs.
+- Migrated the old hidden .knowledge/ graph (26 notes) into the vault; left a pointer
+  stub. All 79 notes link-checked (0 unresolved wikilinks).
+- Progress layer seeded: weekly summary 2026-W24 and an advisor update (2026-06-12),
+  both synthesized from this week's lab entries (06-09 -> 06-12c).
+- Proposed (NOT yet applied, pending Nick) a "Knowledge Base & Retrieval" section for
+  CLAUDE.md so future Claude instances know how to find/cite/update the vault.
+...............
+2026-06-12c
+- Produced a refactoring + publication-readiness assessment of the NCE codebase
+  (deliverables in refactoring/: ASSESSMENT.md + claude_code_refactoring_research.md).
+  All inspection done CPU-only against an rsync mirror (/tmp/nce_clean) so the 8
+  running GPU experiments were untouched (0% GPU used).
+- Key finding: NO single source of truth. Working tree vs HEAD = 30 modified, 19
+  deleted, 154 untracked files, incl. 8 untracked .py INSIDE nce/ (the 5 samplers,
+  proposal_sampler, proposal_in_elim, dtype_utils). A clean checkout/clone is missing
+  functionality experiments depend on. Reconciling this is prerequisite to any refactor.
+- CPU test baseline on the faithful mirror: 145 passed / 7 failed / 2 skipped. The 7
+  failures are config-hygiene only (5 import a nonexistent `worker` module; 2 are dead
+  config fields backward_ecl/num_batches_per_set). Core inference/training/loss green.
+- Verified findings: 420 print()s in library code; dead imports (F, sys) in train.py;
+  tqdm.notebook breaks headless; hardcoded /home/cohenn1/SDBE/PyGMs path (publication
+  blocker); no LICENSE/pyproject/pinned deps; linear_mse_solver.py ~10 overlapping
+  solvers; graphical_model.py 2.1k-LOC monolith. Suggestions tiered SAFE/LOW-RISK/
+  NEEDS-TESTING/NEEDS-DECISION. No code edited (assessment only, pending Nick's go-ahead).
+...............
+2026-06-12b
+- Diagnosed the 22 phase-1 sweep failures: NCE_SAMPLE_BLOCK_LOG2=28/ACHUNK=4096
+  over-sized the streaming sample-gen so FactorNN._eval_elim_block's (B,A,n_labels)
+  int64 cube hit 48 GiB on wide/multi-valued (pedigree k=4-5) high-merge configs.
+- Fix (both opt-in-free, result-identical, verified):
+  (1) sample_generator._dyn_streaming_budget: size the streamed block from FREE gpu
+      mem (torch.cuda.mem_get_info) and the widest NN factor's per-row footprint;
+      env block-log2 is now just an UPPER cap. NCE_SAMPLE_MEM_FRAC (default 0.25).
+  (2) factor_nn._eval_elim_block: internal chunk over the elim-block dim B (hard
+      safety net) so the cube/one-hot can never OOM regardless of caller block size.
+  Tests: budget picks ~216k rows for a 22-label k5 factor (cube ~38MB vs old 47GB);
+  grid10x10 rnn16 smoke abs_err 2e-4; chunked _eval_elim_block matches to_exact to
+  7.6e-6 with mem forced to 8MB.
+- Re-ran 14 recoverable failures (binary rbm/grid20x20 + k3 pedigree13) alongside the
+  running grid40 phase 2 (dynamic sizing lets them coexist) -- no new OOM.
+- 8 failures are NOT bugs: high-cardinality pedigree (k=4-5) at merge bound 16 needs
+  exact training targets = sum over k^16 terms (5^16=1.5e11) -> infeasible to compute.
+  A real finding about merge-16 on multi-valued problems; left as gaps (rerun_infeasible.txt).
+...............
+2026-06-12
+- Started drafting the research paper on bucket merging for NeuroBE in writeup/.
+  - writeup/paper.md: skeleton draft (abstract, intro, background, method, experiments,
+    systems, discussion, related work, conclusion). Core thesis: merging reduces the
+    number of NN message approximations -> fewer error-injection sites -> 6-7x (up to
+    ~100x) lower log-Z error AND less runtime; sweet spot at merge bound 8-16, past
+    which the 2^elim exact cost returns. Headline 4-problem table from curated lab-
+    notebook numbers (grid10x10.wrap, grid20x20, pedigree13, rbm_22).
+  - writeup/NOTES.md: provenance of every number + open items. Flagged discrepancy
+    between curated headline numbers and the broader automated reduce_nn sweep
+    (different seeds/sampling, non-monotone cells) -> must pick one canonical run set
+    before publishing. Also TODO: reference-Z sources, citations, sampling details,
+    publication figures, venue/scope.
+...............
+2026-06-10b
+- Launched the new-code re-sweep: 29 problems x 5 merge-configs x 3 seeds = 435 runs.
+  Configs: no-merge, reduce-NN backtrack @ D=4/12/16, subsumption(join-tree) @ D=16.
+  All with stream_nn_exact + bigger sample-gen blocks (NCE_SAMPLE_BLOCK_LOG2=28,
+  ACHUNK=4096); reduce-NN configs also reduce_nn_backtrack=true. Benchmark set +
+  ref Z in benchmark_set.json (pedigree51 ref override added to run_experiment.py).
+- Two-phase master_sweep.sh: ALL non-grid40 (315) first with a barrier, THEN grid40
+  (120) -- so the expensive grid40 problems only start at the very end. 4 GPU queues
+  round-robin per phase. Global sweep_48h_watch.sh kills any run exceeding 48h.
+- Stopped the old superseded seed-45/46 sweep to free GPUs (results preserved).
+- Smoke-tested grid10x10f10 iB10 rnn16: NN=0, log_z 303.0858 vs ref 303.085957
+  (abs_err 2e-4), 2s -- new pipeline correct end-to-end.
+...............
+2026-06-10
+- Implemented 3 algorithm/perf changes, all opt-in (defaults reproduce prior
+  behavior exactly, so the in-flight seed queues are unaffected):
+  (1) Backtrack in reduce_nn_merge (config reduce_nn_backtrack): after finding the
+      min NN count reachable within the cap D, re-run the merge at the SMALLEST
+      bound achieving it (binary search w/ snapshot/restore of bucket state).
+      Fixes cluster bloat -- rbm_22 D24 & D28 both -> maxElim 22 (were 24/28), i.e.
+      the 1-NN points become the same computation. _reduce_nn_core/_snapshot/_restore.
+  (2) OOM exact-streaming (config stream_nn_exact): _compute_message_exact_chunked
+      evaluates NN factors per output-slice via _eval_elim_block over free vars
+      instead of densifying the full 2^scope grid (the 16 GiB to_exact OOM).
+      Verified identical to to_exact to 1.9e-6 over real NN->exact conversions.
+      New helper FastBucket._nn_factor_slice.
+  (3) Sample-gen block tunables (env NCE_SAMPLE_BLOCK_LOG2 / NCE_SAMPLE_ACHUNK /
+      NCE_SAMPLE_SMALL_LOG2): bigger streaming blocks -> fewer kernel launches.
+- NOTE: backtracked merges are structurally different, so do NOT average backtrack
+  seeds with the existing non-backtrack seeds 42-46. A clean re-sweep is needed to
+  use these. Did not change any running configs.
+...............
+2026-06-09
+- Diagnosed why high-D (D>=20) reduce-NN runs are so slow: sample generation's
+  large-cluster streaming path (sample_generator.py L221-250) is launch-bound, not
+  GPU-bound. For a D28 cluster (~0.48M loop iterations, ~7M tiny kernel launches from
+  one Python thread) the GPU sits ~37% utilized while one CPU core saturates.
+  Corrected earlier wrong claim of "CPU-core contention" -- box has 64 cores 93% idle
+  and the 4 jobs are on distinct GPUs; the ~2.6x solo->4-up slowdown is CUDA driver
+  kernel-launch serialization across concurrent processes.
+- Wrote SPEEDUP_LARGER_BATCHES.md: make the streaming block budget (2**23) and a_chunk
+  env-tunable (NCE_SAMPLE_BLOCK_LOG2/ACHUNK); 24GB cards have ~64x headroom, so bigger
+  blocks -> ~32x fewer iterations -> est. 2-4x speedup, results unchanged. Plus run
+  high-D streamers 1-2 at a time, not 4. Did NOT change library code (experiments still
+  running); change is queued for after data collection.
+- Added grid40x40 ref log10 Z table (catalog PR is nan): grid40x40.f10 = 5490. Wired as
+  REF_LOGZ_OVERRIDE in run_experiment.py; patched D22 result -> abs_err 1.18.
+- Added failure/timeout annotations to the sweep graphs (x = OOM/killed run, 48h
+  threshold line). High-D OOMs are the to_exact width-blowup, hit before 48h on grids.
+- 48h rule: grid40x40 D22 finished on its own at 46.9h (kept). Armed watchers for
+  rbm_22 D28 s43/s44 (kill ~13:37 Jun 9, ~47h grind, likely no data) and grid40x40 D24
+  (deadline Jun 10 13:21). ETA for all current experiments: ~Jun 10 afternoon.
+...............
+2026-06-07
+- Launched reduce-NN trials 2 & 3 (seeds 43, 44) for the non-grid-large problems
+  to enable 3-trial averaging. Only re-ran the (problem, D) points that completed
+  within budget in trial 1: grid10x10.f10.wrap D8-28, grid20x20.f10 D16/20/24,
+  pedigree13 D12/16/20/24, rbm_22 D12/18/24/28 (34 runs = 17 points x 2 seeds).
+  Skipped the over-budget high-D points (grid20x20 D28+, rbm_22 D32+).
+- Generated seed-variant configs (configs/<stem>_D<D>_s43.yaml / _s44.yaml) and a
+  run_trials.sh runner (explicit <gpu> <cfgs...>, avoids run_batch.sh glob/gpu
+  arg ambiguity). Added 'seed' to result.json so trials are distinguishable.
+- Scheduling across the 3 free GPUs (GPU1 still on grid40x40 D22): GPU0/GPU2 each
+  take a heavy pole (rbm_22 D28 ~17h + grid20x20 D24 ~12h), GPU3 takes all
+  mediums+trivials (~21h). Makespan ~29h. All 4 GPUs busy.
+- grid40x40 D22: 23h in, 9/12 NN buckets done (merge log reports 12 NN);
+  predicted ~29-35h total -> under 48h, kept running.
+...............
+2026-06-06
+- Reduce-NN merge experiment: applied the 48h kill rule to running high-D jobs.
+  Killed rbm_22 D32 (predicted ~270h, from D28's 17.1h x 2^4) and grid20x20.f10
+  D28 (predicted ~190h, from D24's 12.1h x 2^4), incl. their queued D30/D34
+  configs -- all gen-dominated (cost ~ 2^maxElim) and far over budget.
+- Kept grid40x40.f10 D22 (gpu1, ~3h in, primary target, no clean baseline to
+  predict >48h). grid40x40 D20 had run ~14h without completing (no result.json).
+- New completed data points: grid20x20.f10 D24 (NN=4, err=1.466, 723min),
+  rbm_22 D24 (NN=1, err=0.060, 164min) / D28 (NN=1, err=0.236, 1025min).
+- Regenerated per-problem accuracy+time graphs (reduce_nn_<problem>.png).
+- Note: grid20x20.f10 accuracy is non-monotone -- D16 err=0.015 best, then
+  D20/D24 worse (1.36/1.47); merging more hurt here.
+...............
+2026-05-11
+- Diagnosed grid20x20.f15 bw_uniform_no_es high log_Z error (|err|=42.58 in log10).
+- Per-bucket diagnostic (notebooks/May-2026/grid20x20_f15_ecl10/diag_per_bucket.py)
+  showed the NN with hidden_sizes='neurobe,1' (h=scope_size) collapses to a
+  near-constant output; the exact forward message at the worst bucket has
+  ~50 log10 units of dynamic range, but the NN range is ~7. Across all scope
+  sizes the NN compresses the dynamic range 30-60%.
+- Built isolated bucket file with exact_fw and exact_bw for bucket 47 of
+  grid20x20.f15 to enable single-bucket debugging with train_buckets_simple.
+  Sanity check: log10(sum_all(exact_fw x exact_bw)) = 1962.974 vs published
+  reference 1962.98 -> validates the bw computation is genuinely exact.
+- Bucket 47: msg_scope size 11 (msg_ec=2048), exact_fw log10 range [48.30,
+  85.88], exact_bw log10 range [1828.13, 1898.05]. Files:
+    .pt:     data/hard_buckets/grid20x20_f15_uai__bucket_47_diag.pt
+    config:  configs/g20f15_bucket47_bw_uniform_no_es.yaml
+  Launch: python train_buckets_simple.py --config configs/g20f15_bucket47_bw_uniform_no_es.yaml --bucket grid20x20_f15_uai__bucket_47_diag --slow --gpu 0
+- Added grid20x20.f15 to nce/benchmark_problems/small_problems.py (auto_ecl=1024)
+  so train_single_bucket's GM reconstruction can find it.
+- Added bucket entry to data/hard_buckets/bucket_list.json.
+...............
+4-27-26
+
+Half NR sampling (50% uniform + 50% no-replacement):
+
+python train_buckets_simple.py --medium --config /home/cohenn1/NCE/notebooks/April-2026/sampling_test/config_bw_iB2_10_batch256_half_nr.yaml --gpu 0
+
+python train_buckets_simple.py --medium --config /home/cohenn1/NCE/notebooks/April-2026/sampling_test/config_nbe_batch256_half_nr.yaml --gpu 1
+
+Full-problem run on grid10x10.f5.wrap (3 sampling regimes x 2 losses, iB=10, bw_ecl=1025).
+Refactor: bucket.compute_message_nn now dispatches to nce.benchmark.proposal_in_elim
+when proposal_sampling=True. Runner: notebooks/April-2026/grid10x10_full/run_full_problem.py.
+
+python notebooks/April-2026/grid10x10_full/run_full_problem.py notebooks/April-2026/grid10x10_full/configs/bw_uniform.yaml --gpu 0 && python notebooks/April-2026/grid10x10_full/run_full_problem.py notebooks/April-2026/grid10x10_full/configs/bw_half_nr.yaml --gpu 0
+
+python notebooks/April-2026/grid10x10_full/run_full_problem.py notebooks/April-2026/grid10x10_full/configs/bw_nr.yaml --gpu 1 && python notebooks/April-2026/grid10x10_full/run_full_problem.py notebooks/April-2026/grid10x10_full/configs/nbe_uniform.yaml --gpu 1
+
+python notebooks/April-2026/grid10x10_full/run_full_problem.py notebooks/April-2026/grid10x10_full/configs/nbe_half_nr.yaml --gpu 2
+
+python notebooks/April-2026/grid10x10_full/run_full_problem.py notebooks/April-2026/grid10x10_full/configs/nbe_nr.yaml --gpu 3
+
+Full-problem run on grid40x40.f10 (6 configs, iB=100 effectively-ignored, ecl=bw_ecl=2^20+1).
+NR sampler now raises RuntimeError if it can't reach N unique samples (no silent WMB top-up).
+Runner: notebooks/April-2026/grid40x40_full/run_full_problem.py.
+
+python notebooks/April-2026/grid40x40_full/run_full_problem.py notebooks/April-2026/grid40x40_full/configs/bw_uniform.yaml --gpu 0 && python notebooks/April-2026/grid40x40_full/run_full_problem.py notebooks/April-2026/grid40x40_full/configs/bw_half_nr.yaml --gpu 0
+
+python notebooks/April-2026/grid40x40_full/run_full_problem.py notebooks/April-2026/grid40x40_full/configs/bw_nr.yaml --gpu 1 && python notebooks/April-2026/grid40x40_full/run_full_problem.py notebooks/April-2026/grid40x40_full/configs/nbe_uniform.yaml --gpu 1
+
+python notebooks/April-2026/grid40x40_full/run_full_problem.py notebooks/April-2026/grid40x40_full/configs/nbe_half_nr.yaml --gpu 2
+
+python notebooks/April-2026/grid40x40_full/run_full_problem.py notebooks/April-2026/grid40x40_full/configs/nbe_nr.yaml --gpu 3
+
+----------------------------------------------------------------------------------------------------------------------------------------
+4-26-26
+/home/cohenn1/NCE/data/hard_buckets/benchmark_results/20260421_113343_nbe_batch256_T2
+/home/cohenn1/NCE/data/hard_buckets/benchmark_results/20260421_102438_nbe_batch256_half
+/home/cohenn1/NCE/data/hard_buckets/benchmark_results/20260421_102352_bw_ib2_10_batch256_half
+/home/cohenn1/NCE/data/hard_buckets/benchmark_results/20260419_114014_nbe_batch256_uniform
+/home/cohenn1/NCE/data/hard_buckets/benchmark_results/20260419_114008_nbe_batch256_p_s
+/home/cohenn1/NCE/data/hard_buckets/benchmark_results/20260419_114001_bw_ib2_10_batch256_uniform
+/home/cohenn1/NCE/data/hard_buckets/benchmark_results/20260419_113954_bw_ib2_10_batch256_p_s
+
+need bw_ib210 T2
+
+Temperature sweep (skipping nbe T2 since done):
+
+python train_buckets_simple.py --medium --config /home/cohenn1/NCE/notebooks/April-2026/sampling_test/temperatures/config_bw_iB2_10_batch256_T1.5.yaml --gpu 0 && python train_buckets_simple.py --medium --config /home/cohenn1/NCE/notebooks/April-2026/sampling_test/temperatures/config_bw_iB2_10_batch256_T2.yaml --gpu 0
+
+python train_buckets_simple.py --medium --config /home/cohenn1/NCE/notebooks/April-2026/sampling_test/temperatures/config_bw_iB2_10_batch256_T2.5.yaml --gpu 1 && python train_buckets_simple.py --medium --config /home/cohenn1/NCE/notebooks/April-2026/sampling_test/temperatures/config_bw_iB2_10_batch256_T3.yaml --gpu 1
+
+python train_buckets_simple.py --medium --config /home/cohenn1/NCE/notebooks/April-2026/sampling_test/temperatures/config_nbe_batch256_T1.5.yaml --gpu 2 && python train_buckets_simple.py --medium --config /home/cohenn1/NCE/notebooks/April-2026/sampling_test/temperatures/config_nbe_batch256_T2.5.yaml --gpu 2
+
+python train_buckets_simple.py --medium --config /home/cohenn1/NCE/notebooks/April-2026/sampling_test/temperatures/config_nbe_batch256_T3.yaml --gpu 3
+
+No-replacement sampling (bw_iB2_10 nr was run 4-22, others are new):
+
+python train_buckets_simple.py --medium --config /home/cohenn1/NCE/notebooks/April-2026/sampling_test/config_bw_iB2_10_batch256_nr.yaml --gpu 0
+
+python train_buckets_simple.py --medium --config /home/cohenn1/NCE/notebooks/April-2026/sampling_test/config_nbe_batch256_nr.yaml --gpu 1
+
+python train_buckets_simple.py --medium --config /home/cohenn1/NCE/notebooks/April-2026/sampling_test/config_bw_iB2_2_batch256_nr.yaml --gpu 2
+
+python train_buckets_simple.py --medium --config /home/cohenn1/NCE/notebooks/April-2026/sampling_test/config_bw_iB20_batch256_nr.yaml --gpu 3
+
+
+
+4-19-26
+
+trying new P(s) approx distribution
+
+python train_buckets_simple.py --medium --config /home/cohenn1/NCE/notebooks/April-2026/sampling_test/config_bw_iB2_10_batch256_p_s.yaml --gpu 0
+
+python train_buckets_simple.py --medium --config /home/cohenn1/NCE/notebooks/April-2026/sampling_test/config_bw_iB2_10_batch256_uniform.yaml --gpu 1
+
+python train_buckets_simple.py --medium --config /home/cohenn1/NCE/notebooks/April-2026/sampling_test/config_nbe_batch256_p_s.yaml --gpu 2
+
+python train_buckets_simple.py --medium --config /home/cohenn1/NCE/notebooks/April-2026/sampling_test/config_nbe_batch256_uniform.yaml --gpu 3
+
+/home/cohenn1/NCE/notebooks/April-2026/sampling_test/config_bw_iB2_10_batch256_p_s.yaml
+/home/cohenn1/NCE/notebooks/April-2026/sampling_test/config_bw_iB2_10_batch256_uniform.yaml
+/home/cohenn1/NCE/notebooks/April-2026/sampling_test/config_nbe_batch256_p_s.yaml
+/home/cohenn1/NCE/notebooks/April-2026/sampling_test/config_nbe_batch256_uniform.yaml
+
+4-13-26
+Add variance too
+
+python train_buckets_simple.py --medium --multiply_messages 1 10 --add_noise --config /home/cohenn1/NCE/notebooks/April-2026/add_variance_test/config_bw_iB2_0_noise.yaml --gpu 0
+
+python train_buckets_simple.py --medium --multiply_messages 1 1 --add_noise --config /home/cohenn1/NCE/notebooks/April-2026/add_variance_test/config_bw_iB2_0_no_variance.yaml --gpu 1
+
+python train_buckets_simple.py --medium --multiply_messages 1 10 --add_noise --config /home/cohenn1/NCE/notebooks/April-2026/add_variance_test/config_bw_iB2_2.yaml --gpu 2
+
+python train_buckets_simple.py --medium --multiply_messages 1 1 --add_noise --config /home/cohenn1/NCE/notebooks/April-2026/add_variance_test/config_bw_iB2_2_no_var.yaml --gpu 3
+
+
+4-12-26
+Train the noised one
+
+python train_buckets_simple.py --medium --add_noise --config /home/cohenn1/NCE/notebooks/April-2026/noise_test/config_bw_iB2_2_noise.yaml --gpu 0
+
+python train_buckets_simple.py --medium --add_noise --config /home/cohenn1/NCE/notebooks/April-2026/noise_test/config_bw_iB2_2.yaml --gpu 1
+
+python train_buckets_simple.py --medium --add_noise --config /home/cohenn1/NCE/notebooks/April-2026/noise_test/config_bw_iB2_10_noise.yaml --gpu 2
+
+python train_buckets_simple.py --medium --add_noise --config /home/cohenn1/NCE/notebooks/April-2026/noise_test/config_bw_iB2_10.yaml --gpu 3
+
+4/9-26
+Running cosine annealing to see if we get lower err with exact bw
+
+python train_buckets_simple.py --medium --config /home/cohenn1/NCE/notebooks/April-2026/single_bucket_varied_bw_small_nn/config_bw_iB2_exact_cosine.yaml --gpu 0
+
+
+4-6-26
+Running high precision experiments
+python train_buckets_simple.py --medium --config /home/cohenn1/NCE/notebooks/April-2026/single_bucket_varied_bw_small_nn64/config_bw_iB2_0.yaml --gpu 0 && python train_buckets_simple.py --medium --config /home/cohenn1/NCE/notebooks/April-2026/single_bucket_varied_bw_small_nn64/config_bw_iB2_2.yaml --gpu 0
+python train_buckets_simple.py --medium --config /home/cohenn1/NCE/notebooks/April-2026/single_bucket_varied_bw_small_nn64/config_bw_iB2_5.yaml --gpu 1
+python train_buckets_simple.py --medium --config /home/cohenn1/NCE/notebooks/April-2026/single_bucket_varied_bw_small_nn64/config_bw_iB2_10.yaml --gpu 2
+python train_buckets_simple.py --medium --config /home/cohenn1/NCE/notebooks/April-2026/single_bucket_varied_bw_small_nn64/config_bw_iB2_exact.yaml --gpu 3
+
+4-3-26
+
+I'm running the small problems after the single buckets. Starting on nce3.
+
+
+To run small problems
+python /home/cohenn1/NCE/scripts/run_small_problems.py /home/cohenn1/NCE/notebooks/April-2026/full_benchmark_run_varied_bw/config_bw_iB2_0.yaml --output /home/cohenn1/NCE/notebooks/April-2026/full_benchmark_run_varied_bw/iB2_0_results.csv --gpus 0,1 --ecl 1025
+
+python /home/cohenn1/NCE/scripts/run_small_problems.py /home/cohenn1/NCE/notebooks/April-2026/full_benchmark_run_varied_bw/config_bw_iB2_2.yaml --output /home/cohenn1/NCE/notebooks/April-2026/full_benchmark_run_varied_bw/iB2_2_results.csv --gpus 0,1,2,3 --ecl 1025
+
+python /home/cohenn1/NCE/scripts/run_small_problems.py /home/cohenn1/NCE/notebooks/April-2026/full_benchmark_run_varied_bw/config_bw_iB2_10.yaml --output /home/cohenn1/NCE/notebooks/April-2026/full_benchmark_run_varied_bw/iB2_10_.csv --gpus 0,1,2,3 --ecl 1025
+
+python /home/cohenn1/NCE/scripts/run_small_problems.py /home/cohenn1/NCE/notebooks/April-2026/full_benchmark_run_varied_bw/config_bw_iB2_exact.yaml --output /home/cohenn1/NCE/notebooks/April-2026/full_benchmark_run_varied_bw/iB2_exact_results.csv --gpus 2,3 --ecl 1025
+
+4-1-26
+python train_buckets_simple.py --medium --config /home/cohenn1/NCE/notebooks/April-2026/single_bucket_varied_bw_small_nn/config_bw_iB2_0.yaml --gpu 0 && python train_buckets_simple.py --medium --config /home/cohenn1/NCE/notebooks/April-2026/single_bucket_varied_bw_small_nn/config_bw_iB2_2.yaml --gpu 0
+python train_buckets_simple.py --medium --config /home/cohenn1/NCE/notebooks/April-2026/single_bucket_varied_bw_small_nn/config_bw_iB2_5.yaml --gpu 1
+python train_buckets_simple.py --medium --config /home/cohenn1/NCE/notebooks/April-2026/single_bucket_varied_bw_small_nn/config_bw_iB2_10.yaml --gpu 2
+python train_buckets_simple.py --medium --config /home/cohenn1/NCE/notebooks/April-2026/single_bucket_varied_bw_small_nn/config_bw_iB2_exact.yaml --gpu 3
+-------------------
 2026-03-10
 - Quick task 20: Update benchmark WMSE/UKL graphs with per-problem error plots
   - Created visualize_updated.py (220 lines) for WMSE vs UKL benchmark result analysis
@@ -224,4 +1473,192 @@
   - Patterns: log-space-convention, three-layer-architecture
   - Updated _index.md and _context.md
 - Marked 3 P1 checklist items as done
+...............
+2026-05-31
+- Recovered context (chat lost): merge-criteria-of-subsumed-buckets + NeuroBE benchmark analysis
+- Built static analysis: full subsumption merge (merge_join_tree, max_cluster_size=None) over neurobe_binary (15 problems)
+- Per problem: #NNs (induced-scope dispatch), max #elim vars per super-bucket, total & max sample complexity (prod of elim-var domain sizes)
+- VALIDATED: no-merge NN counts match NeuroBE expected counts exactly (2,3,1,1,1,4,1,2,1,1,1,3,2,1,1)
+- Key finding: full subsumption merge collapses large-message buckets into a single exact ROOT super-bucket
+  - max elim vars reaches 24 (BN_8, BN_9); worst super-bucket output msg is a SCALAR (width 0)
+  - max sample complexity = 2^(induced width), up to 16.7M (=2^24) for BN_8/BN_9
+  - total SC ~= max SC (one dominant super-bucket); NN dispatch count drops to ~0 (work moves to exact super-bucket)
+  - Implication: unbounded subsumption reintroduces the 2^w blow-up NeuroBE's NN approx avoids; need a cap (max_merge_degree)
+- Gotcha confirmed (CLAUDE.md): pre-elim bucket.get_ec()/get_width() != induced scope; must use message_scopes / _scope_at_elim
+- Script + results: notebooks/May-2026/claude_experiments/subsumption_merge_analysis/
+...............
+2026-05-31 (cont.)
+- Extended full-subsumption merge analysis to NeuroBE paper-table problems at ecl = 2^iB + 1
+  - iB per table: pedigree=20, grid-hard(40x40)=20, grid-easy(10x10/20x20)=10, rbm=20 and 10
+- Had to fix model sourcing: sli.ics.uci.edu host unreachable; downloaded missing UAI+ord+evid from
+  mirror https://ics.uci.edu/~ihler/uai-data/models/<Set>/ (Grids/DBN/pedigree) into .model_cache/
+- HEADLINE: grid40x40.f*.wrap full subsumption -> super-bucket eliminating 63 vars, sample complexity 2^63 (9.2e18),
+  and that worst cluster still has a width-48 output message (a mid-tree monster, not just the root)
+- pedigree: maxElim up to 34, maxSC up to 1.16e11 (pedigree7)
+- Metrics are topology-only: f2/f5/f10/f15 variants give identical results; rbm == rbm_ferro
+- Script: notebooks/May-2026/claude_experiments/subsumption_merge_analysis/paper_problems_subsumption.py
+- Results: paper_results.txt
+...............
+2026-06-02
+- Merge-degree sweep: varied subsumption cap (max_cluster_size) 1->inf over all NeuroBE paper problems
+- Topology-only skeleton trick: build each FastGM once, sweep caps as pure set ops (instant). Validated cap=inf vs paper_results (6/6 OK)
+- Output: merge_degree_sweep.csv (576 rows), merge_degree_sweep.py
+- KEY TREND: NN-count reduction SATURATES early (cap ~12-20) while max sample-complexity keeps growing as 2^cap
+  - pedigree13: nnM hits floor 26 by cap~12 (maxSC 9.2K); cap>=32 buys 0 extra NN reduction but maxSC -> 2.4e9
+  - grid40x40.f10: nnM floor 33 by cap~20 (maxSC 1M); knee ~16-20
+  - grid40x40.f10.wrap: NO clean knee - nnM keeps creeping to 47 only at cap 64 where maxElim=63, maxSC=9.2e18. Must cap low & accept ~51 NNs
+  - rbm: merging nearly useless - nnM flat at 21 from cap~3; maxSC explodes. Cap should be 1-3
+  - pedigree19: naturally saturates (maxElim 11) - no blow-up
+- Takeaway: optimal merge degree = NN-saturation point (~12-20), NOT unbounded; wrap-grids/rbm show merging past knee is pure cost
+2026-06-02 (cont.)
+- Built NeuroBE runtime cost model vs merge degree. Microbenchmarked GPU constants:
+  - t_batch ~ 1.9ms/256-step (flat in width, launch-bound); R_gen ~ 6.5e9 entries/sec
+  - num_samples(w,l,eps)=(temp*ln(temp/l)+ln1000)/eps, temp=(l-1)w^2+lw+4 (NeuroBE formula, bucket.py:1087)
+  - gen cost = num_samples * sample_complexity (sample_tensor_product_elimination builds that many entries)
+- KEY findings (runtime_estimate.csv, runtime_estimate.png):
+  - Two regimes. (1) Normal: T_train dominates and DECREASES with merge (fewer NNs to train). Generation negligible
+    because NN clusters (wide msg, small elim) are DISTINCT from near-root super-buckets (small msg, big elim, stay exact).
+  - (2) High-connectivity (grid40x40.wrap): merging fuses a cluster that is BOTH wide-msg(48) AND huge-elim(63) -> NN with
+    sample_complexity 2^63 -> generation cliff: cap20=5.6h, cap24=6h, cap32=5days, cap48=430yr, cap64=7.7Myr
+  - rbm: merging ~useless (NN count flat ~21); pedigree/grids non-wrap: merge freely, training-bound, ~1-2h at E_eff=500
+  - E_eff=500 is upper bound; early stopping (neurobe_stop_iter=2) cuts training ~5-10x
+- Refined recommendation: merge to NN-count knee EXCEPT cap merge degree ~16-20 on wrap/high-girth grids to avoid gen cliff
+2026-06-02 (cont. 2)
+- Added EXACT-computation cost to runtime model: non-NN cluster cost = message_size * sample_complexity / R_gen
+  (compute_message_exact builds the full cluster joint table). NN clusters still cost num_samples * sample_complexity.
+- Confirms the T_gen "dip" mechanism: when a cluster flips NN->exact (msg drops below ecl), its sampling cost leaves
+  T_gen but reappears (often larger) in T_exact. E.g. pedigree7 cap16->20: T_gen 0.92s->0.15s but T_exact 0.01->17.85s
+  (root super-bucket now sums 1.16e11 terms). exact+gen rises 0.93s->18s -- work moved & grew, didn't vanish.
+- runtime_estimate.csv now has n_exact, exact_entries, T_exact, T_exact_gen columns; 32 per-problem tables in runtime_out.txt
+- Per-problem graphs (train/generate/exact/exact+gen/total): runtime_<group>.png x5
+- Picture: non-wrap problems training-bound & cheap (exact+gen << 1min even at full merge); wrap grids both NN-gen AND
+  exact blow up at high cap (exact maxes ~256 days, gen ~Myr) -> hard cap ~16-20 confirmed end-to-end
+2026-06-02 (cont. 3)
+- BUG FOUND + FIXED: OOM in FactorNN densification during exact bucket computation
+  - Symptom: merge-degree experiment, pedigree13 iB=20 OOM'd (tried to alloc 10.12 GiB) after ~7.7h;
+    rbm_22 iB=10 hung ~6h (same family). grids iB=10 ran fine.
+  - Root cause (traceback): eliminate_variables -> process_bucket(exact branch) -> compute_message_exact
+    -> FactorNN.to_exact() -> nn_to_FastFactor() (factor_nn.py). nn_to_FastFactor materialized the FULL
+    NN factor in ONE pass: cartesian_prod of ALL 2^scope assignments + one (total x in_dim) input tensor
+    + a single model() forward. For a wide-scope NN factor (~2^25 assignments) the ReLU activations are
+    ~10 GiB even though the resulting factor is only ~MB. (Sample generation already streams via
+    _get_slices MAX_QUERY_ROWS; to_exact did not -- this was the asymmetry.)
+  - Per Nick: base factors at iB=20 are ~1MB; you never hold the factor product in memory at sample-gen.
+    So this was a memory-management bug, NOT a fundamental requirement.
+  - FIX: rewrote nn_to_FastFactor to STREAM the densification in chunks of MAX_QUERY_ROWS=65536
+    (unravel flat index -> coords -> one-hot per chunk -> forward -> write into preallocated output).
+    Peak memory now ~chunk size; result identical to old path.
+  - VERIFIED: chunked one-hot encoding numerically identical to original for lower_dim AND full one-hot
+    across mixed domains; streaming 2^24 assignments peaks at 0.14 GB (was OOM 10.12 GiB), 1.8s, output 67MB.
+  - Impact: unblocks iB=20 / dense problems (pedigree, rbm) in the merge-degree experiment.
+- Merge-degree experiment partial results (iB=10 grids, clean): merging IMPROVES accuracy; no-merge (cap1)
+  is worst (grid20x20 err 15.84, grid10x10wrap 3.81); best around cap 8-16 (0.16 / 0.11); 'uniform' nbe
+  sampling beats 'all' 8x faster + 34x more accurate. rbm_20 iB20 = exact (no NN).
+2026-06-02 (cont. 4)
+- BUG #2 FOUND + FIXED: sample-generation hang (CPU-bound, GPU idle) for merged buckets with large 2^#elim
+  - Symptom: re-running pedigree13 iB20 cap12 + rbm_22 iB10 cap12 (after OOM fix) -> stuck mid-training,
+    GPU 0% / CPU 200%, frozen 30-44min on a single NN bucket's sample generation. grids (small per-bucket
+    elim) were unaffected.
+  - Root cause: FactorNN._get_slices had a Python loop `for elim_assignment in all_elim_assignments`
+    (n_elim = 2^#elim iters) INSIDE the assignment-chunk loop with chunk_size = MAX//n_elim. Total Python
+    iters ~ n_assign * n_elim^2 / MAX -> millions of _filter_and_fix_assignments calls for #elim~12.
+    (This loop had been added earlier to fix an OOM; it traded the OOM for a quadratic Python loop.)
+  - FIX: vectorized the construction -- build (n_elim, chunk_n, n_labels) cube by broadcasting message
+    columns over elim and elim columns over the chunk (loop only over n_labels ~20-30), preserving the
+    block-major-by-elim row order. Memory chunking unchanged.
+  - VERIFIED: vectorized nn_assignments identical to old loop (values + ordering) across random
+    message/elim label layouts.
+- Both fixes (nn_to_FastFactor densify streaming + _get_slices vectorization) target the same underlying
+  cause: merged buckets with large 2^#elim. Re-running pedigree13 + rbm_22 to confirm they now complete.
+2026-06-02 (cont. 5)
+- After fixes #1 (densify) + #2 (_get_slices vectorize): pedigree13 iB20 cap12 now TRAINS all 26 NN buckets
+  fine (was hanging), but OOMs at the FINAL exact elimination (9 GiB).
+- 3rd issue (DIFFERENT KIND - inherent exact cost, not a bug): compute_message_exact -> FastFactor.eliminate
+  (factor.py:159) does torch.logsumexp(self.tensor*ln10, dim=elim) on the FULL materialized joint over the
+  bucket scope. A merged exact super-bucket at iB=20 has scope ~30 vars (output<=2^20 + elim<=12) -> 2^30
+  joint = ~4GB, +copy/logsumexp -> 9GB OOM. This is the "exact computation cost" cliff from the runtime
+  analysis, now hitting memory.
+- Fixable by CHUNKED/streamed exact elimination (block over output-msg assignments, sum over elim per block,
+  never materialize full joint) - real infra change to FastFactor.eliminate/compute_message_exact. OR avoid
+  wide exact super-buckets via lower merge caps (cap<=~6-8 keeps scope <=~26-28 -> fits) or different iB/ecl.
+- rbm_22 iB10 cap12 STILL hangs at one bucket even after #2 (dense -> separate, undiagnosed; py-spy blocked
+  by ptrace_scope=1). rbm is least informative (rbm_20 iB20 = exact/no-NN; merging ~useless for rbm).
+- STATUS: iB=10 grids = complete clean result (merging improves accuracy, sweet spot cap 8-16). iB=20
+  pedigree + dense rbm need infra work or lower-cap scope. Decision pending.
+2026-06-03
+- FIX #3: gated memory-bounded exact elimination (compute_message_exact, bucket.py).
+  - compute_message_exact built the full 2^scope joint (product of factors) then logsumexp'd -> OOM for
+    merged super-buckets at iB=20 (~30-var scope -> 9GB). This is the inherent exact cost (msg_size *
+    sample_complexity), but it should not need that much MEMORY.
+  - Added size gate: if joint numel > 2^28 (~1GB f32), stream via _compute_message_exact_chunked, which
+    fixes a few output vars per block (slice all factors), multiplies the now-small factors + eliminates,
+    and writes the message slice. Peak memory ~ block (<=2^26). Fast path unchanged for normal buckets.
+  - Works because elim count is bounded by merge cap (2^elim small) and the output message <= ecl (small),
+    so blocking output vars always shrinks the joint below the limit while the result stays small.
+  - VERIFIED: chunked result identical to unchunked product+eliminate (maxerr ~1e-7) over random multi-factor
+    cases incl. non-binary domains + multiple elim vars, with chunking forced.
+- Re-running pedigree13 (OOM'd at elimination - should now complete) + rbm_22 (separate training-phase hang).
+2026-06-03 (cont.)
+- iB=20 UNBLOCKED (all 3 fixes work). Full pedigree13 iB=20 merge-degree curve (uniform sampling, ecl=2^20+1):
+    cap  1: err 2.49 (126 NN)   cap  4: 0.74 (39)   cap 8: 0.42 (29)
+    cap 12: 0.38 (26)           cap 16: 0.37 (26)*  cap 24: 0.38 (26)
+  -> no-merge (cap1) is 6.7x WORSE than the cap-16 sweet spot. Same shape as the iB=10 grids.
+- CONCLUSION (3 independent problems, grid20x20.f10 / grid10x10.f10.wrap / pedigree13): merging IMPROVES
+  NeuroBE accuracy by reducing the number of NN factors (less compounded error), with a sweet spot around
+  cap 8-16, then a slight rise. Holds at iB=10 and iB=20.
+- Plot: accuracy_vs_merge.png. Pedigree runs ~33-93 min each (cap1 slowest = most NN buckets; chunked exact
+  elimination adds time at high cap).
+- OPEN: rbm still has a dense-graph sample-gen cost (many FactorNN factors x small chunks when n_elim large);
+  recommend running rbm at low caps only (<=4-6, covers its knee) or dropping it.
+2026-06-03 (cont. 2)
+- rbm_22 iB10 at low caps (n_elim small -> no hang): cap1=0.648(33NN,22.6m) cap2=0.165(27) cap4=0.162(24)
+  cap6=0.094(23,10.2m). CORRECTION to earlier guess: even though NN count only drops 33->23, accuracy still
+  improves 7x (0.648->0.094) and time halves -> rbm follows the SAME merging-helps pattern as the others.
+- FINAL experiment result (4 problems): merging IMPROVES NeuroBE accuracy + cuts time (fewer NN factors),
+  with sweet spot ~cap 8-16, then accuracy worsens / time flattens-or-rises. Effect strong for grids+pedigree,
+  weak for dense rbm. Plots: accuracy_and_time_vs_merge.png, accuracy_vs_merge.png.
+2026-06-04
+- Renamed merge cap param `max_cluster_size` -> `max_merge_bound` (user's "merge bound" terminology).
+  - graphical_model.py: merge_join_tree(max_merge_bound=...) + back-compat alias kwarg max_cluster_size;
+    __init__ reads config.get('max_merge_bound', config.get('max_cluster_size')). 3 internal cap-check refs updated.
+  - Experiment scripts (gen_configs/run_experiment/plot_accuracy/analyze_full_subsumption/merge_degree_sweep)
+    updated to emit/read max_merge_bound, with fallback to old key for historical result.json/configs.
+  - Regenerated experiment YAML configs to use max_merge_bound.
+  - VERIFIED: max_merge_bound and max_cluster_size give identical merges (config path + direct kwarg);
+    back-compat intact; graphical_model imports clean.
+  - LEFT: merge_degree/merge_by_degree (separate greedy path) unchanged.
+
+2026-08-12 (doc 31 — powered WMB-residual sweep)
+- Re-costed doc 19's shelved 34 GPU-h sweep with arm 5e in place of arm 4: 34h -> 7.2h for doc 19's
+  own design (2.4x from arm 5e; a further ~2x because doc 19's model assumed grid-like epochs on RBM,
+  where the measured E is 75-88, not ~300). Ran it in 4.53 GPU-h / 29 runs, gpu3 only, sequential.
+- HEADLINE (negative, and it leads): the residual effect does NOT generalise across model families.
+  grid20x20.f10 (new grid): arm 5e beats baseline 84/108, p<1e-5, +0.515 dex, 36/36 clusters, 1.09x.
+  rbm_20: 20/60, p=0.0135, -0.206 dex. rbm_21: 22/63, p=0.0226, -0.230 dex. Both RBMs LOSE, at ~1.5x.
+- Mechanism explains it and was checked, not assumed: residual net_scale is 0.30 on both grids but
+  0.96 on both RBMs, so there is no output-scale mismatch to fix; the eps compensation degenerates
+  and arm 5e reverts toward arm 4.
+- Controls: on g20 extra epochs buy the baseline nothing (55/108, p=0.92) so the win there is purely
+  the parameterisation; on rbm extra epochs DO help the baseline (46/60, p<1e-4) - the right fix on
+  that family is more epochs. eps-tuning is an accuracy no-op on all 3 problems, a cost win on all 3.
+- Pooling (170/286, p=0.0017) would have hidden the whole finding; reported per-family.
+- Deliverable: notebooks/_August-2026/claude_experiments/31-residual-sweep.md
+...............
+
+2026-08-12
+- Implemented and stress-tested "stage 2b" (fold the one-hot into the first Linear via
+  F.embedding_bag) on branch perf/nn-eval-2b, worktree /tmp/claude-58902/wt-2b. Not merged.
+- Cache-safety verdict: the proposed (data_ptr, _version) key is UNSAFE. Found two holes:
+  .data writes bypass the version counter (both devices), AND on CUDA a normal SGD/Adam step
+  does not bump _version at all (default foreach=True -> torch._foreach_add_). Fixed by having
+  no cache: emb is rebuilt from the live W0 per call, costing <=4% on any call >2 ms.
+  Invalidation matrix 12 mutations x 3 policies: none 0/12 stale, ptr_version 4/12,
+  deliberately-broken control 11/12 (so the tests are not vacuous).
+- Numerics are excellent: 429/429 real _get_slices calls bit-identical, end-to-end log_Z
+  identical, determinism CPU goldens (fix/determinism) all pass with the fusion active.
+- BUT there is no speedup: geomean 1.015x synthetic, 0.83x (grid D=8) and 0.78x (pedigree13)
+  on real configs. Stage 2a already deleted the wide one-hot doc 03 measured 2b against, and
+  neurobe_mode's lower_dim=True makes the encoding 1 column/variable already.
+- Confirmed doc 07: embedding_bag does NOT compose with a shared one-hot (I/D = 0.80 at N=21).
+- RECOMMENDED AGAINST ADOPTION. Writeup: notebooks/_August-2026/claude_experiments/45-embedding-fusion.md
 ...............
