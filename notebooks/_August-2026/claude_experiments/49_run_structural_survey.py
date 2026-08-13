@@ -25,7 +25,9 @@ def main():
     only = int(sys.argv[2]) if len(sys.argv) > 2 else None
     only_p = int(sys.argv[3]) if len(sys.argv) > 3 else None
     bench = json.load(open(BENCH))
-    cat = get_catalog()
+    # the cache resolves relative to the package dir; when running from a worktree
+    # that is a partial copy, so point at the main checkout's cache explicitly.
+    cat = get_catalog(cache_dir='/home/cohenn1/NCE/.model_cache')
 
     rows, cluster_rows, failures = [], [], []
     for gi, g in enumerate(bench['groups']):

@@ -429,13 +429,18 @@ def survey_gm(gm, problem: str = '', strategy: str = '',
 
 def build_gm(problem_key: str, iB: int, ecl: float, strategy: str = 'nomerge',
              max_merge_bound: Optional[int] = None, extra_config: Optional[Dict] = None,
-             device: str = 'cpu', catalog=None):
+             device: str = 'cpu', catalog=None, cache_dir: Optional[str] = None):
     """Build a fresh, un-eliminated FastGM for a catalogue problem.
 
     ``device='cpu'`` is the default because this is a *build-only* pass -- no
     message is ever computed, so the device is irrelevant to the result and CPU
     avoids occupying a GPU.  Pass ``device='cuda'`` if you intend to follow the
     survey with real computation.
+
+    ``cache_dir``: the model cache resolves relative to the *package* directory,
+    so running from a git worktree points at that worktree's partial copy and
+    silently tries to re-download (rbm_22 currently 404s that way). Pass the main
+    checkout's ``.model_cache``, or a ready-made ``catalog``, when in a worktree.
     """
     from nce.benchmark_problems.catalog_utils import get_catalog
     from nce.inference.graphical_model import FastGM
@@ -457,16 +462,17 @@ def build_gm(problem_key: str, iB: int, ecl: float, strategy: str = 'nomerge',
     if extra_config:
         cfg.update(extra_config)
 
-    catalog = catalog if catalog is not None else get_catalog()
+    catalog = catalog if catalog is not None else get_catalog(cache_dir=cache_dir)
     return FastGM(model=catalog[problem_key], nn_config=prepare_config(cfg, strict=False),
                   device=device)
 
 
 def survey_problem(problem_key: str, iB: int, ecl: float, strategy: str = 'nomerge',
                    max_merge_bound: Optional[int] = None,
-                   extra_config: Optional[Dict] = None, catalog=None) -> StreamingSurvey:
+                   extra_config: Optional[Dict] = None, catalog=None,
+                   cache_dir: Optional[str] = None) -> StreamingSurvey:
     """Build + survey in one call.  Seconds per problem, no GPU, no training."""
     gm = build_gm(problem_key, iB, ecl, strategy, max_merge_bound,
-                  extra_config=extra_config, catalog=catalog)
+                  extra_config=extra_config, catalog=catalog, cache_dir=cache_dir)
     return survey_gm(gm, problem=problem_key, strategy=strategy,
                      max_merge_bound=max_merge_bound)
