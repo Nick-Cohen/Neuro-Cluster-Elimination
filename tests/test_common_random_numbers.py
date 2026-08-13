@@ -351,6 +351,44 @@ def test_legacy_seed_formula_collides_across_buckets():
         'discriminating.')
 
 
+def test_legacy_seed_collision_yields_byte_identical_assignments():
+    """The collision is not just equal seeds -- it is equal DATA.
+
+    MEASURED in the study cell audit (doc 46 appendix): on grid20x20 at iB=10,
+    cluster 127's draw 2 and cluster 327's draw 0 are separators of equal width
+    over binary variables, so the nbe formula gives them the same row count and
+    the shared seed makes their 16640x17 assignment matrices byte-identical.
+    Reproduced here in miniature with the real SampleGenerator: two DIFFERENT
+    separators, labels 200 apart, draw 2 against draw 0.
+
+    Consequence, traced rather than assumed (doc 46 appendix section 3): draw 0
+    is `init_batches`, used only to initialise the normalisation constants and
+    then discarded; draw 2 is the training set. draw2-vs-draw2 collisions are
+    arithmetically impossible (they would need equal labels), so no cluster is
+    ever trained twice on the same set, and no cluster is trained on another's
+    training set.
+    """
+    scope_a, scope_b = [1, 4, 9, 12], [2, 5, 10, 13]
+    doms = [2, 2, 2, 2]
+    a = _generator(127, scope_a, doms, use_crn=False)
+    for _ in range(2):
+        a._compute_seed()                     # advance to draw 2
+    b = _generator(327, scope_b, doms, use_crn=False)
+    xa = a.sample_assignments(4096)
+    xb = b.sample_assignments(4096)
+    assert torch.equal(xa, xb), (
+        'the legacy seed collision no longer produces identical data. If the '
+        'seed formula changed, the doc 46 appendix needs re-measuring.')
+
+    ca = _generator(127, scope_a, doms, use_crn=True)
+    for _ in range(2):
+        ca._compute_seed()
+    cb = _generator(327, scope_b, doms, use_crn=True)
+    assert not torch.equal(ca.sample_assignments(4096), cb.sample_assignments(4096)), (
+        'CRN reproduced the collision -- two different separators must not '
+        'share a stream.')
+
+
 def test_crn_off_leaves_the_legacy_path_untouched():
     """The default must be bit-identical to the pre-CRN sampler."""
     g = _generator(11, SCOPE, DOMS, use_crn=False)
