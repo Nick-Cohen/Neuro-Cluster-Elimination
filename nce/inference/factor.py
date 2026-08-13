@@ -4,14 +4,17 @@ import math
 
 class _SlicePlan:
     """Chunk-invariant precomputation for `FastFactor._get_slices` (see `_slice_plan`)."""
-    __slots__ = ('scalar', 'base', 'flat', 'proj_indices', 'proj_col', 'proj_idx_t',
-                 'unexpanded_tail', 'expanded_tail', 'shapes', 'dbg')
+    __slots__ = ('scalar', 'base', 'flat_src', 'flat', 'proj_indices', 'proj_col',
+                 'proj_idx_t', 'unexpanded_tail', 'expanded_tail', 'shapes', 'dbg')
 
     def __init__(self, scalar, base, flat, proj_indices,
                  unexpanded_tail, expanded_tail, dbg):
         self.scalar = scalar
         self.base = base
-        self.flat = flat
+        # `flat_src` is the permuted tensor (a view, free); the flattened copy is
+        # built on first use and only by factors that need it.
+        self.flat_src = flat
+        self.flat = None
         self.proj_indices = proj_indices
         # Single-column projection is the overwhelmingly common case (a small table
         # factor whose scope is one message variable plus elim vars). Indexing with
@@ -299,14 +302,16 @@ class FastFactor:
         # .view() requires contiguous strides which may not hold after permute()
         # above (especially for multi-elim_var super buckets). reshape() falls
         # back to a copy when needed -- and that copy is exactly what we hoist.
+        # `flat` is only reached by factors whose whole scope is elim vars, so it
+        # is built on demand: eagerly materialising it would hold a second copy of
+        # every factor tensor alive for the whole chunk loop for nothing.
         base = tensor.reshape(view)
-        flat = tensor.reshape(-1)
 
         # tail of the shape slices are reshaped to, e.g. (1,2,2,1) if the 2nd and
         # 3rd elim vars are in this tensor
         unexpanded_tail = tuple([v.states if v.label in tensor_labels else 1 for v in elim_vars])
 
-        return _SlicePlan(scalar=False, base=base, flat=flat,
+        return _SlicePlan(scalar=False, base=base, flat=tensor,
                           proj_indices=permuted_assignment_indices,
                           unexpanded_tail=unexpanded_tail,
                           expanded_tail=expanded_tail,
@@ -337,6 +342,8 @@ class FastFactor:
                 # are elim_vars). Flatten the elim dims and broadcast to
                 # all assignments.
                 flat = plan.flat
+                if flat is None:
+                    flat = plan.flat = plan.flat_src.reshape(-1)
                 slices = flat.unsqueeze(0).expand(n, flat.numel())
         except Exception:
             tshape, tlabels, view, n_elim_in_tensor, elim_labels, message_scope = plan.dbg
