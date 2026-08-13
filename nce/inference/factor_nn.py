@@ -1,3 +1,4 @@
+import os
 import torch
 import time
 from torch import nn
@@ -354,6 +355,194 @@ class FactorNN(FastFactor):
         """Convert FactorNN to FastFactor."""
         result = FactorNN.nn_to_FastFactor(fastGM=self.gm, jit_file = None, net = self.net, device=self.device, debug=False, data_processor=self.data_processor)
         return result
+
+    # ------------------------------------------------------------------
+    # Shared input encoding across co-resident NN factors (doc 07 variant D)
+    #
+    # `nn_to_FastFactor` builds a (chunk x width) one-hot for EVERY factor
+    # independently. When several NN factors of one cluster densify over the
+    # SAME grid -- which is exactly what happens in RBM-topology clusters,
+    # where up to 21 nets share one 22-variable scope -- that encoding is
+    # rebuilt N times. `densify_shared` builds it once per chunk and runs
+    # every net on it.
+    #
+    # SAFETY, deliberately by construction rather than by cache invalidation:
+    #
+    #   * WEIGHTS: nothing derived from any weight is stored anywhere. The
+    #     shared object is the one-hot, which is a pure function of the
+    #     assignment indices and the (domains, lower_dim) layout -- it does
+    #     not depend on a single parameter. Each net is called live inside
+    #     the chunk loop. There is therefore no cache to go stale, which is
+    #     the only design that survives torch 2.0.1's `foreach` optimiser
+    #     steps not bumping `_version` on CUDA and this repo's `.data` writes
+    #     (net.py:77, linear_mse_solver.py:616-630, bucket.py:666).
+    #   * INPUTS: sharing happens only between factors whose *encoding key*
+    #     is identical -- same GM, same ordered scope, same domain sizes,
+    #     same lower_dim, same dtype, same device -- AND whose first layer
+    #     actually accepts that encoding's width. Anything else is refused
+    #     and falls back to the per-factor path.
+    # ------------------------------------------------------------------
+
+    #: env kill switch, read at call time (``0`` restores the per-factor path)
+    _SHARED_ENCODING_ENV = 'NCE_SHARED_ENCODING'
+
+    #: instrumentation: [groups_shared, factors_shared, factors_refused]
+    _shared_encoding_stats = [0, 0, 0]
+
+    @staticmethod
+    def _net_in_features(net):
+        """Number of input features the net's first Linear consumes, or None."""
+        seq = getattr(net, 'network', None)
+        if seq is None:
+            seq = getattr(net, 'trunk', None)
+        if seq is not None:
+            for layer in seq:
+                if isinstance(layer, nn.Linear):
+                    return int(layer.in_features)
+        for name in ('value_head', 'mask_head'):
+            head = getattr(net, name, None)
+            if isinstance(head, nn.Linear):
+                return int(head.in_features)
+        return None
+
+    @staticmethod
+    def shared_encoding_key(factor):
+        """Hashable identity of the input encoding `factor` will consume in
+        `nn_to_FastFactor`, or None if the factor must not be shared.
+
+        Every component of the key is something the one-hot construction in
+        `nn_to_FastFactor` reads. Two factors with equal keys provably build
+        an identical (chunk x width) input matrix for identical chunks.
+        """
+        if not getattr(factor, 'is_nn', False):
+            return None
+        net = getattr(factor, 'net', None)
+        gm = getattr(factor, 'gm', None)
+        if net is None or gm is None:
+            return None
+        bucket = getattr(net, 'bucket', None)
+        if bucket is None:
+            return None
+        try:
+            # The scope nn_to_FastFactor itself queries -- NOT factor.labels,
+            # which was frozen at construction and can drift.
+            scope = tuple(int(v) for v in bucket.get_message_scope())
+            domains = tuple(int(gm.matching_var(v).states) for v in scope)
+            param_dtype = next(net.parameters()).dtype
+        except Exception:
+            return None
+        lower = bool(gm.lower_dim)
+        # Width of the one-hot nn_to_FastFactor builds: lower_dim drops
+        # category 0 (and a size-1 variable then contributes no column at
+        # all); the full encoding keeps all categories, and a size-1
+        # variable is copied as a single value column.
+        width = (sum(max(d - 1, 0) for d in domains) if lower
+                 else sum(domains))
+        in_features = FactorNN._net_in_features(net)
+        if in_features is not None and in_features != width:
+            # This net does not consume this encoding -- refuse to share it.
+            return None
+        return (id(gm), scope, domains, lower, param_dtype,
+                str(factor.device), width)
+
+    @staticmethod
+    def densify_shared(factors, debug=False):
+        """Densify a group of FactorNNs that share one input encoding.
+
+        All members must have the same `shared_encoding_key` (the caller is
+        responsible for grouping; this is re-asserted here). Returns a list of
+        FastFactor in the same order, each bit-identical to `f.to_exact()`.
+        """
+        assert len(factors) >= 1
+        keys = [FactorNN.shared_encoding_key(f) for f in factors]
+        assert all(k is not None and k == keys[0] for k in keys), \
+            "densify_shared called on a heterogeneous group"
+        _, scope, domain_tuple, lower, param_dtype, dev_str, _width = keys[0]
+        scope = list(scope)
+        domain_list = [int(d) for d in domain_tuple]
+        device = factors[0].device
+        full_onehot = not lower
+
+        total = 1
+        for d in domain_list:
+            total *= d
+
+        # Chunking is IDENTICAL to nn_to_FastFactor's so each net sees exactly
+        # the same rows in exactly the same batches -> bit-identical GEMMs.
+        MAX_QUERY_ROWS = 65536
+        cat_arange = [torch.arange(s, device=device) for s in domain_list]
+        flat_outs = [torch.empty(total, dtype=param_dtype, device=device)
+                     for _ in factors]
+        t0 = time.time() if debug else None
+        with torch.no_grad():
+            for start in range(0, total, MAX_QUERY_ROWS):
+                end = min(total, start + MAX_QUERY_ROWS)
+                rem = torch.arange(start, end, device=device)
+                coords = [None] * len(domain_list)
+                for j in range(len(domain_list) - 1, -1, -1):
+                    d = domain_list[j]
+                    coords[j] = rem % d
+                    rem = rem // d
+                cols = []
+                for i, size in enumerate(domain_list):
+                    ci = coords[i].unsqueeze(1)
+                    if full_onehot:
+                        if size > 1:
+                            cols.append((ci == cat_arange[i]).to(param_dtype))
+                        else:
+                            cols.append(ci.to(param_dtype))
+                    elif size > 1:
+                        cols.append((ci == cat_arange[i][1:]).to(param_dtype))
+                chunk_inputs = (torch.cat(cols, dim=1) if cols
+                                else torch.zeros((end - start, 0),
+                                                 dtype=param_dtype, device=device))
+                # ONE encoding, N nets. Each net is read live here; no weight-
+                # derived quantity outlives this loop iteration.
+                for oi, f in enumerate(factors):
+                    flat_outs[oi][start:end] = f.net(chunk_inputs).reshape(-1)
+        if debug:
+            print(f"Shared densify ({len(factors)} nets x {total} assignments) "
+                  f"took {time.time() - t0:.4f} seconds")
+
+        out = []
+        for oi, f in enumerate(factors):
+            vals = f.data_processor.undo_normalization(
+                flat_outs[oi].reshape(tuple(domain_list)))
+            out.append(FastFactor(vals, list(scope)))
+        return out
+
+    @staticmethod
+    def group_for_shared_encoding(factors):
+        """Partition `factors` into {key: [FactorNN, ...]} groups eligible for a
+        shared encoding. Only groups of size >= 2 are returned; everything else
+        (non-NN factors, unshareable NNs, lone NNs) is left to the caller's
+        existing per-factor path, so N=1 behaviour is byte-for-byte unchanged.
+        """
+        if os.environ.get(FactorNN._SHARED_ENCODING_ENV, '1') == '0':
+            return {}
+        groups = {}
+        for f in factors:
+            if not getattr(f, 'is_nn', False):
+                continue
+            key = FactorNN.shared_encoding_key(f)
+            if key is None:
+                FactorNN._shared_encoding_stats[2] += 1
+                continue
+            groups.setdefault(key, []).append(f)
+        shared = {k: v for k, v in groups.items() if len(v) >= 2}
+        FactorNN._shared_encoding_stats[0] += len(shared)
+        FactorNN._shared_encoding_stats[1] += sum(len(v) for v in shared.values())
+        return shared
+
+    @staticmethod
+    def densify_group_map(factors, debug=False):
+        """{id(factor): FastFactor} for every factor densified via a shared
+        encoding. Factors absent from the map must use `f.to_exact()`."""
+        out = {}
+        for _key, group in FactorNN.group_for_shared_encoding(factors).items():
+            for f, dense in zip(group, FactorNN.densify_shared(group, debug=debug)):
+                out[id(f)] = dense
+        return out
 
     def get_factor_complexity(self):
         """

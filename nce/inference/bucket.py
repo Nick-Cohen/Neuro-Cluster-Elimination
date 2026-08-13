@@ -56,8 +56,18 @@ class FastBucket:
         if joint_numel > FastBucket._EXACT_JOINT_NUMEL_LIMIT:
             return self._compute_message_exact_chunked(scope, elim_labels)
 
+        # Co-resident NN factors that provably consume the SAME input encoding
+        # are densified together, building the one-hot once instead of once per
+        # net (doc 07 variant D). Groups of size 1 are not returned, so the
+        # single-NN path below is unchanged.
+        shared = FactorNN.densify_group_map(self.factors)
+
+        def _to_exact(f):
+            dense = shared.get(id(f))
+            return dense if dense is not None else f.to_exact()
+
         if self.factors[0].is_nn:
-            message = self.factors[0].to_exact()
+            message = _to_exact(self.factors[0])
             assert message.tensor is not None
         else:
             message = self.factors[0]
@@ -67,7 +77,7 @@ class FastBucket:
             if self.config.get('exact', False):
                 self.numel += factor.tensor.numel()
             if factor.is_nn:
-                factor = factor.to_exact()
+                factor = _to_exact(factor)
             message = message * factor
         # Eliminate variables
         try:
@@ -105,7 +115,9 @@ class FastBucket:
             factors = self.factors
             device = self.device
         else:
-            factors = [f.to_exact() if f.is_nn else f for f in self.factors]
+            shared = FactorNN.densify_group_map(self.factors)
+            factors = [(shared.get(id(f)) or f.to_exact()) if f.is_nn else f
+                       for f in self.factors]
             device = factors[0].tensor.device
         dom = {lbl: int(self.gm.matching_var(lbl).states) for lbl in scope}
         out_labels = [lbl for lbl in scope if lbl not in elim_labels]
