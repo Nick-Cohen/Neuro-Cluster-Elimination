@@ -1,9 +1,23 @@
+import os
 import torch
 import time
 from torch import nn
 from typing import List
 from .factor import FastFactor
 import torch.nn.functional as F
+
+# Rows per NN forward pass in FactorNN._get_slices / nn_to_FastFactor.
+#
+# doc 03 sec 2.8 proposed deriving this from FREE gpu memory (its item 4, MEASURED
+# 2.22x at merge bound 12). It is deliberately a FIXED constant here instead.
+# Reason: the bit-exact determinism suite landed AFTER doc 03 was written, and
+# free memory varies run to run, so a free-memory-derived chunk size would make
+# the GEMM batch shape -- and therefore the last bits of every NN factor value
+# (doc 09 sec 3.3: cuBLAS picks a different tiling per M) -- depend on machine
+# state. That is precisely the reproducibility property the frozen rerun build
+# needs to keep. A constant is deterministic on any GPU; the env knob exists for
+# deliberate, recorded experiments, mirroring NCE_SAMPLE_BLOCK_LOG2.
+_NN_QUERY_ROWS = 1 << int(os.environ.get("NCE_NN_QUERY_LOG2", "16"))
 
 class FactorNN(FastFactor):
     """
@@ -197,7 +211,7 @@ class FactorNN(FastFactor):
         # Batch over assignments so peak rows in any NN forward ≤ MAX_QUERY_ROWS.
         # Each chunk produces (chunk × n_elim) one-hot rows; the previous code did
         # all (n_assign × n_elim) at once which OOMs when n_elim = 2^K is large.
-        MAX_QUERY_ROWS = 65536
+        MAX_QUERY_ROWS = _NN_QUERY_ROWS
         chunk_size = max(1, MAX_QUERY_ROWS // max(1, n_elim))
 
         # Perf: build the one-hot input with a single scatter_ into one
@@ -418,7 +432,7 @@ class FactorNN(FastFactor):
         # process MAX_QUERY_ROWS assignments at a time and write into a preallocated
         # output, so peak memory ~ chunk size. Result is identical to the unchunked
         # path. Mirrors the batching already used in _get_slices.
-        MAX_QUERY_ROWS = 65536
+        MAX_QUERY_ROWS = _NN_QUERY_ROWS
         cat_arange = [torch.arange(s, device=device) for s in domain_list]
         flat_out = torch.empty(total, dtype=param_dtype, device=device)
         with torch.no_grad():

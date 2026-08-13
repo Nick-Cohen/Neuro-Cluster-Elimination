@@ -50,6 +50,19 @@ class DataPreprocessor:
         # Using per-batch max causes gradient inconsistency and training divergence
         self.global_max_targets = None
 
+        # Perf: ln(10) cached per device. The old code rebuilt
+        # `torch.log(torch.tensor(10.0)).to(dev)` on every call -- a pageable
+        # host->device copy, which synchronizes the CUDA stream and so drains
+        # the queue inside the hot sample-generation loop (doc 03 sec 2.3, item 3).
+        # MEASURED 32 us/call to construct vs 0.33 us to look up.
+        # A cached float32 DEVICE TENSOR is used rather than doc 03's suggested
+        # Python float: `t / <python float>` is rewritten by PyTorch into a
+        # multiply-by-reciprocal and is NOT bit-identical to `t / <0-dim tensor>`
+        # (MEASURED max diff 3.05e-05 at magnitude 700 -- exactly the deviation
+        # doc 03 sec 2.7 reported for its V1). The cached tensor holds the
+        # identical bit pattern and reproduces the current values exactly.
+        self._ln10_cache = {}
+
         # minmax_01 mode attributes (populated by _initialize_normalizing_constant)
         self.ln_min = None
         self.ln_max = None
@@ -59,6 +72,29 @@ class DataPreprocessor:
         # Initialize normalizing constant from provided samples if available
         if y is not None:
             self._initialize_normalizing_constant(y, bw)
+
+    def _ln10(self, device):
+        """ln(10) as a 0-dim float32 tensor on `device`, built once per device.
+
+        Bit-identical to the `torch.log(torch.tensor(10.0)).to(device)` it
+        replaces (verified: same int32 bit pattern, and mul/div over 2^22
+        random values at magnitudes 1/300/700 are exactly equal).
+        """
+        # `torch.device('cuda')` and `torch.device('cuda:0')` are distinct keys
+        # but both are valid; caching per key is correct, just occasionally
+        # stores two entries.
+        # getattr guard: DataPreprocessor instances are pickled into checkpoints,
+        # so an object unpickled from a pre-cache checkpoint has no _ln10_cache.
+        cache = getattr(self, '_ln10_cache', None)
+        if cache is None:
+            cache = {}
+            self._ln10_cache = cache
+        key = str(device)
+        t = cache.get(key)
+        if t is None:
+            t = torch.log(torch.tensor(10.0)).to(device)
+            cache[key] = t
+        return t
 
     def _initialize_normalizing_constant(self, y_vals: torch.Tensor, bw_vals: torch.Tensor = None):
         """Compute normalizing constant from training samples.
@@ -83,7 +119,7 @@ class DataPreprocessor:
         if torch.isnan(y_vals).any():
             print(f"[DataPreprocessor] ERROR: NaN in y_vals input to _initialize_normalizing_constant!")
 
-        ln10 = torch.log(torch.tensor(10.0)).to(self.device)
+        ln10 = self._ln10(self.device)
 
         # Convert to natural log space
         y_ln = y_vals * ln10
@@ -158,7 +194,7 @@ class DataPreprocessor:
         elif self.normalizing_constant is None:
             self._initialize_normalizing_constant(y_vals, bw_vals)
 
-        ln10 = torch.log(torch.tensor(10.0)).to(self.device)
+        ln10 = self._ln10(self.device)
 
         # minmax_01 mode: normalize to [0, 1] range in natural log space
         if self.normalization_mode == 'minmax_01':
@@ -199,7 +235,7 @@ class DataPreprocessor:
         Returns:
             Values in log10 space
         """
-        ln10 = torch.log(torch.tensor(10.0)).to(outputs.device)
+        ln10 = self._ln10(outputs.device)
 
         if self.normalization_mode == 'minmax_01':
             # Undo: y_ln = ln_min + outputs * ln_range, then convert to log10

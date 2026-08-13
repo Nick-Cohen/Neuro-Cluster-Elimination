@@ -245,8 +245,13 @@ class FastFactor:
         if n_elim_in_tensor == 0:
             view = tuple(int(dim) for dim in tensor.shape) + (1,)
         else:
+            # Perf: math.prod over Python ints. The old torch.prod(torch.tensor(...))
+            # allocated a throwaway CPU tensor to multiply a handful of ints, in a
+            # function called 100s-1000s of times per elimination (doc 03 sec 4.9).
+            # Identical result by construction (both are exact integer products;
+            # math.prod is arbitrary-precision so it cannot silently overflow int64).
             view = tuple(int(dim) for dim in tensor.shape[:n_assign_dims]) + \
-                   (int(torch.prod(torch.tensor(tensor.shape[n_assign_dims:]))),)
+                   (math.prod(int(d) for d in tensor.shape[n_assign_dims:]),)
         try:
             if not projected_assignments.numel() == 0:
                 # .view() requires contiguous strides which may not hold after
@@ -312,7 +317,7 @@ class FastFactor:
             view = tuple(int(d) for d in tensor_p.shape) + (1,)
         else:
             view = tuple(int(d) for d in tensor_p.shape[:n_assign_dims]) + \
-                   (int(torch.prod(torch.tensor(tensor_p.shape[n_assign_dims:]))),)
+                   (math.prod(int(d) for d in tensor_p.shape[n_assign_dims:]),)
         if projected.numel() != 0:
             slices = tensor_p.reshape(view)[tuple(projected.t())]
         else:
