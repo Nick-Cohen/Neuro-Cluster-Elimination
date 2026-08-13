@@ -1,6 +1,41 @@
 import torch
 import math
 
+
+class _SlicePlan:
+    """Chunk-invariant precomputation for `FastFactor._get_slices` (see `_slice_plan`)."""
+    __slots__ = ('scalar', 'base', 'flat', 'proj_indices', 'proj_col', 'proj_idx_t',
+                 'unexpanded_tail', 'expanded_tail', 'shapes', 'dbg')
+
+    def __init__(self, scalar, base, flat, proj_indices,
+                 unexpanded_tail, expanded_tail, dbg):
+        self.scalar = scalar
+        self.base = base
+        self.flat = flat
+        self.proj_indices = proj_indices
+        # Single-column projection is the overwhelmingly common case (a small table
+        # factor whose scope is one message variable plus elim vars). Indexing with
+        # a Python list would rebuild an index tensor and copy it host->device on
+        # every chunk; a plain column view costs nothing.
+        self.proj_col = proj_indices[0] if len(proj_indices) == 1 else None
+        self.proj_idx_t = (torch.as_tensor(proj_indices, dtype=torch.long,
+                                           device=base.device)
+                           if len(proj_indices) > 1 else None)
+        self.unexpanded_tail = unexpanded_tail
+        self.expanded_tail = expanded_tail
+        # n -> (unexpanded_shape, expanded_shape); chunk sizes repeat, so building
+        # these 17-element tuples once per distinct n instead of once per call.
+        self.shapes = {}
+        self.dbg = dbg
+
+    def shapes_for(self, n):
+        s = self.shapes.get(n)
+        if s is None:
+            s = ((n,) + self.unexpanded_tail, (n,) + self.expanded_tail)
+            self.shapes[n] = s
+        return s
+
+
 class FastFactor:
     def __init__(self, tensor, labels):
         self.tensor = tensor
@@ -204,20 +239,32 @@ class FastFactor:
         
         return variance.item()
     
-    def _get_slices(self, assignments, elim_vars, elim_domain_sizes, message_scope):
+    def _slice_plan(self, elim_vars, elim_domain_sizes, message_scope):
+        """Precompute the part of `_get_slices` that does not depend on the
+        assignment chunk.
+
+        `_get_slices` is called once per (factor, assignment chunk). Everything it
+        does except projecting/indexing the chunk itself -- the label bookkeeping,
+        the permutation, the flattened view of the factor tensor and the two output
+        shapes' tails -- depends only on (self, elim_vars, message_scope), which are
+        fixed for a whole cluster. Callers that loop over chunks should build the
+        plan once and call `_get_slices_prepared`; that is bit-identical to calling
+        `_get_slices` per chunk (the tensor ops performed are the same ops on the
+        same values) and removes the repeated Python work.
+
+        Returns an opaque plan object. `FactorNN` overrides this to return None,
+        meaning "no prepared path -- use `_get_slices`".
+        """
         tensor = self.tensor
         tensor_labels = self.labels
 
-        # Handle 0-dim tensors (scalar factors with empty labels)
-        # These represent constant factors that broadcast to all samples and all elimination states
-        if tensor.dim() == 0 or len(tensor_labels) == 0:
-            # Create output shape: (num_samples, elim_dim1, elim_dim2, ...)
-            expanded_shape = (len(assignments),) + tuple([v.states for v in elim_vars])
-            # Broadcast the scalar value to this shape
-            return tensor.expand(expanded_shape)
+        expanded_tail = tuple([v.states for v in elim_vars])
 
-        # indices in assignments that correspond to dimensions in the tensor
-        assignment_indices = [i for i, idx in enumerate(message_scope) if idx in tensor_labels]
+        # Handle 0-dim tensors (scalar factors with empty labels)
+        if tensor.dim() == 0 or len(tensor_labels) == 0:
+            return _SlicePlan(scalar=True, base=tensor, flat=None,
+                              proj_indices=(), unexpanded_tail=expanded_tail,
+                              expanded_tail=expanded_tail, dbg=None)
 
         # indices of the assignment in the tensor
         tensor_assignment_indices = [i for i, idx in enumerate(tensor_labels) if idx not in elim_vars]
@@ -238,45 +285,80 @@ class FastFactor:
         # assertation necessary for indexing
         assert(all(tensor_labels[i] < tensor_labels[i+1] for i in range(len(tensor_labels)-n_elim_in_tensor-1)))
         permuted_assignment_indices = [i for i, idx in enumerate(message_scope) if idx in tensor_labels]
-        projected_assignments = assignments[:,permuted_assignment_indices]
 
         # stretch out the elim-vars-present-in-this-factor dimensions to 1d
         n_assign_dims = len(tensor.shape) - n_elim_in_tensor
         if n_elim_in_tensor == 0:
             view = tuple(int(dim) for dim in tensor.shape) + (1,)
         else:
-            view = tuple(int(dim) for dim in tensor.shape[:n_assign_dims]) + \
-                   (int(torch.prod(torch.tensor(tensor.shape[n_assign_dims:]))),)
+            tail = 1
+            for dim in tensor.shape[n_assign_dims:]:
+                tail *= int(dim)
+            view = tuple(int(dim) for dim in tensor.shape[:n_assign_dims]) + (tail,)
+
+        # .view() requires contiguous strides which may not hold after permute()
+        # above (especially for multi-elim_var super buckets). reshape() falls
+        # back to a copy when needed -- and that copy is exactly what we hoist.
+        base = tensor.reshape(view)
+        flat = tensor.reshape(-1)
+
+        # tail of the shape slices are reshaped to, e.g. (1,2,2,1) if the 2nd and
+        # 3rd elim vars are in this tensor
+        unexpanded_tail = tuple([v.states if v.label in tensor_labels else 1 for v in elim_vars])
+
+        return _SlicePlan(scalar=False, base=base, flat=flat,
+                          proj_indices=permuted_assignment_indices,
+                          unexpanded_tail=unexpanded_tail,
+                          expanded_tail=expanded_tail,
+                          dbg=(tuple(tensor.shape), list(tensor_labels), view,
+                               n_elim_in_tensor,
+                               [v.label for v in elim_vars], list(message_scope)))
+
+    def _get_slices_prepared(self, plan, assignments):
+        """`_get_slices` with the chunk-invariant work already done (see `_slice_plan`)."""
+        n = assignments.shape[0]
+        unexpanded_slice_shape, expanded_slice_shape = plan.shapes_for(n)
+        if plan.scalar:
+            return plan.base.expand(expanded_slice_shape)
+
+        proj_indices = plan.proj_indices
         try:
-            if not projected_assignments.numel() == 0:
-                # .view() requires contiguous strides which may not hold after
-                # permute() above (especially for multi-elim_var super buckets).
-                # Use reshape() which falls back to a copy when needed.
-                slices = tensor.reshape(view)[tuple(projected_assignments.t())]
+            if n != 0 and len(proj_indices) != 0:
+                if plan.proj_col is not None:
+                    # base[assignments[:, c]] -- identical gather, no index tensor
+                    # to materialise and no transpose/unbind round trip.
+                    slices = plan.base.index_select(
+                        0, assignments.select(1, plan.proj_col))
+                else:
+                    projected_assignments = assignments.index_select(1, plan.proj_idx_t)
+                    slices = plan.base[tuple(projected_assignments.t())]
             else:
                 # Factor has no assignment-projection dims (all its labels
                 # are elim_vars). Flatten the elim dims and broadcast to
                 # all assignments.
-                flat = tensor.reshape(-1)
-                slices = flat.unsqueeze(0).expand(len(assignments), flat.numel())
+                flat = plan.flat
+                slices = flat.unsqueeze(0).expand(n, flat.numel())
         except Exception:
+            tshape, tlabels, view, n_elim_in_tensor, elim_labels, message_scope = plan.dbg
             print(f"[_get_slices INDEX error] orig tensor.shape={self.tensor.shape} labels={self.labels}")
-            print(f"  permuted tensor.shape={tensor.shape}, tensor_labels={tensor_labels}")
-            print(f"  view={view}, projected_assignments.shape={projected_assignments.shape}")
-            print(f"  elim_var_labels={[v.label for v in elim_vars]}, n_elim_in_tensor={n_elim_in_tensor}")
-            print(f"  message_scope={message_scope}, permuted_assignment_indices={permuted_assignment_indices}")
+            print(f"  permuted tensor.shape={tshape}, tensor_labels={tlabels}")
+            print(f"  view={view}, projected_assignments.shape={(n, len(proj_indices))}")
+            print(f"  elim_var_labels={elim_labels}, n_elim_in_tensor={n_elim_in_tensor}")
+            print(f"  message_scope={message_scope}, permuted_assignment_indices={proj_indices}")
             raise
-        
-        # reshape slices to match elimination variables in order, e.g. (1,2,2,1) if 2nd and 3rd variables are in tensor
-        unexpanded_slice_shape = (len(assignments),) + tuple([v.states if v.label in tensor_labels else 1 for v in elim_vars])
+
         try:
             reshaped_slices = slices.reshape(unexpanded_slice_shape)
         except Exception:
+            tshape, tlabels, view, n_elim_in_tensor, elim_labels, message_scope = plan.dbg
             print(f"[_get_slices reshape error] slices.shape={slices.shape} → unexpanded={unexpanded_slice_shape}")
-            print(f"  tensor.shape={self.tensor.shape}, tensor_labels={self.labels}, elim_var_labels={[v.label for v in elim_vars]}")
+            print(f"  tensor.shape={self.tensor.shape}, tensor_labels={self.labels}, elim_var_labels={elim_labels}")
             raise
-        expanded_slice_shape = (len(assignments),) + tuple([v.states for v in elim_vars])
         return reshaped_slices.expand(expanded_slice_shape)
+
+    def _get_slices(self, assignments, elim_vars, elim_domain_sizes, message_scope):
+        return self._get_slices_prepared(
+            self._slice_plan(elim_vars, elim_domain_sizes, message_scope), assignments)
 
     def _eval_elim_block(self, assignments, elim_coords, elim_vars, elim_var_labels, message_scope):
         """Evaluate this factor at every (message assignment x elim assignment)
