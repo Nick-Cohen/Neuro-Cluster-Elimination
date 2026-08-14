@@ -126,19 +126,18 @@ class HybridMemorizerNet(nn.Module):
 def _proposal_tree_over_scope(bucket, gm, scope, ecl=0, temperature=1.0):
     """`build_proposal_for_bucket`, but over the scope WE ask for.
 
-    The shipped function picks the scope itself via `proposal_scope_for_bucket`,
-    which for a bucket with a SINGLE elim var reads the pre-merge
-    `gm.message_scopes` cache. That cache is computed before any merge pass, so
-    once a neighbour has been merged the messages actually arriving at an
-    unmerged bucket can span variables the cache never predicted, and
-    `build_proposal_tree` then raises `KeyError: <label>` on the missing domain
-    size. Measured on `dbn/rbm_20` under reduce-NN: 11/11 NN clusters raise.
-    Doc 10's defect-4 fix covered the MERGED branch of the same function and
-    left this one alone.
+    HISTORY. The shipped function used to pick the scope itself via
+    `proposal_scope_for_bucket`, which for a bucket with a SINGLE elim var read
+    the pre-merge `gm.message_scopes` cache -- a pre-elimination artefact. This
+    copy was written to bypass that.
 
-    We already know the correct scope -- `bucket.get_message_scope()`, which is
-    recomputed from the bucket's current factors -- so pass it in. Everything
-    else mirrors `proposal_sampler.build_proposal_for_bucket` verbatim.
+    AS OF DOC 57 the two are equivalent: `proposal_scope_for_bucket` now returns
+    `bucket.get_message_scope()` unconditionally, and `build_proposal_for_bucket`
+    unions in the extra domain sizes this copy always did. Kept rather than
+    deleted only because collapsing it is a refactor on a path that is currently
+    verified, and this file is on a branch that still has to merge. If you are
+    touching this area, `build_proposal_for_bucket(bucket, gm, ecl, temperature)`
+    should now do the same thing.
     """
     from nce.inference.factor import FastFactor
     from nce.sampling.proposal_sampler import ProposalTree, build_proposal_tree
@@ -244,17 +243,28 @@ def build_memorization_table(bucket, trainer, config):
     # is disjoint from the proposal path's `prop-nr` stream.
     #
     # This buys pairing, order-independence and collision-freedom, NOT the
-    # shared-prefix property: `sample_no_replacement_v3_recursive` is Gumbel
-    # top-k over an N-dependent frontier, so two runs with different
-    # `memorize_num_samples` still share nothing (see doc 56 section 2c).
+    # shared-prefix property: the sampler's phase-1 frontier schedule is a
+    # function of N, so two runs with different `memorize_num_samples` share
+    # nothing (doc 56 section 2c).
+    #
+    # MEASURED (doc 57), and it changes what this line is worth:
+    # `sample_no_replacement_v3_recursive` reaches its RNG only when
+    # `K_outer < N`, and phase 1 over-delivers on every tree probed, so the
+    # generator is NEVER advanced and this seed is not an input to the draw at
+    # all. The re-key is insurance against the day that changes, not a repair.
+    # `test_the_no_replacement_sampler_never_consumes_its_generator` is the
+    # tripwire.
     rng = _crn.no_replacement_generator(config, scope, domain_sizes, device,
                                         role=_crn.ROLE_MEMO)
     nr_samples, _, _ = tree.sample_no_replacement_v3_recursive(
         n_samp, M=1, rng=rng, mode='save')
     # The proposal tree does not always span the whole separator (its variables
-    # come from the upstream/downstream factors). proposal_in_elim.py raises a
-    # KeyError in that case; here the missing coordinates are filled uniformly
-    # at random instead. Correctness is unaffected -- the TRUE value is still
+    # come from the upstream/downstream factors); the missing coordinates are
+    # filled uniformly at random. (proposal_in_elim.py used to raise a KeyError
+    # here; as of doc 57 it fills too, and additionally corrects log q by the
+    # fill's own density, which matters there because its weights are 1/q and
+    # does not matter here because the top-K is by TRUE value.)
+    # Correctness is unaffected -- the TRUE value is still
     # evaluated at whatever assignment comes out, and the top-K is still by true
     # value -- but the candidate pool for those variables is not proposal-guided
     # and no-repeat is no longer guaranteed (duplicates are dropped below).
