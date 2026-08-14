@@ -1,0 +1,907 @@
+{
+ "gpu": 0,
+ "dim": 4096,
+ "warm_s": 360.0,
+ "setup_s": 9.0,
+ "timed_s": 60.0,
+ "arms": {
+  "cold": {
+   "temp_at_start": 36,
+   "telemetry": [
+    {
+     "temp": 42,
+     "power": 279.95,
+     "sm_clock": 1800
+    },
+    {
+     "temp": 43,
+     "power": 266.79,
+     "sm_clock": 1755
+    },
+    {
+     "temp": 44,
+     "power": 234.32,
+     "sm_clock": 1710
+    },
+    {
+     "temp": 44,
+     "power": 221.92,
+     "sm_clock": 1785
+    },
+    {
+     "temp": 45,
+     "power": 269.9,
+     "sm_clock": 1710
+    },
+    {
+     "temp": 46,
+     "power": 269.64,
+     "sm_clock": 1785
+    },
+    {
+     "temp": 46,
+     "power": 263.77,
+     "sm_clock": 1725
+    },
+    {
+     "temp": 46,
+     "power": 260.58,
+     "sm_clock": 1770
+    },
+    {
+     "temp": 47,
+     "power": 266.82,
+     "sm_clock": 1710
+    },
+    {
+     "temp": 48,
+     "power": 263.53,
+     "sm_clock": 1785
+    },
+    {
+     "temp": 48,
+     "power": 265.92,
+     "sm_clock": 1725
+    },
+    {
+     "temp": 48,
+     "power": 262.35,
+     "sm_clock": 1770
+    },
+    {
+     "temp": 49,
+     "power": 262.49,
+     "sm_clock": 1800
+    },
+    {
+     "temp": 49,
+     "power": 258.95,
+     "sm_clock": 1815
+    },
+    {
+     "temp": 49,
+     "power": 257.09,
+     "sm_clock": 1800
+    },
+    {
+     "temp": 50,
+     "power": 257.69,
+     "sm_clock": 1800
+    },
+    {
+     "temp": 50,
+     "power": 257.75,
+     "sm_clock": 1800
+    },
+    {
+     "temp": 51,
+     "power": 258.37,
+     "sm_clock": 1800
+    },
+    {
+     "temp": 51,
+     "power": 256.78,
+     "sm_clock": 1800
+    },
+    {
+     "temp": 52,
+     "power": 256.25,
+     "sm_clock": 1770
+    },
+    {
+     "temp": 52,
+     "power": 253.32,
+     "sm_clock": 1770
+    },
+    {
+     "temp": 52,
+     "power": 254.23,
+     "sm_clock": 1770
+    },
+    {
+     "temp": 53,
+     "power": 255.82,
+     "sm_clock": 1755
+    },
+    {
+     "temp": 53,
+     "power": 259.34,
+     "sm_clock": 1755
+    },
+    {
+     "temp": 54,
+     "power": 263.66,
+     "sm_clock": 1755
+    },
+    {
+     "temp": 54,
+     "power": 261.69,
+     "sm_clock": 1755
+    },
+    {
+     "temp": 54,
+     "power": 259.93,
+     "sm_clock": 1740
+    },
+    {
+     "temp": 55,
+     "power": 258.23,
+     "sm_clock": 1740
+    },
+    {
+     "temp": 55,
+     "power": 258.67,
+     "sm_clock": 1725
+    },
+    {
+     "temp": 55,
+     "power": 256.1,
+     "sm_clock": 1725
+    },
+    {
+     "temp": 56,
+     "power": 260.44,
+     "sm_clock": 1710
+    },
+    {
+     "temp": 56,
+     "power": 261.09,
+     "sm_clock": 1740
+    },
+    {
+     "temp": 56,
+     "power": 261.77,
+     "sm_clock": 1740
+    },
+    {
+     "temp": 57,
+     "power": 267.25,
+     "sm_clock": 1725
+    },
+    {
+     "temp": 57,
+     "power": 262.21,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 57,
+     "power": 264.26,
+     "sm_clock": 1785
+    },
+    {
+     "temp": 58,
+     "power": 258.66,
+     "sm_clock": 1755
+    },
+    {
+     "temp": 58,
+     "power": 259.98,
+     "sm_clock": 1740
+    },
+    {
+     "temp": 58,
+     "power": 274.22,
+     "sm_clock": 1710
+    },
+    {
+     "temp": 59,
+     "power": 260.49,
+     "sm_clock": 1755
+    },
+    {
+     "temp": 59,
+     "power": 271.77,
+     "sm_clock": 1620
+    },
+    {
+     "temp": 60,
+     "power": 278.18,
+     "sm_clock": 1740
+    },
+    {
+     "temp": 60,
+     "power": 271.12,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 60,
+     "power": 269.3,
+     "sm_clock": 1740
+    },
+    {
+     "temp": 60,
+     "power": 270.85,
+     "sm_clock": 1785
+    },
+    {
+     "temp": 61,
+     "power": 269.08,
+     "sm_clock": 1710
+    },
+    {
+     "temp": 61,
+     "power": 224.73,
+     "sm_clock": 1755
+    },
+    {
+     "temp": 61,
+     "power": 250.72,
+     "sm_clock": 1770
+    },
+    {
+     "temp": 62,
+     "power": 268.21,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 62,
+     "power": 267.79,
+     "sm_clock": 1740
+    },
+    {
+     "temp": 62,
+     "power": 268.57,
+     "sm_clock": 1770
+    },
+    {
+     "temp": 62,
+     "power": 265.78,
+     "sm_clock": 1785
+    },
+    {
+     "temp": 63,
+     "power": 266.84,
+     "sm_clock": 1650
+    },
+    {
+     "temp": 63,
+     "power": 236.8,
+     "sm_clock": 1740
+    },
+    {
+     "temp": 63,
+     "power": 258.02,
+     "sm_clock": 1770
+    },
+    {
+     "temp": 64,
+     "power": 265.33,
+     "sm_clock": 1650
+    },
+    {
+     "temp": 63,
+     "power": 253.13,
+     "sm_clock": 1725
+    },
+    {
+     "temp": 64,
+     "power": 261.7,
+     "sm_clock": 1785
+    },
+    {
+     "temp": 64,
+     "power": 271.92,
+     "sm_clock": 1740
+    }
+   ],
+   "n": 1475,
+   "median_ms": 39.159,
+   "mean_ms": 39.3061,
+   "p25_ms": 38.7444,
+   "p75_ms": 39.6519,
+   "cv_pct": 3.3793
+  },
+  "warm-idle": {
+   "equilibrium_temp": 83,
+   "temp_at_start": 79,
+   "telemetry": [
+    {
+     "temp": 81,
+     "power": 262.63,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 271.7,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 245.81,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 262.49,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 275.23,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 255.61,
+     "sm_clock": 1710
+    },
+    {
+     "temp": 81,
+     "power": 272.29,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 247.99,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 257.01,
+     "sm_clock": 1665
+    },
+    {
+     "temp": 81,
+     "power": 270.04,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 258.33,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 268.94,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 251.84,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 261.15,
+     "sm_clock": 1710
+    },
+    {
+     "temp": 81,
+     "power": 274.66,
+     "sm_clock": 1710
+    },
+    {
+     "temp": 81,
+     "power": 254.74,
+     "sm_clock": 1710
+    },
+    {
+     "temp": 81,
+     "power": 268.52,
+     "sm_clock": 1710
+    },
+    {
+     "temp": 81,
+     "power": 253.22,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 260.53,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 271.27,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 253.57,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 265.59,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 256.06,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 259.95,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 274.71,
+     "sm_clock": 1710
+    },
+    {
+     "temp": 81,
+     "power": 252.1,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 267.51,
+     "sm_clock": 1530
+    },
+    {
+     "temp": 81,
+     "power": 243.91,
+     "sm_clock": 1650
+    },
+    {
+     "temp": 81,
+     "power": 264.3,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 260.08,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 258.96,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 274.44,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 253.31,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 267.11,
+     "sm_clock": 1710
+    },
+    {
+     "temp": 81,
+     "power": 262.56,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 258.0,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 276.3,
+     "sm_clock": 1710
+    },
+    {
+     "temp": 81,
+     "power": 227.99,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 268.22,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 269.69,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 258.18,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 273.26,
+     "sm_clock": 1710
+    },
+    {
+     "temp": 81,
+     "power": 229.6,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 266.08,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 265.46,
+     "sm_clock": 1710
+    },
+    {
+     "temp": 81,
+     "power": 257.53,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 273.22,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 228.5,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 265.92,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 266.18,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 257.34,
+     "sm_clock": 1710
+    },
+    {
+     "temp": 81,
+     "power": 268.09,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 255.99,
+     "sm_clock": 1665
+    },
+    {
+     "temp": 81,
+     "power": 262.62,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 271.33,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 256.09,
+     "sm_clock": 1680
+    }
+   ],
+   "n": 1403,
+   "median_ms": 41.3298,
+   "mean_ms": 41.286,
+   "p25_ms": 41.0465,
+   "p75_ms": 41.4556,
+   "cv_pct": 2.768
+  },
+  "handoff": {
+   "equilibrium_temp": 83,
+   "temp_after_setup": 83,
+   "temp_at_start": 80,
+   "yield_s": 0.1619,
+   "ballast_context_attached": true,
+   "ballast_process_alive": true,
+   "ballast_still_attached": false,
+   "telemetry": [
+    {
+     "temp": 82,
+     "power": 275.92,
+     "sm_clock": 1590
+    },
+    {
+     "temp": 81,
+     "power": 239.85,
+     "sm_clock": 1650
+    },
+    {
+     "temp": 81,
+     "power": 263.84,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 266.02,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 82,
+     "power": 259.61,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 273.63,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 253.6,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 82,
+     "power": 268.64,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 260.15,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 257.53,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 271.75,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 228.29,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 82,
+     "power": 261.86,
+     "sm_clock": 1665
+    },
+    {
+     "temp": 81,
+     "power": 272.71,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 258.88,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 270.43,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 228.92,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 263.23,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 270.92,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 256.07,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 270.16,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 230.92,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 262.7,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 267.22,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 258.33,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 273.22,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 239.57,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 265.04,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 272.14,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 255.35,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 269.67,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 242.76,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 261.94,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 276.64,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 255.77,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 271.77,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 242.1,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 263.93,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 276.92,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 253.97,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 267.03,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 249.13,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 263.83,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 276.1,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 254.87,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 267.19,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 250.06,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 262.32,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 270.3,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 258.67,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 265.33,
+     "sm_clock": 1680
+    },
+    {
+     "temp": 81,
+     "power": 249.2,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 261.15,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 275.28,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 253.62,
+     "sm_clock": 1695
+    },
+    {
+     "temp": 81,
+     "power": 268.47,
+     "sm_clock": 1710
+    }
+   ],
+   "n": 1402,
+   "median_ms": 41.4203,
+   "mean_ms": 41.3407,
+   "p25_ms": 41.0449,
+   "p75_ms": 41.57,
+   "cv_pct": 2.7513
+  }
+ },
+ "handoff_vs_warm_idle_pct": 0.219,
+ "cold_vs_warm_idle_pct": -5.252,
+ "verdict": "CLEAN HANDOFF"
+}

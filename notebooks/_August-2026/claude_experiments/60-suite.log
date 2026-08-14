@@ -1,9 +1,9 @@
-..............F......................................................... [ 18%]
-..........FFFFF........s..........................F..................... [ 36%]
-...............................s.............ssssss..................... [ 54%]
-..............................................................s......... [ 72%]
-...................ss..........ss..........ss........................... [ 90%]
-.......................................                                  [100%]
+..........................F............................................. [ 17%]
+......................FFFFF........s..........................F......... [ 35%]
+...........................................s.............ssssss......... [ 52%]
+........................................................................ [ 70%]
+..s............................ss..........ss..........ss............... [ 87%]
+...................................................                      [100%]
 =============================== warnings summary ===============================
 tests/test_config_schema.py::TestNestedToFlatTranslation::test_nested_and_flat_produce_same_result
   /tmp/claude-58902/wt-frozen/tests/test_config_schema.py:84: UserWarning: Dead field 'backward_ecl'. Use 'bw_ecl' instead.
@@ -38,4 +38,4 @@ FAILED tests/test_benchmark_configs.py::TestWorkerConfigClean::test_prepare_conf
 FAILED tests/test_benchmark_configs.py::TestWorkerConfigClean::test_bw_ecl_zero_config
 FAILED tests/test_benchmark_configs.py::TestWorkerConfigClean::test_bw_ecl_positive_config
 FAILED tests/test_config_docs.py::TestSchemaDocSync::test_every_schema_field_documented
-7 failed, 377 passed, 15 skipped, 6 warnings in 395.21s (0:06:35)
+7 failed, 389 passed, 15 skipped, 6 warnings in 398.84s (0:06:38)

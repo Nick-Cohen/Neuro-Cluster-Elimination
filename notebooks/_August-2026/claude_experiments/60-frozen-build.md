@@ -6,12 +6,17 @@
 > ## THE FROZEN BUILD
 >
 > ```
-> commit 38de3c5    branch frozen/rerun-v1
+> tag frozen-rerun-v2    branch frozen/rerun-v1
 > ```
 >
-> **Code is frozen at `38de3c5`.** Everything committed after it is this document
-> and its measurement artefacts; `git diff --stat 38de3c5 HEAD -- nce/` is **empty**,
-> which is the check to run rather than take my word for it.
+> **`frozen-rerun-v2` supersedes `frozen-rerun-v1` (`38de3c5`).** v1 was never used for any
+> run. v2 adds only orchestration: ballast covering in-job setup (§6.2), the `--warmup-s`
+> option, per-phase timing in the manifest, and a hard `NCE_MODEL_CACHE` startup assertion.
+>
+> **v2 changes NOTHING numeric.** `git diff --name-only frozen-rerun-v1 frozen-rerun-v2 -- nce/`
+> touches only `nce/scheduler/`; `nce/inference`, `nce/sampling` and `nce/neural_networks` are
+> byte-identical. Every log Z in §3 therefore stands unchanged, and results produced under
+> either tag are directly comparable. Run that diff rather than take my word for it.
 >
 > Lineage: `9dbc2d0` (five validated fixes + proposal-sampling correctness)
 > → `1c45dd3` (`integration/perf-merged`) → three merges → one integration commit.
@@ -39,13 +44,15 @@
 > **every job in the rerun**. It is exactly the kind of thing that only appears when
 > branches meet: neither branch was wrong on its own.
 >
-> **Ballast: built, tested, and it holds the card outright** — across a 120 s gap an idle
-> card falls **83 → 49 °C**, with ballast it stays at **83 °C**, yielding in **0.92–1.17 s**
-> when a job arrives. **But it does not close the whole gap.** Measured on the real
-> scheduler: the inter-job gap is only ~0.4 s (so there was little there to fill), while
-> **8–9 s of GPU idle sits *inside* each job**, before its first GPU work, where ballast is
-> forbidden to go. §6 is the honest accounting — read it before trusting any timing from
-> this build.
+> **Ballast: built, tested, and it closes the cold-start gap.** Across a 120 s idle gap a
+> card falls **83 → 49 °C**; with ballast it stays at **83 °C**. It also owns each job's
+> ~8 s CPU-bound setup window, releasing the card in **0.162 s** immediately before the first
+> GPU operation — **proven non-perturbing: +0.219%** against an already-warm-idle reference
+> (per-trial CV 2.75%), reproduced independently at +0.211% with a different mechanism.
+> The bias being removed is **−5.25%**. With `--warmup-s 360` no job starts cold.
+> **§6.3 corrects two numbers from an earlier draft of this document** — the "GPU busy only
+> 43–45%" and "inter-job gap ~0.4 s" figures were artefacts of reading the scheduler's
+> poll-quantised completion line as a job duration. Read §6 before trusting any timing.
 
 ---
 
@@ -326,54 +333,114 @@ at any instant in that window starts from equilibrium rather than from 49 °C.
 Yield latency, measured on this run: **0.92 s and 1.17 s** — both well inside the
 documented stop timeout, and neither needed SIGKILL.
 
-### 6.2 But the gap it fills is mostly not where the bias comes from
+### 6.2 Ballast also covers each job's setup window — and that is proven, not asserted
 
-`60_ballast_thermal.py` ran the **real** scheduler over a real 2-job queue, both arms, on
-gpu0, sampling telemetry every second. Two findings, both against the premise:
+The window that actually matters is **inside the job**: the runner's CPU-bound setup
+(process spawn, `import torch`, model validation, catalog load) runs for **~8 s** before the
+job touches the GPU, and a card left idle falls from 83 °C to **~72 °C** in that time
+(measured decay, §6.1 trace). Ballast now owns that window.
 
-**(a) This scheduler barely produces an inter-job gap.** `_reap()` and dispatch happen in
-the *same* `sweep()`, so when work is queued a card is handed its next job within
-**~0.4 s** of finishing the last. Ballast never even started during the queued phase — it
-engaged only once the queue drained. The "cards cool between jobs" premise assumes a gap
-this scheduler does not create while it has work.
+**Why this is not a perturbation.** The timed region begins at the job's *first GPU
+operation*. Setup is, by construction, outside every timed region the rerun reports. So
+ballast holding the card during setup and getting off before the first GPU op is not
+interference — it is the window ballast should own.
 
-**(b) The real idle window is *inside* the job, where ballast is not allowed to go.**
-Measured, on both arms:
+**Mechanism.** `Dispatcher._launch` hands the card over **warm**, with ballast still on it,
+passing the runner a pause-file and the worker's own paused-marker.
+`runner.pause_ballast()` is called in the last CPU-only instant before
+`FastGM(...)` — the first GPU work in the process — and **blocks until the worker itself
+attests it has stopped**. If that attestation never arrives it **raises and the job fails**,
+because a job timed against a card that is also running ballast is silently wrong, which is
+worse than a failed job.
 
-| | ballast arm | no-ballast arm |
-|---|---|---|
-| GPU idle after dispatch, before first GPU work | **8.5 s / 9.0 s** | **7.7 s / 9.3 s** |
-| fraction of job wall time the GPU is genuinely busy | **43%** | **45%** |
+**Ballast pauses rather than exits.** An exiting worker costs ~5 s to respawn (process +
+`import torch` + CUDA context), and the next job is dispatched within ~0.4 s of the
+scheduler reaping the last one, so an exiting worker could never be back in time to cover
+the *next* job's setup. A paused worker frees its matrices and queues no kernels, holding
+only the bare CUDA context. That is a **weaker** guarantee than a dead process, which is
+exactly why it had to be measured.
 
-That idle is the runner's CPU-bound setup — process start, torch import, model load,
-elimination order — plus teardown. Ballast is stopped *before* the job launches, precisely
-so it cannot perturb the job's timings, so **it cannot cover this window**. Covering it
-would need the runner to signal "about to touch the GPU, yield now", which is a larger
-change than this task, and it trades directly against the no-perturbation requirement.
+**The proof** (`60_ballast_handoff.py`, gpu0, CUDA-event timed, ~1,400 trials per arm). The
+reference is an *already-warm idle card*; the question is whether the handoff arm matches it.
 
-**(c) For light configs there is no heat to preserve anyway.** `grid10x10.f10` `reduce_nn`
-D=4 runs at **62 W, 6% utilisation, 1350 MHz, 41–43 °C**. The two arms' dispatch
-temperatures were **41 °C vs 40 °C** — indistinguishable. Doc 59's effect was measured on
-a card at 82 °C under a 280 W GEMM; the paper's exposure lives in the *heavy, long* configs
-(doc 59 measured NCE at 155–170 W / 46–59%), not in configs like this one.
+| arm | temp at start | median | CV | vs reference |
+|---|---|---|---|---|
+| cold (idle, ambient) | 36 °C | 39.159 ms | 3.38% | **−5.25%** |
+| **warm-idle (reference)** | 79 °C | **41.330 ms** | 2.77% | — |
+| **handoff** (ballast held setup, then paused) | 80 °C | **41.420 ms** | 2.75% | **+0.219%** |
 
-### 6.3 What this means for the rerun
+**+0.219% against a per-trial CV of 2.75% — the handoff is clean.** During the handoff arm's
+timed region the ballast process was still alive and its CUDA context still attached (both
+`True`, as the pause contract intends) and it still made no measurable difference. Pause
+latency: **0.162 s**. The card sat at **83 °C throughout the 9 s setup** and entered the
+timed region at 80 °C.
 
-Ballast is worth keeping — it costs nothing when jobs are queued back to back, and it does
-remove cooling across queue-drain gaps, blocked jobs, and the intervals between scheduler
-invocations. But **it does not by itself remove the bias doc 59 measured**, because a
-material part of that bias is the ~8–9 s of in-job GPU idle before each job's first GPU
-work, which scales the same way with job length. Two things follow, and both are decisions
-for Nick rather than calls I should make:
+Corroboration from an independent earlier run of the same harness against the older
+kill-based handshake: **+0.211%**. Two mechanisms, two runs, same answer.
 
-1. **Warm-up is still mandatory** (doc 59 item 3, 6 minutes) — ballast does not replace it.
-2. Either accept the residual in-job cold start, or have the runner hold ballast through
-   its setup phase and yield on a readiness signal just before the first GPU work. The
-   second closes the gap properly but puts a ballast process on the same card as a starting
-   job, which is exactly what requirement 3 forbids today.
+The **−5.25%** cold row is the bias being removed, and it reproduces doc 59's +5.87%
+cold→steady drift. The thermal traces make it visceral: the cold arm's card climbs
+**42 → 63 °C across its own timed region** (still warming while being measured), while
+warm-idle and handoff are **flat at 81 °C from the first sample to the last**.
 
-Until one of those is chosen, **do not treat this build's timings as free of the doc-59
-bias.** Accuracy numbers are unaffected — they are bit-deterministic and clock-independent.
+### 6.3 Two numbers in an earlier draft of this document were wrong
+
+Both came from trusting the scheduler's own `[done] … after 60.3s` line as a job duration.
+It is not one: `_reap()` only runs on the sweep boundary, so a completion is reported
+**quantised to the poll interval** (default 30 s). Timing the same job standalone under
+`/usr/bin/time` gives **36.39 s**, and the runner's internal accounting sums to 36.13 s —
+the 60.3 s figure was ~24 s of scheduler *noticing* latency.
+
+Consequently:
+
+- **"The GPU is genuinely busy only 43–45% of job wall time" was an artefact** of that
+  inflated denominator. Against the true 36.4 s wall the GPU-active share is **~76%**. The
+  rerun is *not* half setup-bound. **Do not use the scheduler's `after Xs` line as a job
+  duration** — use `manifest.timing.t_elim_s` / `total_wall_s`.
+- **"The inter-job gap is only ~0.4 s" was also wrong.** 0.4 s is the gap between the
+  scheduler *noticing* and dispatching. The card is actually idle from job end to the next
+  poll — **~24 s**, far more idle time than the setup window. Fixed: the runner now deletes
+  the pause-file as soon as its GPU work is done, so ballast resumes immediately rather than
+  up to a poll interval later.
+
+### 6.4 Where a 36.4 s job's time actually goes
+
+Measured per phase from `manifest.timing.phases_s` (grid10x10.f10, reduce_nn D=4, gpu3):
+
+| phase | seed 42 | share | what it is |
+|---|---|---|---|
+| spawn + interpreter | 0.16 s | 0.4% | `Popen` to first line of `main` |
+| pre-timer setup | 8.00 s | 22% | **of which `import torch` + nce imports = 7.59 s**; then model validation, config, manifest |
+| model load | 0.01 s | — | page-cached `.uai` |
+| ballast pause | 0.38 s | 1% | the handshake |
+| FastGM build | 3.35 s | 9% | elimination order + factor upload |
+| **elimination (timed region)** | **24.22 s** | **67%** | of which NN training 21.5 s |
+| teardown | ~0.3 s | 1% | |
+
+**The dominant per-job overhead is `import torch` at ~7.6 s**, which is per-process and
+irreducible without a persistent worker pool. It is ~21% of a 36 s job and would be ~0.5% of
+a 1500 s job, so it matters for sizing a sweep of many short jobs and is negligible for long
+ones. It is *not* a timing bias in the paper's numbers — it sits outside `t_elim_s` — but it
+is real wall-clock cost when planning the sweep.
+
+### 6.5 What this means for the rerun
+
+Ballast now covers all three windows: between jobs, after a job finishes (immediately, not
+one poll later), and each job's own setup. The only job that can still start cold is the
+**first on each card**, because `sweep()` would otherwise dispatch in the same pass that
+starts ballast.
+
+- **The 6-minute warm-up is once per card, not per job.** An earlier draft of this document
+  said "still mandatory" without that qualifier and it was read as per-job; doc 59 item 3
+  always meant once, before the first timed job. There is no several-hundred-percent
+  overhead on short jobs, and no length-correlated bias from warm-up.
+- `--warmup-s` (opt-in) closes the remaining first-job case by holding every dispatchable
+  card at load before the first dispatch. Doc 59 measured time-to-equilibrium at **330 s
+  (gpu0) / 180 s (gpu3)** and recommends 360 s. Off by default because it delays the first
+  job, which is a scheduling decision rather than one to impose silently.
+- With `--warmup-s 360`, **no job in the sweep starts cold** and the residual thermal bias is
+  the +0.219% measured above, i.e. inside noise.
+- Accuracy numbers were never affected — they are bit-deterministic and clock-independent.
 
 ---
 
@@ -407,11 +474,24 @@ python -m nce.scheduler.enqueue --queue Q.json \
 python -m nce.scheduler.scheduler --queue Q.json --status
 
 # 4. Run. Ballast is ON by default; --no-ballast disables it.
+#    --warmup-s 360 holds every card at load before the FIRST dispatch, so that
+#    job does not start cold either (doc 59: equilibrium 330 s gpu0 / 180 s gpu3).
 #    TIMING-BEARING runs: gpu0 and gpu3 only.
-python -m nce.scheduler.scheduler --queue Q.json --out-dir runs/ --threads 1 --only-gpus 0 3
-#    ACCURACY-ONLY runs may also use gpu1 (thermally throttled, ~10% slow, numbers correct):
+python -m nce.scheduler.scheduler --queue Q.json --out-dir runs/ --threads 1 \
+    --only-gpus 0 3 --warmup-s 360
+#    ACCURACY-ONLY runs may also use gpu1 (thermally throttled, ~10% slow, numbers
+#    correct). Warm-up is pointless here -- do not pay for it:
 python -m nce.scheduler.scheduler --queue Q.json --out-dir runs/ --threads 1 --only-gpus 1
 ```
+
+If `NCE_MODEL_CACHE` is unset or points somewhere without models, `enqueue`, `scheduler`
+and `runner` now **all refuse to start**, naming the variable. A sweep can no longer begin
+and then block every job on a missing cache.
+
+**Read timings from the manifest, never from the console.** The scheduler's
+`[done] … after Xs` line is quantised to the poll interval and overstates job duration (§6.3).
+The reportable numbers are `manifest.timing.t_elim_s` (the timed region),
+`total_wall_s`, and the per-phase split in `manifest.timing.phases_s`.
 
 **Hardware rules, unchanged and non-negotiable**
 
