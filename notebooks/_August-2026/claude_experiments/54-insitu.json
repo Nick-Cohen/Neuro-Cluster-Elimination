@@ -1,0 +1,134 @@
+[
+ {
+  "strategy": "none",
+  "route": "wmb",
+  "status": "OK",
+  "checked": 99,
+  "scope_bad": 0,
+  "value_bad": 0,
+  "not_a_list": 0,
+  "worst_delta": 0.0,
+  "examples": []
+ },
+ {
+  "strategy": "none",
+  "route": "tree_collect",
+  "status": "OK",
+  "checked": 99,
+  "scope_bad": 0,
+  "value_bad": 0,
+  "not_a_list": 0,
+  "worst_delta": 0.00018310546875,
+  "examples": []
+ },
+ {
+  "strategy": "subsumption",
+  "route": "wmb",
+  "status": "OK",
+  "checked": 83,
+  "scope_bad": 0,
+  "value_bad": 0,
+  "not_a_list": 0,
+  "worst_delta": 7.62939453125e-05,
+  "examples": []
+ },
+ {
+  "strategy": "subsumption",
+  "route": "tree_collect",
+  "status": "OK",
+  "checked": 83,
+  "scope_bad": 0,
+  "value_bad": 0,
+  "not_a_list": 0,
+  "worst_delta": 0.00018310546875,
+  "examples": []
+ },
+ {
+  "strategy": "non_subsumption",
+  "route": "wmb",
+  "status": "OK",
+  "checked": 39,
+  "scope_bad": 0,
+  "value_bad": 0,
+  "not_a_list": 0,
+  "worst_delta": 0.0001068115234375,
+  "examples": []
+ },
+ {
+  "strategy": "non_subsumption",
+  "route": "tree_collect",
+  "status": "OK",
+  "checked": 39,
+  "scope_bad": 0,
+  "value_bad": 0,
+  "not_a_list": 0,
+  "worst_delta": 0.000152587890625,
+  "examples": []
+ },
+ {
+  "strategy": "reduce_nn",
+  "route": "wmb",
+  "status": "OK",
+  "checked": 93,
+  "scope_bad": 0,
+  "value_bad": 0,
+  "not_a_list": 0,
+  "worst_delta": 4.57763671875e-05,
+  "examples": []
+ },
+ {
+  "strategy": "reduce_nn",
+  "route": "tree_collect",
+  "status": "OK",
+  "checked": 93,
+  "scope_bad": 0,
+  "value_bad": 0,
+  "not_a_list": 0,
+  "worst_delta": 0.00018310546875,
+  "examples": []
+ },
+ {
+  "strategy": "sub+nonsub",
+  "route": "wmb",
+  "status": "OK",
+  "checked": 29,
+  "scope_bad": 0,
+  "value_bad": 0,
+  "not_a_list": 0,
+  "worst_delta": 0.0001068115234375,
+  "examples": []
+ },
+ {
+  "strategy": "sub+nonsub",
+  "route": "tree_collect",
+  "status": "OK",
+  "checked": 29,
+  "scope_bad": 0,
+  "value_bad": 0,
+  "not_a_list": 0,
+  "worst_delta": 0.000152587890625,
+  "examples": []
+ },
+ {
+  "strategy": "merge_degree",
+  "route": "wmb",
+  "status": "OK",
+  "checked": 95,
+  "scope_bad": 0,
+  "value_bad": 0,
+  "not_a_list": 0,
+  "worst_delta": 4.57763671875e-05,
+  "examples": []
+ },
+ {
+  "strategy": "merge_degree",
+  "route": "tree_collect",
+  "status": "OK",
+  "checked": 95,
+  "scope_bad": 0,
+  "value_bad": 0,
+  "not_a_list": 0,
+  "worst_delta": 0.00018310546875,
+  "examples": []
+ }
+]

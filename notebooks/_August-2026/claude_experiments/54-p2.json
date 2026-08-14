@@ -1,0 +1,129 @@
+[
+ {
+  "phase": "H1-build",
+  "strategy": "reduce_nn",
+  "route": "wmb",
+  "merges_on_temp_gms": 0,
+  "detail": []
+ },
+ {
+  "phase": "H2-scope-cache",
+  "strategy": "reduce_nn",
+  "route": "wmb",
+  "n_underestimated": 0,
+  "examples": []
+ },
+ {
+  "phase": "H1-build",
+  "strategy": "reduce_nn",
+  "route": "tree_collect",
+  "merges_on_temp_gms": 0,
+  "detail": []
+ },
+ {
+  "phase": "H2-scope-cache",
+  "strategy": "reduce_nn",
+  "route": "tree_collect",
+  "n_underestimated": 0,
+  "examples": []
+ },
+ {
+  "phase": "H1-build",
+  "strategy": "subsumption",
+  "route": "wmb",
+  "merges_on_temp_gms": 0,
+  "detail": []
+ },
+ {
+  "phase": "H2-scope-cache",
+  "strategy": "subsumption",
+  "route": "wmb",
+  "n_underestimated": 0,
+  "examples": []
+ },
+ {
+  "phase": "H1-build",
+  "strategy": "subsumption",
+  "route": "tree_collect",
+  "merges_on_temp_gms": 0,
+  "detail": []
+ },
+ {
+  "phase": "H2-scope-cache",
+  "strategy": "subsumption",
+  "route": "tree_collect",
+  "n_underestimated": 0,
+  "examples": []
+ },
+ {
+  "phase": "H1-build",
+  "strategy": "non_subsumption",
+  "route": "wmb",
+  "merges_on_temp_gms": 0,
+  "detail": []
+ },
+ {
+  "phase": "H2-scope-cache",
+  "strategy": "non_subsumption",
+  "route": "wmb",
+  "n_underestimated": 0,
+  "examples": []
+ },
+ {
+  "phase": "H1-build",
+  "strategy": "non_subsumption",
+  "route": "tree_collect",
+  "merges_on_temp_gms": 0,
+  "detail": []
+ },
+ {
+  "phase": "H2-scope-cache",
+  "strategy": "non_subsumption",
+  "route": "tree_collect",
+  "n_underestimated": 0,
+  "examples": []
+ },
+ {
+  "phase": "H1-build",
+  "strategy": "merge_degree",
+  "route": "wmb",
+  "merges_on_temp_gms": 0,
+  "detail": []
+ },
+ {
+  "phase": "H2-scope-cache",
+  "strategy": "merge_degree",
+  "route": "wmb",
+  "n_underestimated": 0,
+  "examples": []
+ },
+ {
+  "phase": "H1-build",
+  "strategy": "merge_degree",
+  "route": "tree_collect",
+  "merges_on_temp_gms": 0,
+  "detail": []
+ },
+ {
+  "phase": "H2-scope-cache",
+  "strategy": "merge_degree",
+  "route": "tree_collect",
+  "n_underestimated": 0,
+  "examples": []
+ },
+ {
+  "phase": "H3-bw-approx-no-populate",
+  "strategy": "reduce_nn",
+  "result": "no error"
+ },
+ {
+  "phase": "H3-bw-approx-no-populate",
+  "strategy": "subsumption",
+  "result": "no error"
+ },
+ {
+  "phase": "H3-bw-approx-no-populate",
+  "strategy": "merge_degree",
+  "result": "no error"
+ }
+]
