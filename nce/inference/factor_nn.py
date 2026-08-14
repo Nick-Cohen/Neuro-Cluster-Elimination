@@ -148,14 +148,26 @@ class FactorNN(FastFactor):
             return torch.zeros((n_rows, n_labels), dtype=torch.int64, device=src.device)
         return src.index_select(1, sel)
 
-    def _get_slices(self, assignments, elim_vars, elim_domain_sizes, message_scope):
-        """
-        Args:
-            assignments (torch.tensor): _description_
-            elim_vars (list[int]): _description_
-            message_scope (list[int]): _description_
-            self.labels is a list of variable indices in the NN input
+    @staticmethod
+    def elim_extent(labels, elim_vars, elim_domain_sizes):
+        """(present_pos, k^{e_f}) for a factor with `labels` in a cluster eliminating
+        `elim_vars`: which of the cluster's elim axes this factor actually reads, and
+        how many distinct elim points it therefore has. Cheap; no tensors."""
+        present_pos = [j for j, var in enumerate(elim_vars) if var.label in labels]
+        k = 1
+        for j in present_pos:
+            k *= int(elim_domain_sizes[j])
+        return present_pos, k
 
+    def _elim_table(self, assignments, elim_vars, elim_domain_sizes, message_scope):
+        """(n_assign, k^{e_f}) values of this net over ONLY the elim vars in its own
+        scope, plus (present_pos, full_sizes).
+
+        This is the whole of _get_slices except the final broadcast, factored out so a
+        caller that streams blocks of the full elim grid can evaluate the k^{e_f}
+        distinct points once and flat-index them, instead of re-running the net on
+        every block.  Row order is C-order over the present axes, matching
+        torch.cartesian_prod.
         """
         # Perf: enumerate ONLY the elimination variables this factor's scope
         # actually contains. The value is constant along every absent elim axis,
@@ -230,6 +242,14 @@ class FactorNN(FastFactor):
             out = torch.empty((0, n_elim), device=dev)
         else:
             out = chunks_out[0] if len(chunks_out) == 1 else torch.cat(chunks_out, dim=0)
+        return out, present_pos, full_sizes
+
+    def _get_slices(self, assignments, elim_vars, elim_domain_sizes, message_scope):
+        """Values of this NN factor at every (assignment x full elim grid) point,
+        as a broadcast view over the elim axes it does not contain."""
+        out, present_pos, full_sizes = self._elim_table(
+            assignments, elim_vars, elim_domain_sizes, message_scope)
+        n_assign = out.shape[0]
         # (n_assign, k^e_f) -> (n_assign, 1, k_j, 1, ...) -> broadcast to the full
         # elimination grid. expand() is a stride-0 view, so the absent axes cost
         # nothing; the caller only ever reads / broadcasts against this.
@@ -269,6 +289,51 @@ class FactorNN(FastFactor):
             else:
                 raise ValueError(f"Label {l} not in message_scope or elim_var_labels")
 
+        # Perf: project the elim block onto ONLY the elim columns this net reads.
+        # The net's input row is a pure function of (msg cols, elim cols in
+        # col_src), so two elim rows that agree on those columns produce the
+        # identical one-hot row and hence the identical value. The caller hands
+        # us the coordinates of ALL of the cluster's elim vars, so a factor
+        # holding e_f of e elim vars otherwise repeats every value
+        # elim_prod / k^e_f times. Evaluate the distinct rows and gather back --
+        # same projection FastFactor._eval_elim_block and _get_slices already do,
+        # here expressed as a dedup because the block is an arbitrary slice of
+        # the elim grid rather than a full grid. No cache, no memory growth.
+        eval_coords = elim_coords
+        inv = None
+        used_cols = sorted({s for m, s in col_src if not m})
+        if B > 0 and len(used_cols) < elim_coords.shape[1]:
+            sub = elim_coords[:, torch.tensor(used_cols, dtype=torch.int64, device=dev)] \
+                if used_cols else elim_coords[:, :0]
+            if sub.shape[1] == 0:
+                # net reads no elim var at all -> one distinct row
+                inv = torch.zeros(B, dtype=torch.int64, device=dev)
+                eval_coords = elim_coords[:1]
+            else:
+                radix = (sub.amax(dim=0) + 1).to(torch.int64)
+                total = 1
+                for r in radix.tolist():
+                    total *= int(r)
+                if total <= 2 ** 62:
+                    strides = torch.ones_like(radix)
+                    acc = 1
+                    for i in range(radix.numel() - 1, -1, -1):
+                        strides[i] = acc
+                        acc *= int(radix[i])
+                    key = (sub * strides).sum(dim=1)
+                    uniq, inv = torch.unique(key, return_inverse=True)
+                    n_u = int(uniq.numel())
+                else:                                   # pathological radix
+                    _, inv = torch.unique(sub, dim=0, return_inverse=True)
+                    n_u = int(inv.max().item()) + 1
+                if n_u < B:
+                    rep = torch.empty(n_u, dtype=torch.int64, device=dev)
+                    rep.scatter_(0, inv, torch.arange(B, dtype=torch.int64, device=dev))
+                    eval_coords = elim_coords.index_select(0, rep)
+                else:
+                    inv = None                          # nothing to gain
+        B_eval = eval_coords.shape[0]
+
         # Hard safety net: chunk over the elim-block dim B so the (b*A, n_labels)
         # int64 coord cube + one-hot expansion never exceed a memory bound, no
         # matter how large a block the caller passed. Result is identical.
@@ -289,16 +354,18 @@ class FactorNN(FastFactor):
         is_msg_t, msg_src_t, elim_src_t = self._col_src_tensors(col_src, dev)
         msg_cols = self._gather_cols(assignments, msg_src_t, A, n_labels) + offsets
 
-        out = torch.empty((A, B), device=dev)
-        for b0 in range(0, B, bchunk):
-            b1 = min(B, b0 + bchunk)
+        out = torch.empty((A, B_eval), device=dev)
+        for b0 in range(0, B_eval, bchunk):
+            b1 = min(B_eval, b0 + bchunk)
             b = b1 - b0
-            elim_cols = self._gather_cols(elim_coords[b0:b1], elim_src_t, b, n_labels) + offsets
+            elim_cols = self._gather_cols(eval_coords[b0:b1], elim_src_t, b, n_labels) + offsets
             cols = torch.where(is_msg_t, msg_cols.unsqueeze(0), elim_cols.unsqueeze(1))
             one_hot = self._one_hot_from_cols(cols, offsets, oh_width, oh_lower,
                                               param_dtype, dev)
             vals = self.data_processor.undo_normalization(self.net(one_hot))
             out[:, b0:b1] = vals.view(b, A).T
+        if inv is not None:
+            out = out.index_select(1, inv)                        # (A, B)
         return out.detach()                                      # (A, B)
 
 
