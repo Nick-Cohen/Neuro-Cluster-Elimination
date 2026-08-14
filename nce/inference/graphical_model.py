@@ -1551,8 +1551,17 @@ class FastGM:
         # Convert the elimination order to Var objects
         downstream_elim_order = [self.matching_var(var) for var in downstream_elim_order]
 
-        # Create the downstream graphical model
-        downstream_gm = FastGM(factors=gradient_factors, elim_order=downstream_elim_order, device=self.device, nn_config=self.config)
+        # Create the downstream graphical model. Its config must NOT be
+        # self.config verbatim: that would re-run all four merge passes on a
+        # graph built from a factor list, and would leave populate_bw_factors
+        # on, recursing into backward-factor population.
+        downstream_config = dict(self.config)
+        downstream_config['populate_bw_factors'] = False
+        for _flag in ('use_join_tree_merge', 'use_reduce_nn_merge',
+                      'use_non_subsumption_merge'):
+            downstream_config[_flag] = False
+        downstream_config['merge_degree'] = 0
+        downstream_gm = FastGM(factors=gradient_factors, elim_order=downstream_elim_order, device=self.device, nn_config=downstream_config)
 
         return self._wmb_eliminate(downstream_gm, bucket_scope, i_bound, weights)
 

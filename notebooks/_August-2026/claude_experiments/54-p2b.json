@@ -1,0 +1,62 @@
+[
+ {
+  "strategy": "subsumption",
+  "cluster": 37,
+  "n_elim": 2,
+  "n_bw_factors": 2,
+  "H1b_merges_on_downstream_gm": 0,
+  "H1b_passes": []
+ },
+ {
+  "strategy": "subsumption",
+  "probe": "get_wmb_message_gradient_factors",
+  "ok": true,
+  "H4_merges_on_temp_gm": 0,
+  "H4_passes": []
+ },
+ {
+  "strategy": "non_subsumption",
+  "cluster": 96,
+  "n_elim": 10,
+  "n_bw_factors": 1,
+  "H1b_merges_on_downstream_gm": 0,
+  "H1b_passes": []
+ },
+ {
+  "strategy": "non_subsumption",
+  "probe": "get_wmb_message_gradient_factors",
+  "ok": true,
+  "H4_merges_on_temp_gm": 0,
+  "H4_passes": []
+ },
+ {
+  "strategy": "reduce_nn",
+  "cluster": 60,
+  "n_elim": 3,
+  "n_bw_factors": 2,
+  "H1b_merges_on_downstream_gm": 0,
+  "H1b_passes": []
+ },
+ {
+  "strategy": "reduce_nn",
+  "probe": "get_wmb_message_gradient_factors",
+  "ok": true,
+  "H4_merges_on_temp_gm": 0,
+  "H4_passes": []
+ },
+ {
+  "strategy": "merge_degree",
+  "cluster": 51,
+  "n_elim": 2,
+  "n_bw_factors": 2,
+  "H1b_merges_on_downstream_gm": 0,
+  "H1b_passes": []
+ },
+ {
+  "strategy": "merge_degree",
+  "probe": "get_wmb_message_gradient_factors",
+  "ok": true,
+  "H4_merges_on_temp_gm": 0,
+  "H4_passes": []
+ }
+]

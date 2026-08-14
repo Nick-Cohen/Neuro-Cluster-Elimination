@@ -1,0 +1,518 @@
+[
+ {
+  "strategy": "none",
+  "route": "wmb",
+  "status": "OK",
+  "checked": 99,
+  "scope_bad": 0,
+  "value_bad": 86,
+  "not_a_list": 0,
+  "worst_delta": 16.109786987304688,
+  "examples": [
+   {
+    "cluster": 0,
+    "kind": "value",
+    "delta": 4.524932861328125,
+    "n_elim": 1,
+    "sep": [
+     1,
+     10
+    ]
+   },
+   {
+    "cluster": 9,
+    "kind": "value",
+    "delta": 7.05865478515625,
+    "n_elim": 1,
+    "sep": [
+     8,
+     19
+    ]
+   },
+   {
+    "cluster": 90,
+    "kind": "value",
+    "delta": 9.763427734375,
+    "n_elim": 1,
+    "sep": [
+     80,
+     91
+    ]
+   }
+  ]
+ },
+ {
+  "strategy": "none",
+  "route": "tree_collect",
+  "status": "OK",
+  "checked": 99,
+  "scope_bad": 0,
+  "value_bad": 86,
+  "not_a_list": 0,
+  "worst_delta": 10.401885986328125,
+  "examples": [
+   {
+    "cluster": 0,
+    "kind": "value",
+    "delta": 0.18707275390625,
+    "n_elim": 1,
+    "sep": [
+     1,
+     10
+    ]
+   },
+   {
+    "cluster": 9,
+    "kind": "value",
+    "delta": 5.6370849609375,
+    "n_elim": 1,
+    "sep": [
+     8,
+     19
+    ]
+   },
+   {
+    "cluster": 90,
+    "kind": "value",
+    "delta": 1.08837890625,
+    "n_elim": 1,
+    "sep": [
+     80,
+     91
+    ]
+   }
+  ]
+ },
+ {
+  "strategy": "subsumption",
+  "route": "wmb",
+  "status": "OK",
+  "checked": 83,
+  "scope_bad": 0,
+  "value_bad": 82,
+  "not_a_list": 0,
+  "worst_delta": 16.109786987304688,
+  "examples": [
+   {
+    "cluster": 0,
+    "kind": "value",
+    "delta": 4.524932861328125,
+    "n_elim": 1,
+    "sep": [
+     1,
+     10
+    ]
+   },
+   {
+    "cluster": 9,
+    "kind": "value",
+    "delta": 7.05865478515625,
+    "n_elim": 1,
+    "sep": [
+     8,
+     19
+    ]
+   },
+   {
+    "cluster": 90,
+    "kind": "value",
+    "delta": 9.763427734375,
+    "n_elim": 1,
+    "sep": [
+     80,
+     91
+    ]
+   }
+  ]
+ },
+ {
+  "strategy": "subsumption",
+  "route": "tree_collect",
+  "status": "OK",
+  "checked": 83,
+  "scope_bad": 0,
+  "value_bad": 82,
+  "not_a_list": 0,
+  "worst_delta": 10.401885986328125,
+  "examples": [
+   {
+    "cluster": 0,
+    "kind": "value",
+    "delta": 0.18707275390625,
+    "n_elim": 1,
+    "sep": [
+     1,
+     10
+    ]
+   },
+   {
+    "cluster": 9,
+    "kind": "value",
+    "delta": 5.6370849609375,
+    "n_elim": 1,
+    "sep": [
+     8,
+     19
+    ]
+   },
+   {
+    "cluster": 90,
+    "kind": "value",
+    "delta": 1.08837890625,
+    "n_elim": 1,
+    "sep": [
+     80,
+     91
+    ]
+   }
+  ]
+ },
+ {
+  "strategy": "non_subsumption",
+  "route": "wmb",
+  "status": "OK",
+  "checked": 39,
+  "scope_bad": 0,
+  "value_bad": 27,
+  "not_a_list": 0,
+  "worst_delta": 15.577041625976562,
+  "examples": [
+   {
+    "cluster": 3,
+    "kind": "value",
+    "delta": 2.462646484375,
+    "n_elim": 1,
+    "sep": [
+     2,
+     4,
+     13
+    ]
+   },
+   {
+    "cluster": 5,
+    "kind": "value",
+    "delta": 2.462310791015625,
+    "n_elim": 1,
+    "sep": [
+     4,
+     6,
+     15
+    ]
+   },
+   {
+    "cluster": 39,
+    "kind": "value",
+    "delta": 6.619720458984375,
+    "n_elim": 1,
+    "sep": [
+     29,
+     38,
+     49
+    ]
+   }
+  ]
+ },
+ {
+  "strategy": "non_subsumption",
+  "route": "tree_collect",
+  "status": "OK",
+  "checked": 39,
+  "scope_bad": 0,
+  "value_bad": 27,
+  "not_a_list": 0,
+  "worst_delta": 10.401763916015625,
+  "examples": [
+   {
+    "cluster": 3,
+    "kind": "value",
+    "delta": 1.289031982421875,
+    "n_elim": 1,
+    "sep": [
+     2,
+     4,
+     13
+    ]
+   },
+   {
+    "cluster": 5,
+    "kind": "value",
+    "delta": 5.638092041015625,
+    "n_elim": 1,
+    "sep": [
+     4,
+     6,
+     15
+    ]
+   },
+   {
+    "cluster": 39,
+    "kind": "value",
+    "delta": 5.637664794921875,
+    "n_elim": 1,
+    "sep": [
+     29,
+     38,
+     49
+    ]
+   }
+  ]
+ },
+ {
+  "strategy": "reduce_nn",
+  "route": "wmb",
+  "status": "OK",
+  "checked": 93,
+  "scope_bad": 0,
+  "value_bad": 83,
+  "not_a_list": 0,
+  "worst_delta": 15.81646728515625,
+  "examples": [
+   {
+    "cluster": 0,
+    "kind": "value",
+    "delta": 4.524932861328125,
+    "n_elim": 1,
+    "sep": [
+     1,
+     10
+    ]
+   },
+   {
+    "cluster": 9,
+    "kind": "value",
+    "delta": 7.05865478515625,
+    "n_elim": 1,
+    "sep": [
+     8,
+     19
+    ]
+   },
+   {
+    "cluster": 90,
+    "kind": "value",
+    "delta": 9.763427734375,
+    "n_elim": 1,
+    "sep": [
+     80,
+     91
+    ]
+   }
+  ]
+ },
+ {
+  "strategy": "reduce_nn",
+  "route": "tree_collect",
+  "status": "OK",
+  "checked": 93,
+  "scope_bad": 0,
+  "value_bad": 83,
+  "not_a_list": 0,
+  "worst_delta": 10.401885986328125,
+  "examples": [
+   {
+    "cluster": 0,
+    "kind": "value",
+    "delta": 0.18707275390625,
+    "n_elim": 1,
+    "sep": [
+     1,
+     10
+    ]
+   },
+   {
+    "cluster": 9,
+    "kind": "value",
+    "delta": 5.6370849609375,
+    "n_elim": 1,
+    "sep": [
+     8,
+     19
+    ]
+   },
+   {
+    "cluster": 90,
+    "kind": "value",
+    "delta": 1.08837890625,
+    "n_elim": 1,
+    "sep": [
+     80,
+     91
+    ]
+   }
+  ]
+ },
+ {
+  "strategy": "sub+nonsub",
+  "route": "wmb",
+  "status": "OK",
+  "checked": 29,
+  "scope_bad": 0,
+  "value_bad": 28,
+  "not_a_list": 0,
+  "worst_delta": 16.109786987304688,
+  "examples": [
+   {
+    "cluster": 3,
+    "kind": "value",
+    "delta": 2.462646484375,
+    "n_elim": 1,
+    "sep": [
+     2,
+     4,
+     13
+    ]
+   },
+   {
+    "cluster": 5,
+    "kind": "value",
+    "delta": 2.462310791015625,
+    "n_elim": 1,
+    "sep": [
+     4,
+     6,
+     15
+    ]
+   },
+   {
+    "cluster": 39,
+    "kind": "value",
+    "delta": 6.619720458984375,
+    "n_elim": 1,
+    "sep": [
+     29,
+     38,
+     49
+    ]
+   }
+  ]
+ },
+ {
+  "strategy": "sub+nonsub",
+  "route": "tree_collect",
+  "status": "OK",
+  "checked": 29,
+  "scope_bad": 0,
+  "value_bad": 28,
+  "not_a_list": 0,
+  "worst_delta": 10.401824951171875,
+  "examples": [
+   {
+    "cluster": 3,
+    "kind": "value",
+    "delta": 1.289031982421875,
+    "n_elim": 1,
+    "sep": [
+     2,
+     4,
+     13
+    ]
+   },
+   {
+    "cluster": 5,
+    "kind": "value",
+    "delta": 5.638092041015625,
+    "n_elim": 1,
+    "sep": [
+     4,
+     6,
+     15
+    ]
+   },
+   {
+    "cluster": 39,
+    "kind": "value",
+    "delta": 5.637664794921875,
+    "n_elim": 1,
+    "sep": [
+     29,
+     38,
+     49
+    ]
+   }
+  ]
+ },
+ {
+  "strategy": "merge_degree",
+  "route": "wmb",
+  "status": "OK",
+  "checked": 95,
+  "scope_bad": 0,
+  "value_bad": 84,
+  "not_a_list": 0,
+  "worst_delta": 15.81646728515625,
+  "examples": [
+   {
+    "cluster": 0,
+    "kind": "value",
+    "delta": 4.524932861328125,
+    "n_elim": 1,
+    "sep": [
+     1,
+     10
+    ]
+   },
+   {
+    "cluster": 9,
+    "kind": "value",
+    "delta": 7.05865478515625,
+    "n_elim": 1,
+    "sep": [
+     8,
+     19
+    ]
+   },
+   {
+    "cluster": 90,
+    "kind": "value",
+    "delta": 9.763427734375,
+    "n_elim": 1,
+    "sep": [
+     80,
+     91
+    ]
+   }
+  ]
+ },
+ {
+  "strategy": "merge_degree",
+  "route": "tree_collect",
+  "status": "OK",
+  "checked": 95,
+  "scope_bad": 0,
+  "value_bad": 84,
+  "not_a_list": 0,
+  "worst_delta": 10.401885986328125,
+  "examples": [
+   {
+    "cluster": 0,
+    "kind": "value",
+    "delta": 0.18707275390625,
+    "n_elim": 1,
+    "sep": [
+     1,
+     10
+    ]
+   },
+   {
+    "cluster": 9,
+    "kind": "value",
+    "delta": 5.6370849609375,
+    "n_elim": 1,
+    "sep": [
+     8,
+     19
+    ]
+   },
+   {
+    "cluster": 90,
+    "kind": "value",
+    "delta": 1.08837890625,
+    "n_elim": 1,
+    "sep": [
+     80,
+     91
+    ]
+   }
+  ]
+ }
+]

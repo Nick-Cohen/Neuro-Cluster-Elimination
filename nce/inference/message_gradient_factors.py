@@ -104,6 +104,15 @@ def get_wmb_message_gradient_factors(factors: List[FastFactor], message_scope, c
     # This GM is only used for message gradient computation, not for training
     local_config = dict(config)  # Create a copy
     local_config['populate_bw_factors'] = False
+    # Don't re-merge in this temporary GM either. It is built from a factor
+    # LIST, not from the primary bucket tree, so a merge pass here operates on
+    # a structure the caller never asked about; measured on grid10x10.f10 it
+    # raises KeyError under subsumption and non-subsumption merging and
+    # silently re-merges under reduce-NN and merge_degree.
+    for _flag in ('use_join_tree_merge', 'use_reduce_nn_merge',
+                  'use_non_subsumption_merge'):
+        local_config[_flag] = False
+    local_config['merge_degree'] = 0
 
     # Create a graphical model with the factors
     gm = FastGM(factors=factors, nn_config=local_config, elim_order=elim_order)

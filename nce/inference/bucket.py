@@ -1425,6 +1425,39 @@ class FastBucket:
     def get_ec(self):
         return self.get_message_size()
     
+    def get_backward_factor_list(self, backward_iB=None, backward_ecl=None):
+        """The cluster's backward (downstream) message as a factor list,
+        INDEPENDENT of `use_bw_approx`.
+
+        `compute_message_nn` only attaches backward factors under
+        `use_bw_approx: True`, and that same flag also flips
+        DataPreprocessor.use_bw_approx (the normalising constant) and makes
+        `bw_hat` non-None in the loss. Anything that merely wants to *look at*
+        the backward message -- e.g. the `fw_bw` memorisation-table selection
+        rule -- therefore could not be run as an isolated arm: turning the flag
+        on to get the factors also changed the training target in two places.
+
+        This accessor breaks that coupling. It reads the already-populated
+        `approximate_downstream_factors` (so it costs one WMB elimination, not a
+        second population sweep) and touches no trainer state.
+
+        Requires `populate_bw_factors: True`. Returns None if the cluster has no
+        populated downstream factors (e.g. `populate_bw_skip_non_nn` skipped it).
+        """
+        from nce.utils.backward_message import get_backward_message
+        if self.approximate_downstream_factors is None:
+            return None
+        if backward_iB is None:
+            backward_iB = self.config.get('backward_iB', self.config.get('iB', 100))
+        if backward_ecl is None:
+            backward_ecl = self.config.get('bw_ecl', self.config.get('ecl', 2 ** 20))
+        factor_list, _ = get_backward_message(
+            self.gm, self.label,
+            backward_factors=list(self.approximate_downstream_factors),
+            iB=backward_iB, backward_ecl=backward_ecl,
+            approximation_method='wmb', return_factor_list=True)
+        return factor_list
+
     def get_fw_bw_stats(self):
         from nce.utils.stats import get_fw_bw_correlation
         from nce.utils.backward_message import get_backward_message

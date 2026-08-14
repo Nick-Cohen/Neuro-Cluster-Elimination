@@ -184,3 +184,131 @@ def test_upstream_and_downstream_decompose_the_model(merge_name, route_name):
         tmp.is_primary = False
         tmp.eliminate_variables(all=True)
         assert float(tmp.log_partition_function) == pytest.approx(ref_logz, abs=1e-3)
+
+
+# ---------------------------------------------------------------------------
+# Doc 54: four further sites of the SAME defect class (temporary/copied GMs
+# that re-merge, and merge-unaware per-variable bucket indexing), none of which
+# doc 10 or doc 44 covered. All on the backward path.
+# ---------------------------------------------------------------------------
+
+def _merge_flags_are_off(cfg):
+    return (not cfg.get('use_join_tree_merge', False)
+            and not cfg.get('use_reduce_nn_merge', False)
+            and not cfg.get('use_non_subsumption_merge', False)
+            and not int(cfg.get('merge_degree', 0) or 0))
+
+
+@pytest.mark.parametrize('merge_name,route_name', CASES)
+def test_get_backward_factors_is_merge_aware(built, merge_name, route_name):
+    """Doc 54 defect 1: `_get_backward_factors` indexed `gm.buckets[var]` for
+    every var in `gm.elim_order`. Absorbed members are removed from
+    `gm.buckets` but stay in `elim_order`, so it raised KeyError under every
+    merge strategy. This is the path taken whenever `use_bw_approx=True`
+    without pre-populated backward factors.
+    """
+    from nce.utils.backward_message import _get_backward_factors
+    gm = _build(MERGE_STRATEGIES[merge_name], POPULATION_ROUTES[route_name])
+    live = [v for v in gm.elim_order if v in gm.buckets]
+    if len(live) < 3:
+        pytest.skip('not enough surviving buckets')
+    target = live[len(live) // 2]
+    facs = _get_backward_factors(gm, target.label, None)   # used to KeyError
+    assert isinstance(facs, list)
+
+
+@pytest.mark.parametrize('merge_name,route_name', CASES)
+def test_backward_message_downstream_gm_does_not_remerge(built, merge_name, route_name):
+    """Doc 54 defect 2: `get_backward_message` built its downstream GM from a
+    verbatim `deepcopy(gm.config)`, so all four merge passes re-ran inside the
+    backward GM. Measured consequence on grids/grid10x10.f10 under subsumption:
+    the returned backward message spanned 11 variables against a 2-variable
+    separator, i.e. nine variables that should have been summed out were not.
+
+    Asserted on the OBSERVABLE consequence -- the backward message must live on
+    exactly the cluster's separator -- not on the config, so the test still
+    means something if the implementation changes.
+    """
+    from nce.utils.backward_message import get_backward_message
+    gm = built[(merge_name, route_name)]
+    checked = 0
+    for kv, b in gm.buckets.items():
+        if not b.approximate_downstream_factors:
+            continue
+        scope = b.get_message_scope()
+        if not scope:
+            continue
+        bw, _ = get_backward_message(
+            gm, kv.label, backward_factors=list(b.approximate_downstream_factors),
+            iB=10, backward_ecl=256, approximation_method='wmb',
+            return_factor_list=False)
+        assert set(bw.labels) <= set(scope), (
+            f'{merge_name}/{route_name} cluster {kv.label}: backward message '
+            f'spans {sorted(bw.labels)} outside separator {sorted(scope)}')
+        checked += 1
+    if checked == 0:
+        pytest.skip('no populated clusters with a non-empty separator')
+
+
+@pytest.mark.parametrize('merge_name,route_name', CASES)
+def test_backward_message_honours_return_factor_list(built, merge_name, route_name):
+    """Doc 54 defect 5: the three early returns in `get_backward_message`
+    ignored `return_factor_list` and handed back a bare FastFactor, which every
+    caller then feeds to SampleGenerator.sample_tensor_product (which iterates
+    it). Reachable because merging creates empty-separator clusters.
+    """
+    from nce.utils.backward_message import get_backward_message
+    gm = built[(merge_name, route_name)]
+    checked = 0
+    for kv, b in gm.buckets.items():
+        if b.approximate_downstream_factors is None:
+            continue
+        fl, _ = get_backward_message(
+            gm, kv.label, backward_factors=list(b.approximate_downstream_factors),
+            iB=10, backward_ecl=256, approximation_method='wmb',
+            return_factor_list=True)
+        assert isinstance(fl, list), (
+            f'{merge_name}/{route_name} cluster {kv.label} (sep='
+            f'{sorted(b.get_message_scope())}): got {type(fl).__name__}')
+        checked += 1
+    if checked == 0:
+        pytest.skip('no populated clusters')
+
+
+@pytest.mark.parametrize('merge_name,route_name', CASES)
+def test_message_gradient_factors_gm_does_not_remerge(built, merge_name, route_name):
+    """Doc 54 defect 3: `get_wmb_message_gradient_factors` builds a temporary GM
+    from a factor LIST using a copy of the caller's config, with the merge flags
+    intact. It raised KeyError under subsumption / non-subsumption.
+    """
+    from nce.inference.message_gradient_factors import get_wmb_message_gradient_factors
+    gm = built[(merge_name, route_name)]
+    for kv, b in gm.buckets.items():
+        if not b.approximate_downstream_factors:
+            continue
+        scope = b.get_message_scope()
+        if not scope:
+            continue
+        facs = [f.to_exact() if hasattr(f, 'to_exact') else f
+                for f in b.approximate_downstream_factors]
+        get_wmb_message_gradient_factors(facs, scope, gm.config)   # used to KeyError
+        return
+    pytest.skip('no populated clusters with a non-empty separator')
+
+
+@pytest.mark.parametrize('merge_name,route_name', CASES)
+def test_backward_factors_available_without_use_bw_approx(built, merge_name, route_name):
+    """Doc 54: `use_bw_approx` gated THREE things at once -- computing the
+    backward factors, the preprocessor's normalising constant, and `bw_hat` in
+    the loss -- so the `fw_bw` arm could not be isolated. `FastBucket.
+    get_backward_factor_list()` provides the factors with the flag off.
+    """
+    gm = built[(merge_name, route_name)]
+    assert gm.config.get('use_bw_approx', False) is False
+    for kv, b in gm.buckets.items():
+        if b.approximate_downstream_factors is None:
+            continue
+        fl = b.get_backward_factor_list(backward_iB=10, backward_ecl=256)
+        assert isinstance(fl, list)
+        return
+    pytest.skip('no populated clusters')
