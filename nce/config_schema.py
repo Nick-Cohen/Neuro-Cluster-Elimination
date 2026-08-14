@@ -50,6 +50,13 @@ NESTED_SECTIONS = OrderedDict([
         'hidden_sizes':              _field('hidden_sizes', default=[]),
         'use_linspace_bias':         _field('use_linspace_bias', default=False),
         'use_memorizer':             _field('use_memorizer', default=False),
+        # Hybrid NN + memorization table (doc 44)
+        'use_memorization_table':    _field('use_memorization_table', default=False),
+        'memorize_num_samples':      _field('memorize_num_samples', default=0),
+        'memorize_sample_frac':      _field('memorize_sample_frac', default=0.0),
+        'memorize_top_k':            _field('memorize_top_k', default=0),
+        'memorize_frac':             _field('memorize_frac', default=0.0),
+        'memorize_selection':        _field('memorize_selection', default='fw_true'),
         'custom_hidden_sizes':       _field('custom_hidden_sizes', default=None),
         'init_with_linear_optimum':  _field('init_with_linear_optimum', default=False),
         'weight_decay':              _field('weight_decay', default=0.0),

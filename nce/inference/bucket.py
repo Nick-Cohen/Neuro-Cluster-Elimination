@@ -520,6 +520,43 @@ class FastBucket:
             if torch.cuda.is_available():
                 torch.cuda.synchronize()
 
+            # --- Hybrid memorization table (doc 44) ---
+            # Sample no-repeat assignments from the WMB proposal tree, evaluate the
+            # TRUE message value there, keep the top-K as an exact lookup table and
+            # splice it over the trained net. Additive: off unless the flag is set.
+            if self.config.get('use_memorization_table', False):
+                import time as _mt
+                import math as _math
+                from nce.neural_networks.memorization_table import (
+                    build_memorization_table, HybridMemorizerNet)
+                _m0 = _mt.time()
+                if not hasattr(self.gm, 'memorization_log'):
+                    self.gm.memorization_log = []
+                try:
+                    _keys, _vals, _mstats = build_memorization_table(self, t, self.config)
+                    net = HybridMemorizerNet(net, _keys, _vals, self,
+                                             lower_dim=bool(self.gm.lower_dim))
+                    net.eval()
+                    _mstats['ok'] = True
+                except Exception as _e:
+                    import traceback as _tb
+                    _mstats = {'bucket': self.label, 'ok': False,
+                               'error': f"{type(_e).__name__}: {_e}",
+                               'traceback': _tb.format_exc()[-1500:]}
+                    print(f"[Memorize] bucket {self.label}: FAILED ({_mstats['error']})")
+                _mstats['total_seconds'] = _mt.time() - _m0
+                self.gm.phase_times['memorize'] = \
+                    self.gm.phase_times.get('memorize', 0.0) + _mstats['total_seconds']
+                self.gm.memorization_log.append(_mstats)
+                if _mstats.get('ok'):
+                    print(f"[Memorize] bucket {self.label}: w={_mstats['width']} "
+                          f"msg=2^{_math.log2(_mstats['message_size']):.0f} "
+                          f"sampled={_mstats['n_samples_actual']}/{_mstats['n_samples_requested']} "
+                          f"memorized={_mstats['k_actual']} "
+                          f"frac={_mstats['memorized_fraction']:.4g} "
+                          f"(sample {_mstats['sample_seconds']:.1f}s, "
+                          f"eval {_mstats['eval_seconds']:.1f}s)")
+
             # Create FactorNN with trained network (no bw_inv needed - loss handles backward message)
             nn_message_factor = FactorNN(net, t.data_preprocessor, losses=t.losses)
 
@@ -562,6 +599,24 @@ class FastBucket:
                         iB=100, backward_ecl=2**30,
                         approximation_method='wmb', return_factor_list=False)
                     approx_fw = nn_message_factor.to_exact()
+                    # Doc 44 diagnostic: what FRACTION OF THE EXACT MESSAGE MASS do
+                    # the memorized entries carry? K/2^w counts entries; this counts
+                    # what they are worth. Read-only, no RNG, both arms unaffected.
+                    _hyb = getattr(nn_message_factor, 'net', None)
+                    if getattr(_hyb, 'n_memorized', 0):
+                        try:
+                            _ef = exact_fw.copy() if hasattr(exact_fw, 'copy') else exact_fw
+                            _ef.order_indices()
+                            _flat = _ef.tensor.reshape(-1)
+                            _ln10 = float(np.log(10.0))
+                            _tot = torch.logsumexp(_flat.double() * _ln10, dim=0)
+                            _mem = torch.logsumexp(
+                                _flat.double().reshape(-1)[_hyb._keys] * _ln10, dim=0)
+                            rec['memorized_mass_fraction'] = float(torch.exp(_mem - _tot))
+                            rec['n_memorized'] = int(_hyb.n_memorized)
+                        except Exception as _me:
+                            rec['memorized_mass_fraction'] = None
+                            rec['mass_error'] = f"{type(_me).__name__}: {_me}"
                     exact_contrib = float((exact_fw * exact_bw).sum_all_entries())
                     approx_contrib = float((approx_fw * exact_bw).sum_all_entries())
                     rec.update({
