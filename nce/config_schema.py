@@ -42,6 +42,7 @@ NESTED_SECTIONS = OrderedDict([
         'masked_net':              _field('masked_net', default=False),
         'masked_net_lambda':       _field('masked_net_lambda', default=1.0),
         'device':                  _field('device', default='cuda'),
+        'deterministic_guard':     _field('deterministic_guard', default=False),
         'neurobe_mode':            _field('neurobe_mode', default=False),
         'use_float64':             _field('use_float64', default=False),
     }),
@@ -49,6 +50,13 @@ NESTED_SECTIONS = OrderedDict([
         'hidden_sizes':              _field('hidden_sizes', default=[]),
         'use_linspace_bias':         _field('use_linspace_bias', default=False),
         'use_memorizer':             _field('use_memorizer', default=False),
+        # Hybrid NN + memorization table (doc 44)
+        'use_memorization_table':    _field('use_memorization_table', default=False),
+        'memorize_num_samples':      _field('memorize_num_samples', default=0),
+        'memorize_sample_frac':      _field('memorize_sample_frac', default=0.0),
+        'memorize_top_k':            _field('memorize_top_k', default=0),
+        'memorize_frac':             _field('memorize_frac', default=0.0),
+        'memorize_selection':        _field('memorize_selection', default='fw_true'),
         'custom_hidden_sizes':       _field('custom_hidden_sizes', default=None),
         'init_with_linear_optimum':  _field('init_with_linear_optimum', default=False),
         'weight_decay':              _field('weight_decay', default=0.0),
@@ -116,6 +124,7 @@ NESTED_SECTIONS = OrderedDict([
         'proposal_sampling':    _field('proposal_sampling', default=False),
         'proposal_mix':         _field('proposal_mix', default='full'),
         'proposal_temperature': _field('proposal_temperature', default=1.0),
+        'common_random_numbers': _field('common_random_numbers', default=True),
         'num_samples':          _field('num_samples', default=_REQUIRED),
         'set_size':           _field('set_size', default=None),
         'val_set':            _field('val_set', default=True),
@@ -587,6 +596,35 @@ def prepare_config(config_dict, strict=False):
                 f"Use a number or a time string like '20m', '1h', '300s'."
             )
         flat['num_epochs'] = 999_999_999  # effectively unlimited
+
+    # proposal_sampling implies populate_bw_factors.
+    #
+    # `build_proposal_for_bucket` builds the WMB proposal tree from
+    # `bucket.approximate_upstream_factors + approximate_downstream_factors`,
+    # and those two attributes are populated ONLY by the backward-factor
+    # population pass that `populate_bw_factors` gates. With the flag off both
+    # are None, the function's `if not all_factors` guard returns an EMPTY
+    # ProposalTree, and the empty samples dict then dies ~100 lines downstream
+    # as `KeyError: <first separator var>` at proposal_in_elim.py's
+    # `samples_dict[v]`. See notebooks/_August-2026/claude_experiments/
+    # 57-proposal-and-memo-crn.md.
+    #
+    # Derived, not overridden: an explicit `populate_bw_factors=False` alongside
+    # `proposal_sampling=True` is a contradiction and is rejected rather than
+    # silently flipped. This block must run BEFORE the neurobe_mode expansion,
+    # whose own `populate_bw_factors: False` default would otherwise be
+    # indistinguishable from a user's explicit False.
+    if flat.get('proposal_sampling'):
+        if 'populate_bw_factors' in flat and not flat['populate_bw_factors']:
+            raise ValueError(
+                "proposal_sampling=True requires populate_bw_factors=True: the "
+                "WMB proposal tree is built from bucket.approximate_upstream_"
+                "factors / approximate_downstream_factors, which only the "
+                "backward-factor population pass fills in. Got an explicit "
+                "populate_bw_factors=False. Remove it, or turn off "
+                "proposal_sampling."
+            )
+        flat['populate_bw_factors'] = True
 
     # neurobe_mode expansion: fill in NEUROBE_DEFAULTS for any key
     # not already set by the user. User overrides win.

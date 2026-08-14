@@ -15,6 +15,7 @@ import time
 import torch
 
 from nce.training_logger import log_epoch_loss, log_val_loss
+from nce.sampling import crn as _crn
 
 
 def _is_loss_wrapper(trainer, base_loss_fn, loss_name):
@@ -108,6 +109,66 @@ def _proposal_train_epoch(trainer, batches, loss_fn, config):
     return torch.tensor(sum(batch_losses) / len(batch_losses))
 
 
+def _stack_over_scope(samples, msg_scope, domain_sizes, config, device,
+                      draw_index, log_probs_nat):
+    """Assemble an (n, |msg_scope|) assignment matrix from a proposal sampler's
+    per-variable output, uniform-filling any separator variable the proposal
+    tree did not span and correcting the proposal density accordingly.
+
+    Returns `(assignments, log_probs_nat)`.
+
+    Why this exists. `build_proposal_for_bucket` builds the tree over
+    `proposal_scope_for_bucket(bucket, gm)`, but the tree's LEVELS come from
+    `wtminfill_order` over the factors that survive the WMB-to-scope step, so a
+    separator variable left in no surviving factor gets no level and therefore
+    no samples. Every call site in this file used to index `samples[v]` directly
+    and die with `KeyError: <label>`.
+    `memorization_table.build_memorization_table` already fills such coordinates
+    uniformly -- commit 0eb1f4f, whose message flags THIS file as carrying "the
+    same latent bug".
+
+    Unlike the memorization table, which only ranks candidates by their TRUE
+    message value and so does not care what q was, the importance weights here
+    are 1/q. So the fill's own density, -sum(log d) over the filled variables,
+    is added to the tree's log q. Omitting it would leave every weight wrong by
+    a constant factor -- invisible to any equality test in the suite.
+
+    A tree that spans NOTHING is not a degraded proposal, it is not a proposal
+    at all, so that raises rather than silently turning the arm uniform.
+    """
+    missing = [v for v in msg_scope if v not in samples]
+    if not missing:
+        return torch.stack([samples[v] for v in msg_scope], dim=1).to(device), \
+            log_probs_nat
+    if not samples:
+        raise RuntimeError(
+            "proposal tree produced no samples for any of the %d separator "
+            "variables %r. The usual cause is an EMPTY proposal tree: it is "
+            "built from bucket.approximate_upstream_factors + "
+            "approximate_downstream_factors, which only the backward-factor "
+            "population pass fills in (config populate_bw_factors)."
+            % (len(msg_scope), list(msg_scope)))
+
+    n_rows = int(next(iter(samples.values())).shape[0])
+    dom_of = {int(v): int(d) for v, d in zip(msg_scope, domain_sizes)}
+    missing_sorted = sorted(missing)
+    fill = _crn.proposal_uniform(
+        config, n_rows, missing_sorted,
+        [dom_of[int(v)] for v in missing_sorted], device, draw_index)
+    cols = []
+    for v in msg_scope:
+        if v in samples:
+            cols.append(samples[v].to(device))
+        else:
+            cols.append(fill[:, missing_sorted.index(v)].to(device))
+    assignments = torch.stack(cols, dim=1).to(device)
+    fill_log_density = -sum(_math.log(dom_of[int(v)]) for v in missing_sorted)
+    print(f"[ProposalElim] WARNING: {len(missing)}/{len(msg_scope)} separator "
+          f"variables absent from the proposal tree ({missing_sorted}); filled "
+          f"uniformly, log q shifted by {fill_log_density:.4f} nat")
+    return assignments, log_probs_nat + fill_log_density
+
+
 def train_bucket_with_proposal_sampling(bucket, fastgm, trainer, config):
     """Train one bucket's NN using the proposal-sampling regime in `config`.
 
@@ -153,43 +214,62 @@ def train_bucket_with_proposal_sampling(bucket, fastgm, trainer, config):
     print(f"[ProposalElim] Proposal tree: {len(proposal_tree.levels)} levels, "
           f"vars={proposal_tree.variables}")
 
+    # An empty tree is the failure mode this path shipped with. It arises when
+    # bucket.approximate_upstream_factors and approximate_downstream_factors are
+    # both None -- which is what they are unless the backward-factor population
+    # pass ran -- so build_proposal_for_bucket takes its `if not all_factors`
+    # exit and hands back ProposalTree([]). Every sampler below then returns an
+    # empty dict and the failure surfaced ~100 lines later as an opaque
+    # `KeyError: <first separator var>`. `prepare_config` now derives
+    # populate_bw_factors=True from proposal_sampling=True, so reaching this
+    # branch means something bypassed prepare_config or the population pass
+    # skipped this cluster; either way, say so here rather than downstream.
+    if not proposal_tree.levels:
+        raise RuntimeError(
+            f"[ProposalElim] bucket {bucket.label}: the WMB proposal tree is "
+            f"EMPTY over separator {list(msg_scope)}. It is built from "
+            f"bucket.approximate_upstream_factors ("
+            f"{'None' if bucket.approximate_upstream_factors is None else len(bucket.approximate_upstream_factors)}"
+            f") + approximate_downstream_factors ("
+            f"{'None' if bucket.approximate_downstream_factors is None else len(bucket.approximate_downstream_factors)}"
+            f"), which only the backward-factor population pass populates. "
+            f"config['populate_bw_factors'] = "
+            f"{config.get('populate_bw_factors')!r}; proposal_sampling requires "
+            f"it to be True.")
+
     # ---- Sample according to proposal_mix ----
     if proposal_mix == 'no_replacement':
-        rng = torch.Generator(device=device)
-        rng.manual_seed(int(config.get('seed', 42)))
+        rng = _crn.no_replacement_generator(
+            config, msg_scope, domain_sizes, device, _crn.DRAW_TRAIN)
         # Use recursive NR — non-recursive caps at frontier_size phase-2 samples
         # via clamp(max=1.0), which fails for peaked distributions.
         nr_samples, _, nr_eff_log_probs_log10 = \
             proposal_tree.sample_no_replacement_v3_recursive(
                 num_proposal_samples, M=1, rng=rng, mode='save')
-        assignments = torch.stack(
-            [nr_samples[v] for v in msg_scope], dim=1
-        ).to(device)
-        proposal_log_probs_nat = nr_eff_log_probs_log10.to(
-            device=device, dtype=torch.float32
-        ) * _math.log(10)
+        assignments, proposal_log_probs_nat = _stack_over_scope(
+            nr_samples, msg_scope, domain_sizes, config, device, _crn.DRAW_TRAIN,
+            nr_eff_log_probs_log10.to(device=device, dtype=torch.float32)
+            * _math.log(10))
         print(f"[ProposalElim] NR: got {assignments.shape[0]} samples")
 
     elif proposal_mix == 'half':
         n_half = num_proposal_samples // 2
         n_wmb = num_proposal_samples - n_half
-        uniform_cols = [
-            torch.randint(0, d, (n_half,), device=device, dtype=torch.long)
-            for d in domain_sizes
-        ]
-        uniform_assignments = torch.stack(uniform_cols, dim=1)
+        uniform_assignments = _crn.proposal_uniform(
+            config, n_half, msg_scope, domain_sizes, device, _crn.DRAW_TRAIN)
         log_uniform_density = -sum(_math.log(d) for d in domain_sizes)
         uniform_log_probs = torch.full(
             (n_half,), log_uniform_density, device=device, dtype=torch.float32
         )
 
-        wmb_samples_dict, wmb_log_probs_log10 = proposal_tree.sample(n_wmb)
-        wmb_assignments = torch.stack(
-            [wmb_samples_dict[v] for v in msg_scope], dim=1
-        ).to(device)
-        wmb_log_probs = wmb_log_probs_log10.to(
-            device=device, dtype=torch.float32
-        ) * _math.log(10)
+        wmb_samples_dict, wmb_log_probs_log10 = proposal_tree.sample(
+            n_wmb, crn_key=_crn.proposal_tree_key(
+                config, msg_scope, domain_sizes, _crn.DRAW_TRAIN))
+        wmb_assignments, wmb_log_probs = _stack_over_scope(
+            wmb_samples_dict, msg_scope, domain_sizes, config, device,
+            _crn.DRAW_TRAIN,
+            wmb_log_probs_log10.to(device=device, dtype=torch.float32)
+            * _math.log(10))
 
         assignments = torch.cat([uniform_assignments, wmb_assignments], dim=0)
         proposal_log_probs_nat = torch.cat([uniform_log_probs, wmb_log_probs], dim=0)
@@ -198,27 +278,22 @@ def train_bucket_with_proposal_sampling(bucket, fastgm, trainer, config):
     elif proposal_mix == 'half_nr':
         n_half = num_proposal_samples // 2
         n_nr = num_proposal_samples - n_half
-        uniform_cols = [
-            torch.randint(0, d, (n_half,), device=device, dtype=torch.long)
-            for d in domain_sizes
-        ]
-        uniform_assignments = torch.stack(uniform_cols, dim=1)
+        uniform_assignments = _crn.proposal_uniform(
+            config, n_half, msg_scope, domain_sizes, device, _crn.DRAW_TRAIN)
         log_uniform_density = -sum(_math.log(d) for d in domain_sizes)
         uniform_log_probs = torch.full(
             (n_half,), log_uniform_density, device=device, dtype=torch.float32
         )
 
-        rng = torch.Generator(device=device)
-        rng.manual_seed(int(config.get('seed', 42)))
+        rng = _crn.no_replacement_generator(
+            config, msg_scope, domain_sizes, device, _crn.DRAW_TRAIN)
         nr_samples, _, nr_eff_log_probs_log10 = \
             proposal_tree.sample_no_replacement_v3_recursive(
                 n_nr, M=1, rng=rng, mode='save')
-        nr_assignments = torch.stack(
-            [nr_samples[v] for v in msg_scope], dim=1
-        ).to(device)
-        nr_log_probs = nr_eff_log_probs_log10.to(
-            device=device, dtype=torch.float32
-        ) * _math.log(10)
+        nr_assignments, nr_log_probs = _stack_over_scope(
+            nr_samples, msg_scope, domain_sizes, config, device, _crn.DRAW_TRAIN,
+            nr_eff_log_probs_log10.to(device=device, dtype=torch.float32)
+            * _math.log(10))
 
         assignments = torch.cat([uniform_assignments, nr_assignments], dim=0)
         proposal_log_probs_nat = torch.cat([uniform_log_probs, nr_log_probs], dim=0)
@@ -228,11 +303,9 @@ def train_bucket_with_proposal_sampling(bucket, fastgm, trainer, config):
         # Pure uniform sampling, no proposal/NR cost. Used with
         # correction_proposal_mix='nr' or 'half_nr' to keep training cheap
         # while doing correction on harder-to-reach samples.
-        uniform_cols = [
-            torch.randint(0, d, (num_proposal_samples,), device=device, dtype=torch.long)
-            for d in domain_sizes
-        ]
-        assignments = torch.stack(uniform_cols, dim=1)
+        assignments = _crn.proposal_uniform(
+            config, num_proposal_samples, msg_scope, domain_sizes, device,
+            _crn.DRAW_TRAIN)
         log_uniform_density = -sum(_math.log(d) for d in domain_sizes)
         proposal_log_probs_nat = torch.full(
             (num_proposal_samples,), log_uniform_density,
@@ -242,13 +315,14 @@ def train_bucket_with_proposal_sampling(bucket, fastgm, trainer, config):
 
     else:
         # 'full' — pure proposal sampling
-        samples_dict, proposal_log_probs = proposal_tree.sample(num_proposal_samples)
-        assignments = torch.stack(
-            [samples_dict[v] for v in msg_scope], dim=1
-        ).to(device)
-        proposal_log_probs_nat = proposal_log_probs.to(
-            device=device, dtype=torch.float32
-        ) * _math.log(10)
+        samples_dict, proposal_log_probs = proposal_tree.sample(
+            num_proposal_samples, crn_key=_crn.proposal_tree_key(
+                config, msg_scope, domain_sizes, _crn.DRAW_TRAIN))
+        assignments, proposal_log_probs_nat = _stack_over_scope(
+            samples_dict, msg_scope, domain_sizes, config, device,
+            _crn.DRAW_TRAIN,
+            proposal_log_probs.to(device=device, dtype=torch.float32)
+            * _math.log(10))
         print(f"[ProposalElim] full: {num_proposal_samples} samples")
 
     # ---- Build training data ----
@@ -303,7 +377,17 @@ def train_bucket_with_proposal_sampling(bucket, fastgm, trainer, config):
     restore_best_val = bool(config.get('restore_best_val', True))
     if use_holdout_val:
         n_val = int(holdout_val_frac * len(x_all))
-        gen = torch.Generator(device=x_all.device).manual_seed(int(bucket.label) + 1)
+        # Keyed on the separator + the run seed, not on the bucket label
+        # (an execution artefact) -- and the run seed was missing
+        # entirely, so two seeds got the SAME train/val split.
+        gen = torch.Generator(device=x_all.device).manual_seed(
+            _crn.derive_seed('holdout-val-split',
+                             run_seed=int(config.get('seed', 42)),
+                             sep=_crn.stream_payload(
+                                 int(config.get('seed', 42)), msg_scope,
+                                 [int(d) for d in domain_sizes],
+                                 'holdout', 0),
+                             n=int(len(x_all))))
         perm = torch.randperm(len(x_all), device=x_all.device, generator=gen)
         val_idx = perm[:n_val]
         train_idx = perm[n_val:]
@@ -577,50 +661,52 @@ def train_bucket_with_proposal_sampling(bucket, fastgm, trainer, config):
             else:
                 # Regenerate samples using correction_proposal_mix
                 if corr_mix == 'no_replacement':
-                    rng = torch.Generator(device=device)
-                    rng.manual_seed(int(config.get('seed', 42)) + 1)
+                    rng = _crn.no_replacement_generator(
+                        config, msg_scope, domain_sizes, device,
+                        _crn.DRAW_CORRECTION)
                     nr_samples, _, nr_eff_log_probs_log10 = \
                         proposal_tree.sample_no_replacement_v3_recursive(
                             corr_n, M=1, rng=rng, mode='save')
-                    corr_assignments = torch.stack(
-                        [nr_samples[v] for v in msg_scope], dim=1
-                    ).to(device)
-                    corr_plp_nat = nr_eff_log_probs_log10.to(
-                        device=device, dtype=torch.float32
-                    ) * _math.log(10)
+                    corr_assignments, corr_plp_nat = _stack_over_scope(
+                        nr_samples, msg_scope, domain_sizes, config, device,
+                        _crn.DRAW_CORRECTION,
+                        nr_eff_log_probs_log10.to(device=device,
+                                                  dtype=torch.float32)
+                        * _math.log(10))
                 elif corr_mix == 'half_nr':
                     n_half = corr_n // 2
                     n_nr = corr_n - n_half
-                    uniform_cols = [
-                        torch.randint(0, d, (n_half,), device=device, dtype=torch.long)
-                        for d in domain_sizes
-                    ]
-                    u_assignments = torch.stack(uniform_cols, dim=1)
+                    u_assignments = _crn.proposal_uniform(
+                        config, n_half, msg_scope, domain_sizes, device,
+                        _crn.DRAW_CORRECTION)
                     log_uniform_density = -sum(_math.log(d) for d in domain_sizes)
                     u_log_probs = torch.full(
                         (n_half,), log_uniform_density, device=device, dtype=torch.float32
                     )
-                    rng = torch.Generator(device=device)
-                    rng.manual_seed(int(config.get('seed', 42)) + 1)
+                    rng = _crn.no_replacement_generator(
+                        config, msg_scope, domain_sizes, device,
+                        _crn.DRAW_CORRECTION)
                     nr_samples, _, nr_eff_log_probs_log10 = \
                         proposal_tree.sample_no_replacement_v3_recursive(
                             n_nr, M=1, rng=rng, mode='save')
-                    nr_assignments = torch.stack(
-                        [nr_samples[v] for v in msg_scope], dim=1
-                    ).to(device)
-                    nr_lp = nr_eff_log_probs_log10.to(
-                        device=device, dtype=torch.float32
-                    ) * _math.log(10)
+                    nr_assignments, nr_lp = _stack_over_scope(
+                        nr_samples, msg_scope, domain_sizes, config, device,
+                        _crn.DRAW_CORRECTION,
+                        nr_eff_log_probs_log10.to(device=device,
+                                                  dtype=torch.float32)
+                        * _math.log(10))
                     corr_assignments = torch.cat([u_assignments, nr_assignments], dim=0)
                     corr_plp_nat = torch.cat([u_log_probs, nr_lp], dim=0)
                 else:  # 'full'
-                    samples_dict, corr_plp_log10 = proposal_tree.sample(corr_n)
-                    corr_assignments = torch.stack(
-                        [samples_dict[v] for v in msg_scope], dim=1
-                    ).to(device)
-                    corr_plp_nat = corr_plp_log10.to(
-                        device=device, dtype=torch.float32
-                    ) * _math.log(10)
+                    samples_dict, corr_plp_log10 = proposal_tree.sample(
+                        corr_n, crn_key=_crn.proposal_tree_key(
+                            config, msg_scope, domain_sizes,
+                            _crn.DRAW_CORRECTION))
+                    corr_assignments, corr_plp_nat = _stack_over_scope(
+                        samples_dict, msg_scope, domain_sizes, config, device,
+                        _crn.DRAW_CORRECTION,
+                        corr_plp_log10.to(device=device, dtype=torch.float32)
+                        * _math.log(10))
                 # Compute raw y, bw at correction samples (no preprocessor normalize).
                 # We do un-normalization manually to support minmax_01 mode.
                 y_corr_log10 = trainer.sample_generator.compute_message_values(corr_assignments)

@@ -12,6 +12,7 @@ from typing import List, Dict, Tuple
 
 from nce.inference.factor import FastFactor
 from nce.inference.elimination_order import wtminfill_order
+from nce.sampling import crn
 
 
 class BucketRecord:
@@ -37,7 +38,8 @@ class ProposalTree:
         self.levels = levels  # In elimination order (first eliminated first)
         self.device = device
 
-    def sample(self, num_samples: int) -> Tuple[Dict[int, torch.Tensor], torch.Tensor]:
+    def sample(self, num_samples: int, crn_key: int = None
+               ) -> Tuple[Dict[int, torch.Tensor], torch.Tensor]:
         """
         Generate samples via backward traversal.
 
@@ -46,6 +48,28 @@ class ProposalTree:
 
         Args:
             num_samples: Number of samples to generate
+            crn_key: Optional common-random-numbers stream key
+                (`nce.sampling.crn.stream_key`). When given, each level is
+                sampled by INVERSE CDF from the counter-based CRN stream
+                instead of by `torch.multinomial` on the global RNG.
+
+                Why inverse CDF and not "seed the generator": the proposal
+                distribution q is a function of the cluster's factors, so two
+                merge arms that build genuinely different clusters have
+                genuinely different q -- which the requirement explicitly
+                permits to give different samples. What must NOT differ is the
+                underlying randomness. Driving the multinomial by a shared
+                uniform makes the arms coincide exactly when q coincides, and
+                maximally coupled (the inverse-CDF / monotone coupling) when it
+                does not, instead of independent. It also carries the row-wise
+                purity of the uniform path through unchanged: row i depends
+                only on row i's uniforms, so a larger draw still extends a
+                smaller one, and the stream does not depend on the device or on
+                how many other clusters were sampled first.
+
+                The stream column is keyed on the eliminated VARIABLE LABEL,
+                not on the level position, so a variable that sits at a
+                different depth in two arms' trees still draws the same column.
 
         Returns:
             samples: Dict mapping variable label -> LongTensor of shape (num_samples,)
@@ -81,7 +105,20 @@ class ProposalTree:
             probs = ln_probs.exp().clamp(min=0)
             # Renormalize for numerical safety
             probs = probs / probs.sum(dim=1, keepdim=True)
-            sampled_states = torch.multinomial(probs, 1).squeeze(1)  # (num_samples,)
+            if crn_key is None:
+                sampled_states = torch.multinomial(probs, 1).squeeze(1)  # (num_samples,)
+            else:
+                # Inverse CDF against the CRN uniform for THIS variable.
+                # float64 throughout: the uniform is exactly representable
+                # (top32 / 2**32), and a float32 CDF would quantise nearby
+                # uniforms onto the same state and lose the coupling.
+                u = crn.uniform01(num_samples, [var_label], crn_key,
+                                  device=self.device)          # (n, 1)
+                cdf = probs.to(torch.float64).cumsum(dim=1).contiguous()
+                # right=True gives the k with cdf[k-1] <= u < cdf[k]; the clamp
+                # covers u >= cdf[-1], reachable when the row sums to 1 - eps.
+                sampled_states = torch.searchsorted(
+                    cdf, u, right=True).squeeze(1).clamp_(max=D - 1)
 
             samples[var_label] = sampled_states
 
@@ -193,6 +230,10 @@ def build_proposal_tree(factors: List[FastFactor], message_scope: List[int],
     # Build a temporary FastGM for WMB elimination
     config = dict(reference_gm.config)
     config['populate_bw_factors'] = False
+    # These derived GMs run WMB, never compute_message_nn, so they must also
+    # drop proposal_sampling: prepare_config now treats proposal_sampling=True
+    # with an explicit populate_bw_factors=False as a contradiction and raises.
+    config['proposal_sampling'] = False
     config['approximation_method'] = 'wmb'
     config['ecl'] = ecl
     config['iB'] = int(math.log2(ecl)) if ecl > 0 else 0
@@ -274,20 +315,34 @@ def build_proposal_tree(factors: List[FastFactor], message_scope: List[int],
 def proposal_scope_for_bucket(bucket, reference_gm):
     """The variable scope a proposal tree for `bucket` must be built over.
 
-    Single-var buckets keep using the precomputed message_scopes cache (which is
-    keyed per eliminated variable). Merged clusters must NOT: the cache holds the
-    pre-merge, per-variable scopes. bucket.get_message_scope() is merge-correct —
-    it unions the labels of the bucket's current factors (originals plus every
-    message received so far, buckets being processed in elimination order) and
-    discards ALL of the cluster's elim vars.
+    Always `bucket.get_message_scope()`: the union of the labels of the bucket's
+    CURRENT factors (originals plus every message received so far, buckets being
+    processed in elimination order) minus all of the cluster's elim vars.
+
+    This used to special-case single-elim-var buckets and read
+    `reference_gm.message_scopes` instead. That cache is computed once by
+    `calculate_message_scopes()` at GM construction, i.e. BEFORE any merge pass
+    and before elimination has moved a single message; once a neighbour has been
+    merged, the messages actually arriving at an unmerged bucket can span
+    variables the cache never predicted, and `build_proposal_tree` then raises
+    `KeyError: <label>` on the missing domain size. Doc 10's defect-4 fix covered
+    the merged branch of this same function and left the single-var branch
+    alone; `bd44e4b` diagnosed it (citing 11/11 NN clusters on `dbn/rbm_20`
+    under reduce-NN) but repaired it only inside
+    `memorization_table._proposal_tree_over_scope`, deliberately not touching
+    the shipped `proposal_sampling` path.
+
+    CAVEAT, doc 57: I could not reproduce that divergence. Probing every NN
+    cluster on grid10x10.f10 (rnn4), grid10x10.f10.wrap (rnn8, jt8), pedigree1
+    (rnn6) and dbn/rbm_20 (rnn8) found ZERO buckets where the cache differs from
+    the live scope. This change removes a real hazard -- reading a
+    pre-elimination artefact at elimination time -- but it is defensive, and it
+    is NOT what made `proposal_sampling=True` start working.
 
     Exposed separately from build_proposal_for_bucket so the scope can be
     asserted without building a tree.
     """
-    elim_var_labels = {getattr(v, 'label', v) for v in bucket.elim_vars}
-    if len(elim_var_labels) > 1:
-        return bucket.get_message_scope()
-    return list(reference_gm.message_scopes.get(bucket.label, []))
+    return bucket.get_message_scope()
 
 
 def build_proposal_for_bucket(bucket, reference_gm, ecl=None, temperature=1.0):
@@ -350,6 +405,15 @@ def build_proposal_for_bucket(bucket, reference_gm, ecl=None, temperature=1.0):
     # Include all elim_vars in domain_sizes for the elimination step
     for lab in elim_var_labels:
         domain_sizes[lab] = reference_gm.matching_var(lab).states
+
+    # Any label the backward chain carries that is neither in the separator nor
+    # an elim var still needs a domain size, or build_proposal_tree raises
+    # `KeyError: <label>` when it records a level for it. Mirrors the guard
+    # `memorization_table._proposal_tree_over_scope` already carries (bd44e4b).
+    for f in all_factors:
+        for lab in f.labels:
+            if lab not in domain_sizes:
+                domain_sizes[lab] = reference_gm.matching_var(lab).states
 
     # Eliminate elim_var(s) from combined factors to get factors over message_scope
     message_scope_factors = reference_gm._wmb_eliminate_to_scope(

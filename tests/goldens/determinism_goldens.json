@@ -22,7 +22,7 @@
         "num_epochs": 10
       },
       "golden": {
-        "log_z_repr": "304.2255859375",
+        "log_z_repr": "305.3193054199219",
         "epochs": [
           10
         ],
@@ -30,10 +30,10 @@
         "local_errors": [],
         "bucket_order_digest": "5e354a03ac73569d"
       },
-      "measured_wall_s": 4.21,
+      "measured_wall_s": 4.01,
       "provenance": {
-        "branch": "fix/determinism",
-        "commit": "d5cca0e",
+        "branch": "feat/crn-default-on",
+        "commit": "f6502e2",
         "dirty": false,
         "device": "cpu",
         "device_name": "cpu",
@@ -41,7 +41,7 @@
         "threads": 1,
         "host": "deepreasoning.ics.uci.edu",
         "python": "3.11.7",
-        "date": "2026-08-12 03:08:53"
+        "date": "2026-08-14 09:17:35"
       }
     },
     "cpu_grid_merged": {
@@ -64,7 +64,7 @@
         "num_epochs": 5
       },
       "golden": {
-        "log_z_repr": "324.2785339355469",
+        "log_z_repr": "324.0937194824219",
         "epochs": [
           5,
           5,
@@ -73,10 +73,10 @@
         "n_nn_clusters": 3,
         "local_errors": []
       },
-      "measured_wall_s": 4.31,
+      "measured_wall_s": 4.48,
       "provenance": {
-        "branch": "fix/determinism",
-        "commit": "d5cca0e",
+        "branch": "feat/crn-default-on",
+        "commit": "f6502e2",
         "dirty": false,
         "device": "cpu",
         "device_name": "cpu",
@@ -84,7 +84,7 @@
         "threads": 1,
         "host": "deepreasoning.ics.uci.edu",
         "python": "3.11.7",
-        "date": "2026-08-12 03:08:58"
+        "date": "2026-08-14 09:17:40"
       }
     },
     "cpu_pedigree_plain": {
@@ -107,7 +107,7 @@
         "num_epochs": 5
       },
       "golden": {
-        "log_z_repr": "-10.624578475952148",
+        "log_z_repr": "-11.076421737670898",
         "epochs": [
           5,
           5,
@@ -124,10 +124,10 @@
         "local_errors": [],
         "bucket_order_digest": "e1a7570f4cfb36f1"
       },
-      "measured_wall_s": 3.8,
+      "measured_wall_s": 4.02,
       "provenance": {
-        "branch": "fix/determinism",
-        "commit": "d5cca0e",
+        "branch": "feat/crn-default-on",
+        "commit": "f6502e2",
         "dirty": false,
         "device": "cpu",
         "device_name": "cpu",
@@ -135,7 +135,7 @@
         "threads": 1,
         "host": "deepreasoning.ics.uci.edu",
         "python": "3.11.7",
-        "date": "2026-08-12 03:09:02"
+        "date": "2026-08-14 09:17:45"
       }
     },
     "cpu_pedigree_masked": {
@@ -159,9 +159,9 @@
         "num_epochs": 5
       },
       "golden": {
-        "log_z_repr": "-13.409982681274414",
+        "log_z_repr": "-13.533952713012695",
         "epochs": [
-          4,
+          5,
           5,
           5,
           5,
@@ -171,10 +171,10 @@
         "local_errors": [],
         "bucket_order_digest": "034785624c22f57f"
       },
-      "measured_wall_s": 4.87,
+      "measured_wall_s": 4.91,
       "provenance": {
-        "branch": "fix/determinism",
-        "commit": "d5cca0e",
+        "branch": "feat/crn-default-on",
+        "commit": "f6502e2",
         "dirty": false,
         "device": "cpu",
         "device_name": "cpu",
@@ -182,7 +182,7 @@
         "threads": 1,
         "host": "deepreasoning.ics.uci.edu",
         "python": "3.11.7",
-        "date": "2026-08-12 03:09:08"
+        "date": "2026-08-14 09:17:51"
       }
     },
     "cpu_local_error": {
@@ -206,19 +206,19 @@
         "compute_local_error": true
       },
       "golden": {
-        "log_z_repr": "304.2255859375",
+        "log_z_repr": "305.3193054199219",
         "epochs": [
           10
         ],
         "n_nn_clusters": 1,
         "local_errors": [
-          "1.13958740234375"
+          "2.23333740234375"
         ]
       },
-      "measured_wall_s": 0.7,
+      "measured_wall_s": 0.72,
       "provenance": {
-        "branch": "fix/determinism",
-        "commit": "d5cca0e",
+        "branch": "feat/crn-default-on",
+        "commit": "f6502e2",
         "dirty": false,
         "device": "cpu",
         "device_name": "cpu",
@@ -226,7 +226,7 @@
         "threads": 1,
         "host": "deepreasoning.ics.uci.edu",
         "python": "3.11.7",
-        "date": "2026-08-12 03:09:09"
+        "date": "2026-08-14 09:17:51"
       }
     },
     "cuda_grid_plain": {
@@ -248,17 +248,17 @@
         "reduce_nn_backtrack": true
       },
       "golden": {
-        "log_z_repr": "302.54974365234375",
+        "log_z_repr": "303.1553039550781",
         "epochs": [
-          245
+          395
         ],
         "n_nn_clusters": 1,
         "local_errors": []
       },
-      "measured_wall_s": 23.61,
+      "measured_wall_s": 33.53,
       "provenance": {
-        "branch": "fix/determinism",
-        "commit": "d5cca0e",
+        "branch": "feat/crn-default-on",
+        "commit": "f6502e2",
         "dirty": false,
         "device": "cuda",
         "device_name": "NVIDIA TITAN RTX",
@@ -266,7 +266,7 @@
         "threads": 1,
         "host": "deepreasoning.ics.uci.edu",
         "python": "3.11.7",
-        "date": "2026-08-12 03:13:08"
+        "date": "2026-08-14 09:18:39"
       }
     },
     "cuda_grid_merged": {
@@ -288,19 +288,19 @@
         "reduce_nn_backtrack": true
       },
       "golden": {
-        "log_z_repr": "332.5823669433594",
+        "log_z_repr": "333.6826477050781",
         "epochs": [
-          203,
-          181,
-          316
+          186,
+          86,
+          500
         ],
         "n_nn_clusters": 3,
         "local_errors": []
       },
-      "measured_wall_s": 84.28,
+      "measured_wall_s": 120.78,
       "provenance": {
-        "branch": "fix/determinism",
-        "commit": "d5cca0e",
+        "branch": "feat/crn-default-on",
+        "commit": "f6502e2",
         "dirty": false,
         "device": "cuda",
         "device_name": "NVIDIA TITAN RTX",
@@ -308,7 +308,7 @@
         "threads": 1,
         "host": "deepreasoning.ics.uci.edu",
         "python": "3.11.7",
-        "date": "2026-08-12 03:14:33"
+        "date": "2026-08-14 09:20:40"
       }
     },
     "cuda_rbm": {
@@ -330,28 +330,28 @@
         "reduce_nn_backtrack": true
       },
       "golden": {
-        "log_z_repr": "62.513248443603516",
+        "log_z_repr": "62.60220718383789",
         "epochs": [
+          44,
+          38,
+          53,
+          42,
+          38,
+          48,
+          51,
           41,
-          40,
-          43,
-          39,
-          37,
-          35,
-          78,
-          99,
-          59,
-          36,
-          45,
-          137
+          46,
+          33,
+          42,
+          216
         ],
         "n_nn_clusters": 12,
         "local_errors": []
       },
-      "measured_wall_s": 188.28,
+      "measured_wall_s": 156.98,
       "provenance": {
-        "branch": "fix/determinism",
-        "commit": "d5cca0e",
+        "branch": "feat/crn-default-on",
+        "commit": "f6502e2",
         "dirty": false,
         "device": "cuda",
         "device_name": "NVIDIA TITAN RTX",
@@ -359,7 +359,7 @@
         "threads": 1,
         "host": "deepreasoning.ics.uci.edu",
         "python": "3.11.7",
-        "date": "2026-08-12 03:17:41"
+        "date": "2026-08-14 09:23:17"
       }
     },
     "cuda_pedigree_masked": {
@@ -382,19 +382,19 @@
         "reduce_nn_backtrack": true
       },
       "golden": {
-        "log_z_repr": "-59.3199348449707",
+        "log_z_repr": "-58.972801208496094",
         "epochs": [
-          107,
-          76,
-          60
+          72,
+          86,
+          75
         ],
         "n_nn_clusters": 3,
         "local_errors": []
       },
-      "measured_wall_s": 185.33,
+      "measured_wall_s": 258.62,
       "provenance": {
-        "branch": "fix/determinism",
-        "commit": "d5cca0e",
+        "branch": "feat/crn-default-on",
+        "commit": "f6502e2",
         "dirty": false,
         "device": "cuda",
         "device_name": "NVIDIA TITAN RTX",
@@ -402,7 +402,7 @@
         "threads": 1,
         "host": "deepreasoning.ics.uci.edu",
         "python": "3.11.7",
-        "date": "2026-08-12 03:20:46"
+        "date": "2026-08-14 09:27:36"
       }
     }
   }

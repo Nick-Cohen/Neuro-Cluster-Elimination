@@ -49,7 +49,11 @@ def get_catalog(cache_dir=None, refresh=False):
         Catalog instance ready to access models.
     """
     if cache_dir is None:
-        cache_dir = _DEFAULT_CACHE
+        # NCE_MODEL_CACHE lets a git worktree (whose .model_cache is empty --
+        # the cache is untracked, and the root is derived from THIS file's
+        # location, not the cwd) point at an already-populated cache instead of
+        # silently re-downloading. Unset, behaviour is exactly as before.
+        cache_dir = os.environ.get('NCE_MODEL_CACHE') or _DEFAULT_CACHE
     os.makedirs(cache_dir, exist_ok=True)
     c = Catalog(cache=cache_dir, source=_SOURCE_URL)
     if refresh:

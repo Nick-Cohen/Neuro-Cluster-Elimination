@@ -1,5 +1,10 @@
+import itertools
 import torch
 import math
+
+
+# Monotonic source of stable factor ids. See FastFactor.__hash__.
+_FACTOR_ID_COUNTER = itertools.count()
 
 
 class _SlicePlan:
@@ -40,7 +45,44 @@ class _SlicePlan:
 
 
 class FastFactor:
+    """A tensor-backed factor in log10 space.
+
+    DETERMINISM -- WHY THIS CLASS HAS A `__hash__` BUT NOT AN `__eq__`
+    ------------------------------------------------------------------
+    Until 2026-08-12 `FastGM._create_buckets_from_factors` did `set(factors)`.
+    With the default `object.__hash__` (derived from `id()`), the iteration
+    order of that set followed memory addresses, so bucket factor order -- and
+    hence the association order of a log-space product -- differed between
+    processes and even between two builds in one process. See
+    notebooks/_August-2026/claude_experiments/21-determinism.md.
+
+    The fix at that site was to stop using a set. This adds a second, structural
+    line of defence: every factor gets a stable creation-order integer id and
+    hashes to it, so ANY set or dict keyed on factors iterates in an order that
+    is a function of construction order rather than of the allocator.
+
+    `__eq__` is deliberately left as identity. A value-based `__eq__` was
+    considered and rejected on two grounds:
+
+      * FastFactor is MUTABLE. `self.tensor` is reassigned in place by
+        `order_indices`, `to`, `to_exact`, doping, and normalisation. An object
+        whose hash tracks its value and which is mutated while sitting in a set
+        is a well-known silent-corruption hazard: the object lands in the wrong
+        bucket of the hash table and can no longer be found.
+      * A value-based `__eq__` would change what `set(factors)` MEANS, from
+        "deduplicate by identity" to "deduplicate by value". Duplicate factors
+        are legitimate here (e.g. two copies of the same pairwise potential, or
+        a doped factor equal to its neighbour), and silently dropping one is a
+        correctness bug, not an ordering wobble.
+
+    `copy.deepcopy` of a factor copies `_factor_id`, so a copy shares its
+    original's id. That is harmless -- hash collisions are legal and equality is
+    still identity -- but it means the id identifies a construction event, not a
+    factor value.
+    """
+
     def __init__(self, tensor, labels):
+        self._factor_id = next(_FACTOR_ID_COUNTER)
         self.tensor = tensor
         if self.tensor is None:
             self.device = None
@@ -52,6 +94,12 @@ class FastFactor:
             self.shape = self.tensor.shape
         else:
             self.shape = None
+
+    def __hash__(self):
+        # Stable across processes: small ints hash to themselves and are not
+        # affected by PYTHONHASHSEED. `_factor_id` is looked up defensively
+        # because a few code paths build factors via __new__/deepcopy tricks.
+        return hash(getattr(self, '_factor_id', 0))
 
     def __repr__(self):
         return f"FastFactor(tensor={self.tensor}, labels={self.labels})"

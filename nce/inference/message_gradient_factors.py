@@ -113,6 +113,10 @@ def get_wmb_message_gradient_factors(factors: List[FastFactor], message_scope, c
                   'use_non_subsumption_merge'):
         local_config[_flag] = False
     local_config['merge_degree'] = 0
+    # These derived GMs run WMB, never compute_message_nn, so they must also
+    # drop proposal_sampling: prepare_config now treats proposal_sampling=True
+    # with an explicit populate_bw_factors=False as a contradiction and raises.
+    local_config['proposal_sampling'] = False
 
     # Create a graphical model with the factors
     gm = FastGM(factors=factors, nn_config=local_config, elim_order=elim_order)
