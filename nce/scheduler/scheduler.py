@@ -46,6 +46,7 @@ from nce.scheduler.gpus import (dispatchable_gpus, query_gpus, describe,
                                 RETIRED_GPU_INDICES)
 from nce.scheduler.jobs import JobQueue, JobSpec, PENDING, RUNNING, DONE, FAILED, BLOCKED
 from nce.scheduler import models as modelval
+from nce.scheduler.ballast import BallastPool
 
 # Seconds between sweeps. Not a timeout and not a resource limit: it only sets
 # how quickly a freed GPU is noticed. Jobs here run for minutes to hours, so
@@ -59,7 +60,8 @@ class Dispatcher:
                  base_config: str = None, threads: int = 1,
                  poll_interval: int = DEFAULT_POLL_INTERVAL_S,
                  no_checkpoint: bool = False,
-                 only_gpus: Optional[List[int]] = None):
+                 only_gpus: Optional[List[int]] = None,
+                 ballast: bool = True):
         self.queue = queue
         # Restrict dispatch to these physical indices. Narrows the idle set; it
         # can never widen it, so GPU 2 stays excluded even if named here.
@@ -72,6 +74,15 @@ class Dispatcher:
         self.no_checkpoint = no_checkpoint
         # gpu_uuid -> {'proc': Popen, 'job_id': str, 'started': float}
         self.running: Dict[str, Dict[str, Any]] = {}
+        # Thermal ballast keeps idle cards at working temperature between jobs.
+        # Without it every job starts cold and the cold-start penalty scales
+        # with job length (doc 59: -5.59% at 30 s, -0.49% at 1500 s), i.e. a
+        # bias correlated with the very quantity the paper measures.
+        self.ballast = BallastPool(
+            python=self.python, enabled=ballast,
+            log_dir=os.path.join(self.out_dir, '_ballast'),
+            cwd=os.path.dirname(os.path.dirname(os.path.dirname(
+                os.path.abspath(__file__)))))
 
     # -- helpers -----------------------------------------------------------
     def _job_dir(self, spec: JobSpec) -> str:
@@ -149,43 +160,81 @@ class Dispatcher:
                       flush=True)
 
     def sweep(self) -> int:
-        """One pass: reap, then fill every free GPU. Returns jobs launched."""
+        """One pass: reap, then fill every free GPU. Returns jobs launched.
+
+        Ballast interacts with this in two places and both matter:
+          - our own ballast pids are excluded from the busy signal, or every
+            ballasted card would look occupied and nothing would ever dispatch;
+          - ballast is torn down on a card BEFORE a job launches there, and
+            `BallastPool.stop` blocks until the CUDA context is actually gone,
+            so a job never shares a card with ballast (requirement: ballast must
+            not perturb a running job's timings).
+        """
         self._reap()
         busy = self._busy_uuids()
-        free = [g for g in dispatchable_gpus() if g.uuid not in busy]
+        free = [g for g in dispatchable_gpus(ignore_pids=self.ballast.pids())
+                if g.uuid not in busy]
         if self.only_gpus is not None:
             free = [g for g in free if g.index in self.only_gpus]
         pending = self.queue.pending()
         launched = 0
         for gpu, spec in zip(free, pending):
+            # Yield the card before the job touches it. If ballast will not let
+            # go, skip this card entirely rather than launch onto a busy GPU.
+            if not self.ballast.stop(gpu.index):
+                continue
             self._launch(spec, gpu)
             launched += 1
+        # Ballast every dispatchable card that did NOT just receive a job, so it
+        # is at working temperature when it does. Recomputed after dispatch so a
+        # card we just launched onto is never in the set.
+        self._ballast_idle_cards()
         return launched
+
+    def _ballast_idle_cards(self) -> None:
+        """Run ballast on dispatchable cards that carry no job of ours."""
+        if not self.ballast.enabled:
+            return
+        busy = self._busy_uuids()
+        free = [g for g in dispatchable_gpus(ignore_pids=self.ballast.pids())
+                if g.uuid not in busy]
+        if self.only_gpus is not None:
+            free = [g for g in free if g.index in self.only_gpus]
+        self.ballast.ensure(g.index for g in free)
 
     def run(self, once: bool = False, max_jobs: int = None) -> None:
         self._validate_pending()
         started = 0
         try:
-            while True:
-                if max_jobs is not None and started >= max_jobs:
-                    break
-                started += self.sweep()
-                if once:
-                    break
-                if not self.running and not self.queue.pending():
-                    print('[idle] queue drained: %s' % self.queue.summary(),
-                          flush=True)
-                    break
+            try:
+                while True:
+                    if max_jobs is not None and started >= max_jobs:
+                        break
+                    started += self.sweep()
+                    if once:
+                        break
+                    if not self.running and not self.queue.pending():
+                        print('[idle] queue drained: %s' % self.queue.summary(),
+                              flush=True)
+                        break
+                    time.sleep(self.poll_interval)
+            except KeyboardInterrupt:
+                print('\n[interrupt] leaving %d job(s) running; their checkpoints '
+                      'let them resume.' % len(self.running), flush=True)
+                return
+            # Drain: wait for stragglers so the final summary is truthful.
+            while self.running:
                 time.sleep(self.poll_interval)
-        except KeyboardInterrupt:
-            print('\n[interrupt] leaving %d job(s) running; their checkpoints '
-                  'let them resume.' % len(self.running), flush=True)
-            return
-        # Drain: wait for stragglers so the final summary is truthful.
-        while self.running:
-            time.sleep(self.poll_interval)
-            self._reap()
-        print('[done] %s' % self.queue.summary(), flush=True)
+                self._reap()
+                # Keep the cards freed by finished jobs warm for whatever runs
+                # next; drained cards otherwise cool 83->61 C in 60 s.
+                self._ballast_idle_cards()
+            print('[done] %s' % self.queue.summary(), flush=True)
+        finally:
+            # Never leave ballast behind. An orphaned ballast worker would hold
+            # a card at full power indefinitely and, because it is a compute
+            # process, would make that card look busy to the next scheduler.
+            self.ballast.stop_all()
 
 
 def _cmd_status(args) -> int:
@@ -223,6 +272,11 @@ def main(argv=None) -> int:
     p.add_argument('--base-config', default=None)
     p.add_argument('--python', default=None)
     p.add_argument('--no-checkpoint', action='store_true')
+    p.add_argument('--no-ballast', action='store_true',
+                   help='disable thermal ballast on idle cards. Ballast is ON '
+                        'by default: without it every job starts cold and the '
+                        'cold-start penalty scales with job length (doc 59), '
+                        'biasing exactly the timings the paper reports.')
     p.add_argument('--only-gpus', nargs='+', type=int, default=None,
                    help='restrict dispatch to these physical GPU indices '
                         '(e.g. reserve 0 and 1 for another agent). Can only '
@@ -239,7 +293,8 @@ def main(argv=None) -> int:
                    base_config=args.base_config, threads=args.threads,
                    poll_interval=args.poll_interval,
                    no_checkpoint=args.no_checkpoint,
-                   only_gpus=args.only_gpus)
+                   only_gpus=args.only_gpus,
+                   ballast=not args.no_ballast)
     print('Scheduler starting. %s' % q.summary())
     print(describe())
     d.run(once=args.once, max_jobs=args.max_jobs)

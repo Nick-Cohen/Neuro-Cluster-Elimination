@@ -36,12 +36,18 @@ _HTML_MARKERS = ('<!doctype', '<html', '<head', '<?xml', '<!DOCTYPE')
 
 
 def cache_root() -> str:
-    """The cache directory THIS interpreter will use (worktree-dependent)."""
+    """The cache directory THIS interpreter will use (worktree-dependent).
+
+    MUST agree with `catalog_utils.get_catalog`, which is what actually loads
+    the model. It resolves `NCE_MODEL_CACHE` first and only then falls back to
+    the path derived from its own `__file__`. Recomputing just the fallback
+    here made validation disagree with loading the moment `.model_cache` became
+    untracked (it is gitignored on the CRN lineage), so every job in a fresh
+    worktree was BLOCKED as "model missing" while the loader would have found
+    it perfectly well via the override.
+    """
     from nce.benchmark_problems import catalog_utils
-    return os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(
-            os.path.abspath(catalog_utils.__file__)))),
-        '.model_cache')
+    return os.environ.get('NCE_MODEL_CACHE') or catalog_utils._DEFAULT_CACHE
 
 
 def model_paths(problem_key: str, root: str = None) -> Dict[str, str]:

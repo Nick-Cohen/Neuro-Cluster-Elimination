@@ -20,7 +20,7 @@ from __future__ import annotations
 import os
 import subprocess
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, Iterable, List, Optional
 
 
 # ---------------------------------------------------------------------------
@@ -95,26 +95,50 @@ def _nvidia_smi(query: str, extra: List[str] = None) -> List[List[str]]:
     return rows
 
 
-def query_gpus() -> List[GpuInfo]:
+def query_gpus(ignore_pids: Optional[Iterable[int]] = None) -> List[GpuInfo]:
     """Snapshot every GPU on the box, including retired ones (marked as such).
 
     Sorted by index so iteration order is deterministic.
+
+    `ignore_pids` exists for thermal ballast (see nce/scheduler/ballast.py).
+    Ballast attaches a real CUDA context, so without this the authoritative
+    "a compute process is attached" busy signal would report every ballasted
+    card as busy and the scheduler would deadlock -- box fully utilised,
+    nothing dispatched. ONLY the scheduler's own ballast pids belong here;
+    passing anything else would hide real work and let two jobs collide on one
+    card.
     """
+    ignore = set(ignore_pids or ())
     # Which GPUs have live CUDA contexts? This is the authoritative busy signal.
     pids_by_uuid: Dict[str, List[int]] = {}
-    for row in _nvidia_smi('compute-apps=gpu_uuid,pid'):
+    # Memory attributable to ignored (ballast) pids, so the secondary memory
+    # signal does not re-flag a card that the pid filter just cleared. A ballast
+    # worker holds ~1-2 GiB (context + two 8192^2 fp32 matrices), far above
+    # IDLE_MEMORY_MIB, so skipping this would defeat the pid filter entirely.
+    ignored_mib_by_uuid: Dict[str, int] = {}
+    for row in _nvidia_smi('compute-apps=gpu_uuid,pid,used_gpu_memory'):
         if len(row) >= 2:
-            pids_by_uuid.setdefault(row[0], []).append(int(row[1]))
+            pid = int(row[1])
+            if pid in ignore:
+                if len(row) >= 3:
+                    try:
+                        ignored_mib_by_uuid[row[0]] = (
+                            ignored_mib_by_uuid.get(row[0], 0) + int(row[2]))
+                    except ValueError:
+                        pass
+                continue
+            pids_by_uuid.setdefault(row[0], []).append(pid)
 
     gpus = []
     for row in _nvidia_smi(
             'gpu=index,uuid,name,memory.used,memory.total,utilization.gpu'):
         idx, uuid, name, mused, mtotal, util = row[:6]
+        used = max(0, int(mused) - ignored_mib_by_uuid.get(uuid, 0))
         gpus.append(GpuInfo(
             index=int(idx),
             uuid=uuid,
             name=name,
-            memory_used_mib=int(mused),
+            memory_used_mib=used,
             memory_total_mib=int(mtotal),
             utilization_pct=int(util),
             compute_pids=tuple(sorted(pids_by_uuid.get(uuid, []))),
@@ -122,13 +146,17 @@ def query_gpus() -> List[GpuInfo]:
     return sorted(gpus, key=lambda g: g.index)
 
 
-def dispatchable_gpus() -> List[GpuInfo]:
+def dispatchable_gpus(ignore_pids: Optional[Iterable[int]] = None) -> List[GpuInfo]:
     """GPUs that are safe to dispatch to, in deterministic (index) order.
 
     Retired GPUs are filtered out here as well as in `busy_reason`, so a caller
     that forgets to check `.retired` still cannot be handed GPU 2.
+
+    `ignore_pids`: see `query_gpus`. A card carrying only our thermal ballast is
+    dispatchable -- the scheduler tears the ballast down before it launches.
     """
-    return [g for g in query_gpus() if not g.retired and g.idle]
+    return [g for g in query_gpus(ignore_pids=ignore_pids)
+            if not g.retired and g.idle]
 
 
 def assert_not_retired(index: int) -> None:

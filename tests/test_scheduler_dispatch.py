@@ -94,7 +94,7 @@ def test_busy_gpu_is_not_dispatchable(monkeypatch):
                             g.memory_total_mib, g.utilization_pct,
                             (99999,) if g.uuid == victim.uuid else ())
              for g in real]
-    monkeypatch.setattr(gpumod, 'query_gpus', lambda: faked)
+    monkeypatch.setattr(gpumod, 'query_gpus', lambda **kw: faked)  # **kw: query_gpus now takes ignore_pids (thermal ballast)
     assert victim.uuid not in {g.uuid for g in gpumod.dispatchable_gpus()}
     busy = [g for g in faked if g.uuid == victim.uuid][0]
     assert 'compute processes present' in busy.busy_reason
@@ -108,7 +108,7 @@ def test_memory_in_use_blocks_dispatch(monkeypatch):
                             8000 if g.index == real[0].index else g.memory_used_mib,
                             g.memory_total_mib, g.utilization_pct, ())
              for g in real]
-    monkeypatch.setattr(gpumod, 'query_gpus', lambda: faked)
+    monkeypatch.setattr(gpumod, 'query_gpus', lambda **kw: faked)  # **kw: query_gpus now takes ignore_pids (thermal ballast)
     hot = [g for g in faked if g.index == real[0].index][0]
     assert not hot.idle and 'memory in use' in hot.busy_reason
 
