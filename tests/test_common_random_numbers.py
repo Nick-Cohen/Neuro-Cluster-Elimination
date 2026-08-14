@@ -983,3 +983,52 @@ def test_a_different_proposal_gives_different_but_coupled_samples():
     assert frac > baseline + 0.05, (
         'shared-uniform coupling bought nothing: agreement %.3f vs independent '
         'baseline %.3f' % (frac, baseline))
+
+
+# ---------------------------------------------------------------------------
+# 5c. The memorization table's sampler
+#
+# BLOCKED ON BRANCH TOPOLOGY, DELIBERATELY. `nce/neural_networks/
+# memorization_table.py` exists only on `exp/hybrid-memorization`, which
+# branched before `nce/sampling/crn.py` existed, so the one-line re-key cannot
+# land here without merging the two branches -- which this agent is not
+# authorised to do. What CAN be pinned here is the helper the patch will call,
+# so that when the branches combine the change is a substitution with test
+# cover already in place. The patch itself is in doc 56.
+# ---------------------------------------------------------------------------
+def test_memorization_role_is_ready_for_the_hybrid_branch(arm_meta):
+    """`seed*1000003 + bucket.label` is injective, but keyed on the WRONG thing.
+
+    It has no collision defect. Its problem is that the bucket label is exactly
+    the execution artefact CRN exists to remove: two merge strategies that build
+    a cluster with the same separator on different key variables get different
+    memorization samples, so memorization arms cannot be paired across
+    strategies. The replacement keys on the separator.
+    """
+    pooled = {}
+    for arm in arm_meta:
+        pooled.update(arm_meta[arm])
+    seps = sorted(pooled.items())
+    assert len(seps) >= 2
+
+    seeds = {}
+    for sep, doms in seps:
+        g = crn.no_replacement_generator(PROP_CFG, list(sep), list(doms), 'cpu',
+                                         role=crn.ROLE_MEMO)
+        s = int(g.initial_seed())
+        assert s not in seeds, 'two separators share a memorization seed'
+        seeds[s] = sep
+        # Same separator, any bucket label, any execution position: same seed.
+        assert s == int(crn.no_replacement_generator(
+            PROP_CFG, list(reversed(sep)), list(reversed(doms)), 'cpu',
+            role=crn.ROLE_MEMO).initial_seed())
+
+    # Disjoint from the proposal no-replacement stream on the same separator:
+    # they are different draws for different purposes.
+    sep, doms = seps[0]
+    assert (crn.stream_seed(SEED, list(sep), list(doms), crn.ROLE_MEMO, 0)
+            != crn.stream_seed(SEED, list(sep), list(doms), crn.ROLE_PROP_NR, 0))
+
+    # ... and it is not the formula it replaces.
+    legacy = SEED * 1000003 + 11
+    assert crn.stream_seed(SEED, list(sep), list(doms), crn.ROLE_MEMO, 0) != legacy
