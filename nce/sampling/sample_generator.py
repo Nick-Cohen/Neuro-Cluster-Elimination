@@ -313,25 +313,62 @@ class SampleGenerator:
                       sg_elim_prod=elim_prod, sg_n_assignments=n,
                       sg_n_chunks=((n + a_chunk - 1) // max(1, a_chunk))
                                   * ((elim_prod + e_chunk - 1) // max(1, e_chunk)))
+        # An NN factor only reads the elim vars in its OWN scope, so its value over the
+        # full elim grid has just k^{e_f} = prod(dom(E_f)) distinct points, repeated
+        # elim_prod / k^{e_f} times.  _eval_elim_block de-duplicates WITHIN a block,
+        # which is capped by e_chunk; the repeats that span blocks need the k^{e_f}
+        # points evaluated once per assignment chunk and flat-indexed per block --
+        # exactly what FastFactor._eval_elim_block already does with its dense tensor.
+        # Built only when the table fits the block element cap (2**_SG_BLOCK_LOG2
+        # floats, the same knob that bounds a streamed block), so peak memory is
+        # unchanged in order; otherwise the factor keeps the per-block path.
+        _table_cap = 2 ** _SG_BLOCK_LOG2
+        _tabled = []          # (factor_index, present_pos_tensor, strides_tensor, kf)
+        for _fi, f in enumerate(fx):
+            if not getattr(f, 'is_nn', False):
+                continue      # FastFactor._eval_elim_block already flat-indexes
+            _ppos, _kf = f.elim_extent(f.labels, self.elim_vars, elim_doms)
+            if _kf >= elim_prod or a_chunk * _kf > _table_cap:
+                continue      # nothing to gain, or would not fit
+            _st = [1] * len(_ppos)
+            _acc = 1
+            for i in range(len(_ppos) - 1, -1, -1):
+                _st[i] = _acc
+                _acc *= int(elim_doms[_ppos[i]])
+            _tabled.append((_fi,
+                            torch.tensor(_ppos, dtype=torch.int64, device=dev),
+                            torch.tensor(_st, dtype=torch.int64, device=dev), _kf))
+
         outs = []
         for start in range(0, n, a_chunk):
             ca = assignments[start:start + a_chunk]
             A = len(ca)
+            tables = {}
+            for _fi, _ppos_t, _st_t, _kf in _tabled:
+                _tab, _, _ = fx[_fi]._elim_table(ca, self.elim_vars,
+                                                 self.elim_domain_sizes,
+                                                 self.message_scope)
+                tables[_fi] = (_tab, _ppos_t, _st_t)      # (A, k^{e_f})
             acc_lse = torch.full((A,), float('-inf'), device=dev)
             for e0 in range(0, elim_prod, e_chunk):
                 e1 = min(elim_prod, e0 + e_chunk)
                 flat = torch.arange(e0, e1, device=dev)
                 coords = (flat.unsqueeze(1) // strides_t) % doms_t   # (B, n_elim_vars)
                 block = torch.zeros((A, e1 - e0), device=dev)
-                if _pf is None:
-                    for f in fx:
+                for _fi, f in enumerate(fx):
+                    _t0 = _pf.tic() if _pf is not None else None
+                    _tb = tables.get(_fi)
+                    if _tb is not None:
+                        _tab, _ppos_t, _st_t = _tb
+                        if _ppos_t.numel():
+                            _idx = (coords.index_select(1, _ppos_t) * _st_t).sum(dim=1)
+                        else:
+                            _idx = torch.zeros(e1 - e0, dtype=torch.int64, device=dev)
+                        block += _tab.index_select(1, _idx)
+                    else:
                         block += f._eval_elim_block(ca, coords, self.elim_vars,
                                                     elim_labels, self.message_scope)
-                else:
-                    for _fi, f in enumerate(fx):
-                        _t0 = _pf.tic()
-                        block += f._eval_elim_block(ca, coords, self.elim_vars,
-                                                    elim_labels, self.message_scope)
+                    if _pf is not None:
                         _pf.toc_factor(_fi, _t0)
                 blk = torch.logsumexp(block * ln10, dim=1) / ln10     # (A,)
                 acc_lse = torch.logaddexp(acc_lse * ln10, blk * ln10) / ln10

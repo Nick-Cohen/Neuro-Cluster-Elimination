@@ -148,14 +148,26 @@ class FactorNN(FastFactor):
             return torch.zeros((n_rows, n_labels), dtype=torch.int64, device=src.device)
         return src.index_select(1, sel)
 
-    def _get_slices(self, assignments, elim_vars, elim_domain_sizes, message_scope):
-        """
-        Args:
-            assignments (torch.tensor): _description_
-            elim_vars (list[int]): _description_
-            message_scope (list[int]): _description_
-            self.labels is a list of variable indices in the NN input
+    @staticmethod
+    def elim_extent(labels, elim_vars, elim_domain_sizes):
+        """(present_pos, k^{e_f}) for a factor with `labels` in a cluster eliminating
+        `elim_vars`: which of the cluster's elim axes this factor actually reads, and
+        how many distinct elim points it therefore has. Cheap; no tensors."""
+        present_pos = [j for j, var in enumerate(elim_vars) if var.label in labels]
+        k = 1
+        for j in present_pos:
+            k *= int(elim_domain_sizes[j])
+        return present_pos, k
 
+    def _elim_table(self, assignments, elim_vars, elim_domain_sizes, message_scope):
+        """(n_assign, k^{e_f}) values of this net over ONLY the elim vars in its own
+        scope, plus (present_pos, full_sizes).
+
+        This is the whole of _get_slices except the final broadcast, factored out so a
+        caller that streams blocks of the full elim grid can evaluate the k^{e_f}
+        distinct points once and flat-index them, instead of re-running the net on
+        every block.  Row order is C-order over the present axes, matching
+        torch.cartesian_prod.
         """
         # Perf: enumerate ONLY the elimination variables this factor's scope
         # actually contains. The value is constant along every absent elim axis,
@@ -230,6 +242,14 @@ class FactorNN(FastFactor):
             out = torch.empty((0, n_elim), device=dev)
         else:
             out = chunks_out[0] if len(chunks_out) == 1 else torch.cat(chunks_out, dim=0)
+        return out, present_pos, full_sizes
+
+    def _get_slices(self, assignments, elim_vars, elim_domain_sizes, message_scope):
+        """Values of this NN factor at every (assignment x full elim grid) point,
+        as a broadcast view over the elim axes it does not contain."""
+        out, present_pos, full_sizes = self._elim_table(
+            assignments, elim_vars, elim_domain_sizes, message_scope)
+        n_assign = out.shape[0]
         # (n_assign, k^e_f) -> (n_assign, 1, k_j, 1, ...) -> broadcast to the full
         # elimination grid. expand() is a stride-0 view, so the absent axes cost
         # nothing; the caller only ever reads / broadcasts against this.
