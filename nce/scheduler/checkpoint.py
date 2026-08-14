@@ -275,7 +275,6 @@ def verify_environment(manifest: Dict[str, Any]) -> List[str]:
 @contextmanager
 def checkpointed_elimination(gm, store: CheckpointStore,
                              resume: bool = True,
-                             every: int = 1,
                              fingerprint: Optional[str] = None):
     """Wrap an elimination so it journals messages and can resume.
 
@@ -283,9 +282,18 @@ def checkpointed_elimination(gm, store: CheckpointStore,
         with checkpointed_elimination(gm, store):
             gm.eliminate_variables(all=True)
 
-    `every=1` checkpoints after every cluster. That is the natural unit here:
-    clusters are the expensive step (one NN training each), so per-cluster is
-    the finest granularity that costs nothing meaningful, and there is no
+    EVERY cluster is journaled, and there is deliberately no "checkpoint every
+    N clusters" knob. Such a knob looks like a cheap way to shrink the journal
+    but is incompatible with this design: replay works by feeding each recorded
+    message back in, so a gap in the journal is a cluster whose message cannot
+    be replayed AND whose inputs cannot be reconstructed -- there is no full
+    state snapshot to fall back on. A thinned journal would therefore either
+    fail loudly on the gap or, worse, silently misalign step indices with
+    journal entries. If journal size becomes a problem on wide models, the fix
+    is to compress or prune stored tensors, not to skip clusters.
+
+    Per-cluster is also the right granularity on cost: a cluster is one NN
+    training, so the journal write is negligible beside it, and there is no
     partial-cluster state worth preserving.
 
     Only calls made during THIS block are journaled, and calls made while
@@ -351,12 +359,12 @@ def checkpointed_elimination(gm, store: CheckpointStore,
             'scalars': {n: getattr(self, n) for n in _DELTA_SCALARS
                         if hasattr(self, n)},
         }
-        if step % every == 0:
-            # RNG snapshotted AFTER the cluster's work, so a resume that
-            # replays through here re-enters the stream where this cluster
-            # left it.
-            store.append(step, bucket.label, msgs, _rng_state(), deltas,
-                         was_list=was_list)
+        # Every cluster, unconditionally -- see the docstring on why there is no
+        # skip interval. RNG is snapshotted AFTER the cluster's work, so a
+        # resume that replays through here re-enters the stream where this
+        # cluster left it.
+        store.append(step, bucket.label, msgs, _rng_state(), deltas,
+                     was_list=was_list)
         return result
 
     FastGM.process_bucket = process_bucket
