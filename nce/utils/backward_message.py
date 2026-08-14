@@ -96,6 +96,10 @@ def get_backward_message(gm, bucket_var, backward_factors=None, iB = 100, backwa
     # Create a copy of the config for the downstream GM
     downstream_config = copy.deepcopy(gm.config)
     downstream_config['populate_bw_factors'] = False
+    # These derived GMs run WMB, never compute_message_nn, so they must also
+    # drop proposal_sampling: prepare_config now treats proposal_sampling=True
+    # with an explicit populate_bw_factors=False as a contradiction and raises.
+    downstream_config['proposal_sampling'] = False
 
     # Override approximation method if specified
     if approximation_method is not None:

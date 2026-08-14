@@ -24,6 +24,8 @@ import time
 import torch
 import torch.nn as nn
 
+from nce.sampling import crn as _crn
+
 
 # --------------------------------------------------------------------------- #
 # key packing
@@ -230,8 +232,23 @@ def build_memorization_table(bucket, trainer, config):
     tree = _proposal_tree_over_scope(
         bucket, gm, scope, ecl=config.get('bw_ecl', 0),
         temperature=float(config.get('proposal_temperature', 1.0)))
-    rng = torch.Generator(device=device)
-    rng.manual_seed(int(config.get('seed', 42)) * 1000003 + int(bucket.label))
+    # CRN site 1/2 -- the no-repeat sampler.
+    #
+    # Was `manual_seed(seed * 1000003 + bucket.label)`. That formula is
+    # injective, so it had no collision defect; its problem is that the BUCKET
+    # LABEL is exactly the execution artefact CRN exists to remove. Two merge
+    # strategies that build a cluster with the same separator on different key
+    # variables drew different memorization samples, so memorization arms could
+    # not be paired across strategies. `no_replacement_generator` keys the seed
+    # on the separator (scope + domain sizes) instead, under a `memo` role that
+    # is disjoint from the proposal path's `prop-nr` stream.
+    #
+    # This buys pairing, order-independence and collision-freedom, NOT the
+    # shared-prefix property: `sample_no_replacement_v3_recursive` is Gumbel
+    # top-k over an N-dependent frontier, so two runs with different
+    # `memorize_num_samples` still share nothing (see doc 56 section 2c).
+    rng = _crn.no_replacement_generator(config, scope, domain_sizes, device,
+                                        role=_crn.ROLE_MEMO)
     nr_samples, _, _ = tree.sample_no_replacement_v3_recursive(
         n_samp, M=1, rng=rng, mode='save')
     # The proposal tree does not always span the whole separator (its variables
@@ -243,18 +260,42 @@ def build_memorization_table(bucket, trainer, config):
     # and no-repeat is no longer guaranteed (duplicates are dropped below).
     missing = [v for v in scope if v not in nr_samples]
     n_rows = int(next(iter(nr_samples.values())).shape[0]) if nr_samples else n_samp
+    # CRN site 2/2 -- the uniform fill, and the easier of the two to miss.
+    #
+    # Was `torch.randint(..., generator=rng)`, i.e. drawn off the *consumed*
+    # no-repeat generator. Two defects in one: the draw depended on how many
+    # numbers the NR sampler had already pulled (so it moved with
+    # `memorize_num_samples` and with the tree's shape), and after site 1 above
+    # it would have inherited the NR stream rather than having one of its own.
+    # Here q IS uniform on the missing sub-scope, so that sub-scope determines q
+    # completely and the full counter-based stream applies -- same argument as
+    # the uniform halves of the proposal mixes (doc 56 section 2a). Keyed on the
+    # missing sub-scope, not the whole separator: it is the scope this draw is
+    # actually defined over, and if two arms' trees cover different variables
+    # then q genuinely differs and the arms are entitled to differ.
+    missing_sorted = sorted(missing)
+    fill = None
+    if missing_sorted:
+        dom_of = {int(v): int(d) for v, d in zip(scope, domain_sizes)}
+        fill = _crn.proposal_uniform(
+            config, n_rows, missing_sorted,
+            [dom_of[int(v)] for v in missing_sorted], device, _crn.DRAW_TRAIN)
     cols = []
     for v, d in zip(scope, domain_sizes):
         if v in nr_samples:
             cols.append(nr_samples[v].to(device))
         else:
-            cols.append(torch.randint(0, int(d), (n_rows,), generator=rng,
-                                      device=device))
+            cols.append(fill[:, missing_sorted.index(v)])
     assignments = torch.stack(cols, dim=1).to(device)
     t_sample = time.time() - t0
     stats['n_samples_actual'] = int(assignments.shape[0])
     stats['n_scope_vars_not_in_tree'] = len(missing)
     stats['n_scope_vars'] = len(scope)
+    # CRN audit trail. `separator` + `assignments_digest` make the pairing
+    # property checkable from any run's gm.memorization_log without re-running:
+    # two arms that share a separator must show the same digest.
+    stats['separator'] = [int(v) for v in scope]
+    stats['assignments_digest'] = _crn.assignments_digest(assignments)
 
     # ---- 2. TRUE message values at those assignments --------------------- #
     t0 = time.time()

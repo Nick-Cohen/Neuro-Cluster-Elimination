@@ -597,6 +597,35 @@ def prepare_config(config_dict, strict=False):
             )
         flat['num_epochs'] = 999_999_999  # effectively unlimited
 
+    # proposal_sampling implies populate_bw_factors.
+    #
+    # `build_proposal_for_bucket` builds the WMB proposal tree from
+    # `bucket.approximate_upstream_factors + approximate_downstream_factors`,
+    # and those two attributes are populated ONLY by the backward-factor
+    # population pass that `populate_bw_factors` gates. With the flag off both
+    # are None, the function's `if not all_factors` guard returns an EMPTY
+    # ProposalTree, and the empty samples dict then dies ~100 lines downstream
+    # as `KeyError: <first separator var>` at proposal_in_elim.py's
+    # `samples_dict[v]`. See notebooks/_August-2026/claude_experiments/
+    # 57-proposal-and-memo-crn.md.
+    #
+    # Derived, not overridden: an explicit `populate_bw_factors=False` alongside
+    # `proposal_sampling=True` is a contradiction and is rejected rather than
+    # silently flipped. This block must run BEFORE the neurobe_mode expansion,
+    # whose own `populate_bw_factors: False` default would otherwise be
+    # indistinguishable from a user's explicit False.
+    if flat.get('proposal_sampling'):
+        if 'populate_bw_factors' in flat and not flat['populate_bw_factors']:
+            raise ValueError(
+                "proposal_sampling=True requires populate_bw_factors=True: the "
+                "WMB proposal tree is built from bucket.approximate_upstream_"
+                "factors / approximate_downstream_factors, which only the "
+                "backward-factor population pass fills in. Got an explicit "
+                "populate_bw_factors=False. Remove it, or turn off "
+                "proposal_sampling."
+            )
+        flat['populate_bw_factors'] = True
+
     # neurobe_mode expansion: fill in NEUROBE_DEFAULTS for any key
     # not already set by the user. User overrides win.
     # Runs before validation so expanded defaults satisfy required-field checks.

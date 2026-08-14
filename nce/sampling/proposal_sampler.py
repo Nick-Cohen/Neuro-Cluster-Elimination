@@ -230,6 +230,10 @@ def build_proposal_tree(factors: List[FastFactor], message_scope: List[int],
     # Build a temporary FastGM for WMB elimination
     config = dict(reference_gm.config)
     config['populate_bw_factors'] = False
+    # These derived GMs run WMB, never compute_message_nn, so they must also
+    # drop proposal_sampling: prepare_config now treats proposal_sampling=True
+    # with an explicit populate_bw_factors=False as a contradiction and raises.
+    config['proposal_sampling'] = False
     config['approximation_method'] = 'wmb'
     config['ecl'] = ecl
     config['iB'] = int(math.log2(ecl)) if ecl > 0 else 0
@@ -311,20 +315,27 @@ def build_proposal_tree(factors: List[FastFactor], message_scope: List[int],
 def proposal_scope_for_bucket(bucket, reference_gm):
     """The variable scope a proposal tree for `bucket` must be built over.
 
-    Single-var buckets keep using the precomputed message_scopes cache (which is
-    keyed per eliminated variable). Merged clusters must NOT: the cache holds the
-    pre-merge, per-variable scopes. bucket.get_message_scope() is merge-correct —
-    it unions the labels of the bucket's current factors (originals plus every
-    message received so far, buckets being processed in elimination order) and
-    discards ALL of the cluster's elim vars.
+    Always `bucket.get_message_scope()`: the union of the labels of the bucket's
+    CURRENT factors (originals plus every message received so far, buckets being
+    processed in elimination order) minus all of the cluster's elim vars.
+
+    This used to special-case single-elim-var buckets and read
+    `reference_gm.message_scopes` instead. That cache is computed once by
+    `calculate_message_scopes()` at GM construction, i.e. BEFORE any merge pass
+    and before elimination has moved a single message; once a neighbour has been
+    merged, the messages actually arriving at an unmerged bucket can span
+    variables the cache never predicted, and `build_proposal_tree` then raises
+    `KeyError: <label>` on the missing domain size (measured on `dbn/rbm_20`
+    under reduce-NN: 11/11 NN clusters). Doc 10's defect-4 fix covered the
+    merged branch of this same function and left the single-var branch alone;
+    `bd44e4b` diagnosed it but repaired it only inside
+    `memorization_table._proposal_tree_over_scope`, deliberately not touching
+    the shipped `proposal_sampling` path. It is repaired here now.
 
     Exposed separately from build_proposal_for_bucket so the scope can be
     asserted without building a tree.
     """
-    elim_var_labels = {getattr(v, 'label', v) for v in bucket.elim_vars}
-    if len(elim_var_labels) > 1:
-        return bucket.get_message_scope()
-    return list(reference_gm.message_scopes.get(bucket.label, []))
+    return bucket.get_message_scope()
 
 
 def build_proposal_for_bucket(bucket, reference_gm, ecl=None, temperature=1.0):

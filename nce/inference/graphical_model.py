@@ -1987,6 +1987,10 @@ class FastGM:
 
         # Configure for population: use WMB, don't populate recursively
         pop_config['populate_bw_factors'] = False  # Prevent recursive population
+        # These derived GMs run WMB, never compute_message_nn, so they must also
+        # drop proposal_sampling: prepare_config now treats proposal_sampling=True
+        # with an explicit populate_bw_factors=False as a contradiction and raises.
+        pop_config['proposal_sampling'] = False
         pop_config['approximation_method'] = 'wmb'  # Use WMB for backward factors
         # Don't re-merge in the copy. __init__ dispatches FOUR independent merge
         # passes; disabling only use_join_tree_merge left the copy re-merging
@@ -2077,6 +2081,10 @@ class FastGM:
         bw_ecl = self.config.get('bw_ecl', 0)
         downstream_config = dict(self.config)
         downstream_config['populate_bw_factors'] = False
+        # These derived GMs run WMB, never compute_message_nn, so they must also
+        # drop proposal_sampling: prepare_config now treats proposal_sampling=True
+        # with an explicit populate_bw_factors=False as a contradiction and raises.
+        downstream_config['proposal_sampling'] = False
         downstream_config['approximation_method'] = 'wmb'
         downstream_config['ecl'] = bw_ecl
         # Don't re-merge in the temporary GM (all four merge passes)
