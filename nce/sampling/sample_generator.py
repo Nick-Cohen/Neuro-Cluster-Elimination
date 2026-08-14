@@ -7,6 +7,7 @@ from nce.inference.graphical_model import FastGM
 from nce.inference.bucket import FastBucket
 from nce.inference.factor import FastFactor
 from nce.inference.message_gradient_factors import get_wmb_message_gradient_factors
+from nce.sampling import crn
 from nce.utils import gamma_trace
 import copy
 
@@ -80,10 +81,13 @@ class SampleGenerator:
         # its stream key.
         self._last_draw_index = 0
 
-        # Common random numbers (see nce/sampling/crn.py). OFF by default: it
-        # changes which assignments are drawn, so switching it on moves every
-        # number in the pipeline. Turn it on for the paired strategy comparison.
-        self.use_crn = bool(self.config.get('common_random_numbers', False))
+        # Common random numbers (see nce/sampling/crn.py). ON by default since
+        # 2026-08-14: the corrected reruns are paired strategy comparisons, and
+        # the pre-CRN sample-count data they supersede is not something new runs
+        # need to be bit-comparable with. Set common_random_numbers=False to get
+        # the legacy global-RNG sampler back (its numbers still will not match
+        # anything published, because the seed derivation changed too).
+        self.use_crn = bool(self.config.get('common_random_numbers', True))
 
     def reset_sample_counters(self):
         """Reset sampling counters to reproduce the same samples.
@@ -96,25 +100,39 @@ class SampleGenerator:
         self._validation_sample_counter = 0
 
     def _compute_seed(self, is_validation: bool = False) -> int:
-        """Compute deterministic seed based on bucket_id + global_seed + counter.
+        """Deterministic per-(bucket, role, draw) seed for the GLOBAL torch/numpy RNG.
 
-        The seed formula is:
-            seed = bucket_label + global_seed * 10000 + counter * 100 + validation_offset
+        WHAT IT SEEDS. Under CRN this no longer feeds the separator assignments
+        (those come from `nce.sampling.crn`, which touches no global state). It
+        is still what pins the global RNG at the start of every bucket's data
+        load, and therefore what makes NN weight init and batch shuffling
+        reproducible -- so it MUST stay keyed on the bucket, which is the thing
+        whose network is being initialised.
 
-        This ensures:
-        - Different buckets get different seeds
-        - Different global seeds give different results
-        - Multiple sampling calls get different but reproducible samples
-        - Training and validation samples are different
+        WHY IT IS A DIGEST AND NOT ARITHMETIC. The old formula was
+        `bucket_label + 10000*seed + 100*counter + 50000000*is_validation`,
+        which is NOT injective: `145 + 100*0 == 45 + 100*1`, so bucket 145's
+        draw 0 and bucket 45's draw 1 shared a stream. Any model with more than
+        100 variables reaches it (pedigree1 has 334); MEASURED in doc 46's
+        appendix on 173 of 519 study cells, 63 of the colliding pairs
+        byte-identical. `crn.derive_seed` is field-tagged, so no carry between
+        fields can bring two different (label, draw) pairs together --
+        exhaustively verified over the pedigree-scale domain in
+        `tests/test_common_random_numbers.py`.
+
+        The non-int bucket-label branch also used `hash(str(...))`, which is
+        salted per process by PYTHONHASHSEED and so was not reproducible across
+        runs at all. It now goes through the same digest.
 
         Args:
-            is_validation: If True, add offset to separate from training samples
+            is_validation: If True, the draw is on the validation counter and
+                gets a disjoint stream from the training draws.
 
         Returns:
-            Integer seed value
+            Integer seed in [0, 2**63).
         """
-        bucket_id = self.bucket.label if isinstance(self.bucket.label, int) else hash(str(self.bucket.label)) % 10000
-        validation_offset = 50000000 if is_validation else 0
+        label = self.bucket.label
+        bucket_id = int(label) if isinstance(label, int) else str(label)
 
         if is_validation:
             counter = self._validation_sample_counter
@@ -124,8 +142,9 @@ class SampleGenerator:
             self._training_sample_counter += 1
 
         self._last_draw_index = counter
-        seed = bucket_id + self.random_seed * 10000 + counter * 100 + validation_offset
-        return seed
+        return crn.derive_seed(
+            'sample-generator', run_seed=self.random_seed, bucket=bucket_id,
+            role='val' if is_validation else 'train', draw=counter)
 
     def _set_seed(self, seed: int):
         """Set random seed for both CPU and GPU.

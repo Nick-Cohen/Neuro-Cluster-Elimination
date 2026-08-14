@@ -35,16 +35,31 @@ working, are:
       Legacy puts the bucket label and the draw counter INTO the seed. This is
       the mechanism by which the accidental pairing above would break the first
       time a merge strategy moves a separator to a different key variable.
-  test_legacy_seed_formula_collides_across_buckets
-      `bucket_label + 100*draw_index` is not injective: bucket 145 draw 0 and
-      bucket 45 draw 1 get the SAME seed, so two different separators share a
-      stream. Any problem with more than 100 variables can hit this.
+  test_seed_derivation_is_collision_free_on_the_legacy_collisions
+  test_derive_seed_has_no_collisions_over_the_pedigree_domain
+      `bucket_label + 100*draw_index` was not injective: bucket 145 draw 0 and
+      bucket 45 draw 1 got the SAME seed, so two different separators shared a
+      stream. Any problem with more than 100 variables can hit it (pedigree1 has
+      334). `test_the_legacy_seed_formula_did_collide` keeps the old formula as
+      a reference so the regression cannot become vacuous.
   test_marginals_are_uniform
       A stream of zeros would satisfy every equality assertion in this file.
+
+2026-08-14 -- CRN IS NOW DEFAULT-ON, AND THE PROPOSAL PATH IS COVERED
+---------------------------------------------------------------------
+Section 5 covers the proposal / importance-sampling arms, which doc 46 left
+out. See notebooks/_August-2026/claude_experiments/56-crn-complete.md. The
+discriminating tests there are `test_proposal_uniform_half_is_paired_across_
+merge_arms` (asserts the legacy torch.randint half fails the same check),
+`test_proposal_tree_crn_is_independent_of_the_global_rng` (asserts the
+multinomial path is not), and `test_proposal_tree_crn_samples_the_right_
+distribution` (a deterministic stream that samples the WRONG q would pass every
+equality assertion in section 5).
 """
 import contextlib
 import io
 import math
+import os
 
 import pytest
 import torch
@@ -93,7 +108,7 @@ def _run_arm(arm, use_crn, num_samples):
     cfg = prepare_config(dict(BASE, common_random_numbers=use_crn,
                               num_samples=num_samples, **ARMS[arm]), strict=False)
     out = {}
-    labels = {}
+    meta = {}
     original = SampleGenerator.sample_assignments
 
     def patched(self, num_samples=-1, sampling_scheme=None, is_validation=False):
@@ -102,7 +117,7 @@ def _run_arm(arm, use_crn, num_samples):
                self._last_draw_index)
         assert key not in out, 'duplicate draw key %r -- the recorder is wrong' % (key,)
         out[key] = res.detach().to('cpu').clone()
-        labels[key] = self.bucket.label
+        meta[key] = (self.bucket.label, tuple(int(d) for d in self.domain_sizes))
         return res
 
     SampleGenerator.sample_assignments = patched
@@ -112,13 +127,31 @@ def _run_arm(arm, use_crn, num_samples):
             gm.eliminate_variables(all=True)
     finally:
         SampleGenerator.sample_assignments = original
-    return out, labels
+    return out, meta
 
 
 @pytest.fixture(scope='module')
-def arm_draws():
+def arm_runs():
     """Every arm, CRN on, 256 samples. Cached: each run is a few seconds."""
-    return {arm: _run_arm(arm, use_crn=True, num_samples=256)[0] for arm in ARMS}
+    return {arm: _run_arm(arm, use_crn=True, num_samples=256) for arm in ARMS}
+
+
+@pytest.fixture(scope='module')
+def arm_draws(arm_runs):
+    return {arm: run[0] for arm, run in arm_runs.items()}
+
+
+@pytest.fixture(scope='module')
+def arm_meta(arm_runs):
+    """{arm: {separator_tuple: domain_sizes_tuple}} from the real eliminations.
+
+    Used by the proposal tests so that they run against separators the merge
+    arms ACTUALLY produce, rather than against hand-written scopes.
+    """
+    res = {}
+    for arm, (_, meta) in arm_runs.items():
+        res[arm] = {key[0]: doms for key, (_, doms) in meta.items()}
+    return res
 
 
 # ---------------------------------------------------------------------------
@@ -329,20 +362,45 @@ def test_stream_ignores_bucket_label_and_draw_index():
         'stopped being true, re-derive the non-vacuity argument.')
 
 
-def test_legacy_seed_formula_collides_across_buckets():
-    """`bucket_label + 100*draw_index` is not injective.
+def _legacy_compute_seed(bucket_label, run_seed, draw, is_validation=False):
+    """The seed formula this branch REMOVED, kept as a reference.
 
-    Bucket 145 draw 0 and bucket 45 draw 1 collide, so under the legacy scheme
-    two DIFFERENT separators are sampled from the same stream. Any model with
-    more than 100 variables can hit this (pedigree1 has 334). CRN keys on the
-    separator itself, so the same pair must not collide.
+    `bucket_label + 10000*run_seed + 100*draw + 50000000*is_validation`
+    (`SampleGenerator._compute_seed` up to 2026-08-14). Reproduced here rather
+    than imported, because the point of the tests below is that no code path
+    computes it any more.
+    """
+    return (int(bucket_label) + 10000 * int(run_seed) + 100 * int(draw)
+            + (50000000 if is_validation else 0))
+
+
+def test_the_legacy_seed_formula_did_collide():
+    """Non-vacuity anchor for the two tests below.
+
+    If this ever stops holding, the "collision-free" claim is being tested
+    against a defect that was never there, and the surrounding argument (doc 46
+    appendix: 173 of 519 study cells, 63 byte-identical pairs) needs revisiting.
+    """
+    assert _legacy_compute_seed(145, SEED, 0) == _legacy_compute_seed(45, SEED, 1)
+    assert _legacy_compute_seed(127, SEED, 2) == _legacy_compute_seed(327, SEED, 0)
+    # ... and across run seeds, which the appendix did not call out:
+    assert _legacy_compute_seed(0, 1, 0) == _legacy_compute_seed(0, 0, 100)
+
+
+def test_seed_derivation_is_collision_free_on_the_legacy_collisions():
+    """The pairs that used to share a stream must not share one now.
+
+    `bucket_label + 100*draw_index` is not injective, so under the legacy scheme
+    two DIFFERENT separators were sampled from the same stream. Any model with
+    more than 100 variables reaches it (pedigree1 has 334).
     """
     hi = _generator(145, SCOPE, DOMS, use_crn=False)
     lo = _generator(45, [8, 3, 20, 6], DOMS, use_crn=False)
     lo._compute_seed()                        # burn draw 0 -> next draw is 1
-    assert hi._compute_seed() == lo._compute_seed(), (
-        'the legacy collision this test documents no longer exists; the seed '
-        'formula changed and the surrounding argument needs revisiting.')
+    s_hi, s_lo = hi._compute_seed(), lo._compute_seed()
+    assert s_hi != s_lo, (
+        'bucket 145 draw 0 and bucket 45 draw 1 still share a global-RNG seed '
+        '(%d). The collision-free derivation is not in force.' % s_hi)
 
     hi_c = _generator(145, SCOPE, DOMS, use_crn=True).sample_assignments(500)
     lo_c = _generator(45, [8, 3, 20, 6], DOMS, use_crn=True).sample_assignments(500)
@@ -351,42 +409,95 @@ def test_legacy_seed_formula_collides_across_buckets():
         'discriminating.')
 
 
-def test_legacy_seed_collision_yields_byte_identical_assignments():
-    """The collision is not just equal seeds -- it is equal DATA.
+def test_the_collision_no_longer_yields_byte_identical_assignments():
+    """The old collision was not just equal seeds -- it was equal DATA.
 
     MEASURED in the study cell audit (doc 46 appendix): on grid20x20 at iB=10,
     cluster 127's draw 2 and cluster 327's draw 0 are separators of equal width
-    over binary variables, so the nbe formula gives them the same row count and
-    the shared seed makes their 16640x17 assignment matrices byte-identical.
-    Reproduced here in miniature with the real SampleGenerator: two DIFFERENT
-    separators, labels 200 apart, draw 2 against draw 0.
+    over binary variables, so the nbe formula gave them the same row count and
+    the shared seed made their 16640x17 assignment matrices byte-identical.
+    Reproduced here in miniature: two DIFFERENT separators, labels 200 apart,
+    draw 2 against draw 0.
 
-    Consequence, traced rather than assumed (doc 46 appendix section 3): draw 0
-    is `init_batches`, used only to initialise the normalisation constants and
-    then discarded; draw 2 is the training set. draw2-vs-draw2 collisions are
-    arithmetically impossible (they would need equal labels), so no cluster is
-    ever trained twice on the same set, and no cluster is trained on another's
-    training set.
+    Both halves must now differ -- the CRN path because the separator is the
+    key, and the LEGACY path (crn off) because `_compute_seed` is a field-tagged
+    digest instead of a sum of scaled integers.
     """
     scope_a, scope_b = [1, 4, 9, 12], [2, 5, 10, 13]
     doms = [2, 2, 2, 2]
-    a = _generator(127, scope_a, doms, use_crn=False)
-    for _ in range(2):
-        a._compute_seed()                     # advance to draw 2
-    b = _generator(327, scope_b, doms, use_crn=False)
-    xa = a.sample_assignments(4096)
-    xb = b.sample_assignments(4096)
-    assert torch.equal(xa, xb), (
-        'the legacy seed collision no longer produces identical data. If the '
-        'seed formula changed, the doc 46 appendix needs re-measuring.')
+    assert _legacy_compute_seed(127, SEED, 2) == _legacy_compute_seed(327, SEED, 0), \
+        'the collision being regressed is not the one the appendix measured'
 
-    ca = _generator(127, scope_a, doms, use_crn=True)
-    for _ in range(2):
-        ca._compute_seed()
-    cb = _generator(327, scope_b, doms, use_crn=True)
-    assert not torch.equal(ca.sample_assignments(4096), cb.sample_assignments(4096)), (
-        'CRN reproduced the collision -- two different separators must not '
-        'share a stream.')
+    for use_crn in (False, True):
+        a = _generator(127, scope_a, doms, use_crn=use_crn)
+        for _ in range(2):
+            a._compute_seed()                 # advance to draw 2
+        b = _generator(327, scope_b, doms, use_crn=use_crn)
+        assert not torch.equal(a.sample_assignments(4096),
+                               b.sample_assignments(4096)), (
+            'crn=%s: two different separators still drew byte-identical '
+            'assignments.' % use_crn)
+
+
+def test_derive_seed_has_no_collisions_over_the_pedigree_domain():
+    """Exhaustive over the label/draw range the old formula broke on.
+
+    The legacy formula collided for any two clusters whose labels differ by a
+    multiple of 100 and whose draw indices differ correspondingly -- reachable
+    on every problem with more than 100 variables, and pedigree1 has 334. This
+    enumerates the whole (run seed, label, role, draw) grid over that range and
+    demands 2 * 8 * 400 * 8 = 51200 distinct seeds.
+
+    `derive_seed` is a truncated SHA-256, so it is collision-free by measurement
+    over the domain that matters, not injective by construction; the expected
+    number of collisions at this size is 51200**2 / 2**64 ~ 1.4e-10.
+    """
+    seen = {}
+    for run_seed in range(8):
+        for label in range(400):              # pedigree1 has 334 variables
+            for draw in range(8):
+                for role in ('train', 'val'):
+                    s = crn.derive_seed('sample-generator', run_seed=run_seed,
+                                        bucket=label, role=role, draw=draw)
+                    assert 0 <= s < 2 ** 63
+                    prev = seen.setdefault(s, (run_seed, label, role, draw))
+                    assert prev == (run_seed, label, role, draw), (
+                        'derive_seed collision: %r and %r both give %d'
+                        % (prev, (run_seed, label, role, draw), s))
+    assert len(seen) == 8 * 400 * 8 * 2
+
+    # The same grid under the legacy formula, to show the test has teeth.
+    legacy = set()
+    for run_seed in range(8):
+        for label in range(400):
+            for draw in range(8):
+                legacy.add(_legacy_compute_seed(label, run_seed, draw))
+    assert len(legacy) < 8 * 400 * 8, (
+        'the legacy formula was injective on this grid, so the exhaustive check '
+        'above proves nothing about the defect it replaced.')
+
+
+def test_seed_derivation_does_not_depend_on_pythonhashseed():
+    """Non-int bucket labels used to go through `hash(str(label)) % 10000`.
+
+    Python salts `hash` on str per process, so that branch was not reproducible
+    across runs AT ALL -- a silent nondeterminism the collision audit did not
+    cover. The digest is stable by construction; this pins it against a literal.
+    """
+    import subprocess
+    import sys
+    prog = ('import os,sys;sys.path.insert(0,%r);'
+            'from nce.sampling import crn;'
+            'print(crn.derive_seed("sample-generator", run_seed=42, '
+            'bucket="cluster-a", role="train", draw=0))'
+            % str(__import__("pathlib").Path(__file__).resolve().parents[1]))
+    outs = set()
+    for salt in ('0', '1', '12345'):
+        env = dict(os.environ, PYTHONHASHSEED=salt)
+        outs.add(subprocess.run([sys.executable, '-c', prog], env=env,
+                                capture_output=True, text=True,
+                                check=True).stdout.strip())
+    assert len(outs) == 1, 'seed derivation varies with PYTHONHASHSEED: %r' % outs
 
 
 def test_crn_off_leaves_the_legacy_path_untouched():
@@ -483,8 +594,392 @@ def test_larger_draw_extends_smaller_draw_in_pipeline():
         'vacuous. Investigate before trusting it.')
 
 
-def test_crn_flag_defaults_off():
-    """A silent default change would move every number in the project."""
+def test_crn_flag_defaults_on():
+    """Default flipped to True on 2026-08-14 (Nick's directive).
+
+    It moves every number in the project, which is why the determinism goldens
+    were regenerated in the same commit rather than bypassed. If this assertion
+    ever flips back, the goldens are wrong too.
+    """
     cfg = prepare_config(dict(BASE, num_samples=256, **ARMS['rnn4']), strict=False)
-    assert cfg['common_random_numbers'] is False
+    assert cfg['common_random_numbers'] is True
     assert cfg['deterministic_guard'] is False
+    # An explicit False must still be honoured: the flag is not a no-op.
+    off = prepare_config(dict(BASE, num_samples=256, common_random_numbers=False,
+                              **ARMS['rnn4']), strict=False)
+    assert off['common_random_numbers'] is False
+
+
+def test_the_default_actually_reaches_the_sampler():
+    """A default that the SampleGenerator's own `.get(..., False)` overrides
+    would be a config-only change. Pin both ends."""
+    cfg = {'sampling_scheme': 'uniform', 'num_samples': 256}   # no CRN key at all
+    doms = dict(zip(SCOPE, DOMS))
+    doms[999] = 2
+    gm = _FakeGM(cfg, doms)
+    g = SampleGenerator(gm=gm, bucket=_FakeBucket(11, SCOPE, 999), random_seed=SEED)
+    assert g.use_crn is True
+    assert torch.equal(g.sample_assignments(64),
+                       crn.uniform_assignments(64, **KW)[:64])
+
+
+# ---------------------------------------------------------------------------
+# 5. The proposal path
+#
+# Nick's condition, 2026-08-14: "same seed + same merge structure/strategy +
+# same relevant sampling configuration should produce the same sampled
+# assignments across arms. If proposal hyperparameters genuinely change the
+# proposal distribution, different samples are fine."
+#
+# So the key must contain what genuinely determines q and nothing else. The
+# three mechanisms get three different treatments, argued in
+# notebooks/_August-2026/claude_experiments/56-crn-complete.md:
+#   uniform half   q is uniform on the separator  -> full CRN.
+#   WMB tree half  q is the proposal tree         -> inverse CDF off a shared
+#                                                    uniform; identical q gives
+#                                                    identical samples, different
+#                                                    q gives coupled ones.
+#   no-replacement Gumbel-top-k, stateful         -> separator-keyed generator
+#                                                    seed; no prefix property.
+# ---------------------------------------------------------------------------
+PROP_CFG = dict(seed=SEED, common_random_numbers=True)
+PROP_CFG_OFF = dict(seed=SEED, common_random_numbers=False)
+
+
+def _burn_global_rng(seed, n):
+    """Put the global torch RNG in an arbitrary state.
+
+    Stands in for "this cluster was reached after k other clusters had already
+    drawn", which is exactly what differs between two merge arms.
+    """
+    torch.manual_seed(seed)
+    torch.rand(n)
+
+
+def _shared_separators(arm_meta, a, b):
+    return sorted(set(arm_meta[a]) & set(arm_meta[b]))
+
+
+def test_proposal_arms_actually_share_separators(arm_meta):
+    """Non-vacuity guard for the proposal pairing tests below."""
+    for x, y in [('nomerge', 'rnn4'), ('nomerge', 'jt4')]:
+        assert _shared_separators(arm_meta, x, y), (
+            'arms %s and %s share no separator, so the proposal pairing tests '
+            'iterate nothing.' % (x, y))
+
+
+def test_proposal_uniform_half_is_paired_across_merge_arms(arm_meta):
+    """The motivating case, on the separators the arms really produce.
+
+    Two merge strategies, same problem, same seed, a shared separator: the
+    uniform half of a mixed proposal draw must be byte-identical AND in the same
+    order. The two arms reach `crn.proposal_uniform` at different points in
+    their elimination, so the global RNG state differs; that is simulated here
+    by burning the global stream differently before each call.
+
+    The second half asserts the LEGACY path (`common_random_numbers=False`,
+    which is the bare per-column `torch.randint` the call sites used to inline)
+    fails exactly this, so the test cannot pass by both paths being equally good.
+    """
+    checked = 0
+    legacy_violations = 0
+    for x, y in [('nomerge', 'rnn4'), ('nomerge', 'jt4')]:
+        for sep in _shared_separators(arm_meta, x, y):
+            doms = arm_meta[x][sep]
+            assert doms == arm_meta[y][sep], (
+                'same separator with different domain sizes in %s and %s: %r vs %r'
+                % (x, y, doms, arm_meta[y][sep]))
+            _burn_global_rng(1, 1234)
+            a = crn.proposal_uniform(PROP_CFG, 512, list(sep), list(doms), 'cpu')
+            _burn_global_rng(9, 7)
+            b = crn.proposal_uniform(PROP_CFG, 512, list(sep), list(doms), 'cpu')
+            assert a.shape == (512, len(sep))
+            assert torch.equal(a, b), (
+                'arms %s and %s drew DIFFERENT uniform halves for the shared '
+                'separator %r. digests %s vs %s'
+                % (x, y, sep, crn.assignments_digest(a), crn.assignments_digest(b)))
+            checked += 1
+
+            _burn_global_rng(1, 1234)
+            la = crn.proposal_uniform(PROP_CFG_OFF, 512, list(sep), list(doms), 'cpu')
+            _burn_global_rng(9, 7)
+            lb = crn.proposal_uniform(PROP_CFG_OFF, 512, list(sep), list(doms), 'cpu')
+            legacy_violations += int(not torch.equal(la, lb))
+    assert checked, 'no shared separator was checked'
+    assert legacy_violations == checked, (
+        'the legacy torch.randint half paired too (%d of %d), so the assertions '
+        'above do not discriminate.' % (legacy_violations, checked))
+
+
+def test_proposal_uniform_half_is_prefix_closed(arm_meta):
+    """Arms with different sample counts must share a prefix, not diverge."""
+    grew = 0
+    for sep, doms in sorted(arm_meta['rnn4'].items())[:6]:
+        small = crn.proposal_uniform(PROP_CFG, 300, list(sep), list(doms), 'cpu')
+        large = crn.proposal_uniform(PROP_CFG, 1700, list(sep), list(doms), 'cpu')
+        assert torch.equal(large[:300], small), (
+            'separator %r: the 300-row proposal uniform half is not a prefix of '
+            'the 1700-row one.' % (sep,))
+        grew += 1
+    assert grew, 'no separator was exercised'
+
+
+def test_proposal_uniform_and_separator_streams_are_disjoint(arm_meta):
+    """The proposal role must not reuse the training role's stream.
+
+    They are different sampling schemes over the same separator; sharing the
+    stream would silently correlate a proposal arm's uniform half with a
+    uniform-scheme arm's training set, which is not a pairing anyone asked for.
+    """
+    sep, doms = sorted(arm_meta['rnn4'].items())[0]
+    prop = crn.proposal_uniform(PROP_CFG, 2000, list(sep), list(doms), 'cpu')
+    train = crn.uniform_assignments(2000, list(sep), list(doms), SEED,
+                                    crn.ROLE_TRAIN, crn.DRAW_TRAIN)
+    assert not torch.equal(prop, train)
+
+
+def test_correction_draw_does_not_collide_with_another_run_seed(arm_meta):
+    """`seed + 1` for the correction draw was a cross-run collision.
+
+    The old code seeded the correction no-replacement generator with
+    `int(config['seed']) + 1`, so run 42's CORRECTION draw was run 43's TRAINING
+    draw. Draw indices replace seed arithmetic; this pins that they do not
+    collapse back onto each other.
+    """
+    sep, doms = sorted(arm_meta['rnn4'].items())[0]
+    sep, doms = list(sep), list(doms)
+    train_42 = crn.stream_seed(42, sep, doms, crn.ROLE_PROP_NR, crn.DRAW_TRAIN)
+    corr_42 = crn.stream_seed(42, sep, doms, crn.ROLE_PROP_NR, crn.DRAW_CORRECTION)
+    train_43 = crn.stream_seed(43, sep, doms, crn.ROLE_PROP_NR, crn.DRAW_TRAIN)
+    assert len({train_42, corr_42, train_43}) == 3, (
+        'the correction draw shares a stream with a training draw: %r'
+        % [train_42, corr_42, train_43])
+    # ... whereas the formula it replaced collapsed two of the three.
+    assert (42 + 1) == 43, 'the legacy defect being regressed is seed + 1'
+
+    u_train = crn.proposal_uniform(PROP_CFG, 500, sep, doms, 'cpu', crn.DRAW_TRAIN)
+    u_corr = crn.proposal_uniform(PROP_CFG, 500, sep, doms, 'cpu', crn.DRAW_CORRECTION)
+    assert not torch.equal(u_train, u_corr), (
+        'the correction uniform half is the training uniform half')
+
+
+def test_no_replacement_generator_is_separator_keyed(arm_meta):
+    """Every bucket used to share ONE no-replacement stream (`manual_seed(seed)`).
+
+    That is the opposite defect from a collision-prone formula and just as bad:
+    perfectly correlated Monte-Carlo error across clusters. The generator seed
+    must now be a function of the separator.
+    """
+    pooled = {}
+    for arm in arm_meta:
+        pooled.update(arm_meta[arm])
+    seps = sorted(pooled.items())
+    assert len(seps) >= 2, 'need two separators to compare'
+    seeds = set()
+    for sep, doms in seps:
+        g = crn.no_replacement_generator(PROP_CFG, list(sep), list(doms), 'cpu')
+        seeds.add(int(g.initial_seed()))
+    assert len(seeds) == len(seps), (
+        'two different separators got the same no-replacement generator seed')
+
+    # Same separator, whatever the global RNG has been doing: same seed.
+    sep, doms = seps[0]
+    _burn_global_rng(3, 999)
+    s1 = crn.no_replacement_generator(PROP_CFG, list(sep), list(doms), 'cpu').initial_seed()
+    _burn_global_rng(77, 4)
+    s2 = crn.no_replacement_generator(PROP_CFG, list(sep), list(doms), 'cpu').initial_seed()
+    assert s1 == s2
+    # ... and it is NOT the run seed, which is what the old code used.
+    assert int(s1) != SEED
+
+
+def test_the_proposal_call_sites_do_not_reintroduce_a_bare_rng():
+    """Source guard: the mechanism only works if the call sites go through it.
+
+    A future edit that inlines `torch.randint` or `manual_seed(int(seed))` back
+    into the proposal sampling blocks would silently un-pair those arms while
+    every behavioural test above still passed, because those tests exercise the
+    helpers rather than the call sites.
+    """
+    import pathlib
+    import re
+    root = pathlib.Path(__file__).resolve().parents[1]
+    banned = [
+        (re.compile(r'torch\.randint\(0,\s*d,'), 'inline per-column uniform draw'),
+        (re.compile(r"manual_seed\(int\(config\.get\('seed'"), 'run seed as an RNG seed'),
+        (re.compile(r'manual_seed\(int\(seed\)\)'), 'run seed as an RNG seed'),
+        (re.compile(r'manual_seed\(int\(bucket\.label\)'), 'bucket label as an RNG seed'),
+    ]
+    hits = []
+    for rel in ('nce/benchmark/training.py', 'nce/benchmark/proposal_in_elim.py'):
+        text = (root / rel).read_text()
+        for lineno, line in enumerate(text.splitlines(), 1):
+            if 'crn-seed-ok:' in line:
+                continue
+            for pat, why in banned:
+                if pat.search(line):
+                    hits.append('%s:%d %s -- %s' % (rel, lineno, line.strip(), why))
+    assert not hits, (
+        'the proposal path grew a sampling site that bypasses nce/sampling/crn.py:\n  '
+        + '\n  '.join(hits))
+
+
+# ---------------------------------------------------------------------------
+# 5b. ProposalTree.sample under CRN -- the inverse-CDF mechanism itself
+# ---------------------------------------------------------------------------
+def _toy_tensors(scale=1.0, seed=0):
+    """log10 potentials for the toy proposal tree. One source for the sampler
+    and for the brute-force reference, so the two cannot drift apart."""
+    g = torch.Generator().manual_seed(seed)
+    t12 = torch.rand((4,), generator=g) * scale
+    t9 = torch.rand((2, 4), generator=g) * scale
+    t5 = torch.rand((3, 2), generator=g) * scale
+    return t5, t9, t12
+
+
+def _toy_tree(device='cpu', scale=1.0, seed=0):
+    """A 3-variable proposal tree with a genuinely non-uniform, correlated q.
+
+    Built from real `FastFactor`s and real `BucketRecord`s so `sample()` runs
+    its actual conditioning code, not a mock. Levels are in ELIMINATION order,
+    and `sample()` traverses them in reverse, so level k's factors may only
+    mention variables from levels >= k.
+    """
+    from nce.inference.factor import FastFactor
+    from nce.sampling.proposal_sampler import BucketRecord, ProposalTree
+    t5, t9, t12 = _toy_tensors(scale, seed)
+    return ProposalTree([BucketRecord(5, 3, [FastFactor(t5.clone(), [5, 9])]),
+                         BucketRecord(9, 2, [FastFactor(t9.clone(), [9, 12])]),
+                         BucketRecord(12, 4, [FastFactor(t12.clone(), [12])])],
+                        device)
+
+
+def _toy_exact_q(scale=1.0, seed=0):
+    """q over the 3*2*4 = 24 joint states, by brute force.
+
+    The tree normalises LEVEL BY LEVEL, so q factorises as
+    q(x12) q(x9 | x12) q(x5 | x9) with each conditional the normalised local
+    potential -- NOT the joint normalisation of the product, which would be a
+    different distribution.
+    """
+    t5, t9, t12 = _toy_tensors(scale, seed)
+    ln = math.log(10)
+
+    def norm(t, dim):
+        e = (t.double() * ln).exp()
+        return e / e.sum(dim=dim, keepdim=True)
+
+    p12 = norm(t12, 0)                    # (4,)
+    p9 = norm(t9, 0)                      # (2, 4), normalised over x9 | x12
+    p5 = norm(t5, 0)                      # (3, 2), normalised over x5 | x9
+    q = p5[:, :, None] * p9[None, :, :] * p12[None, None, :]
+    assert abs(float(q.sum()) - 1.0) < 1e-9
+    return q
+
+
+TOY_KEY = crn.stream_key(SEED, [5, 9, 12], [3, 2, 4], crn.ROLE_PROP_TREE, 0)
+
+
+def test_proposal_tree_crn_is_independent_of_the_global_rng():
+    tree = _toy_tree()
+    _burn_global_rng(5, 1000)
+    a, lpa = tree.sample(3000, crn_key=TOY_KEY)
+    _burn_global_rng(11, 3)
+    b, lpb = tree.sample(3000, crn_key=TOY_KEY)
+    assert all(torch.equal(a[v], b[v]) for v in a)
+    assert torch.equal(lpa, lpb)
+
+    # The multinomial path does depend on it -- otherwise the assertion above
+    # would hold for reasons unrelated to CRN.
+    _burn_global_rng(5, 1000)
+    m1, _ = tree.sample(3000)
+    _burn_global_rng(11, 3)
+    m2, _ = tree.sample(3000)
+    assert any(not torch.equal(m1[v], m2[v]) for v in m1), (
+        'torch.multinomial gave the same samples from two different global RNG '
+        'states, so this test does not discriminate CRN from the legacy path.')
+
+
+def test_proposal_tree_crn_is_prefix_closed():
+    tree = _toy_tree()
+    small, _ = tree.sample(700, crn_key=TOY_KEY)
+    large, _ = tree.sample(5000, crn_key=TOY_KEY)
+    for v in small:
+        assert torch.equal(large[v][:700], small[v]), (
+            'variable %d: the 700-row proposal draw is not a prefix of the '
+            '5000-row one' % v)
+
+
+def test_proposal_tree_column_is_keyed_on_the_variable_not_the_depth():
+    """A variable at a different depth in two arms' trees must draw the same column."""
+    u_alone = crn.uniform01(50, [9], TOY_KEY)
+    u_first = crn.uniform01(50, [9, 12], TOY_KEY)
+    u_second = crn.uniform01(50, [12, 9], TOY_KEY)
+    assert torch.equal(u_alone[:, 0], u_first[:, 0])
+    assert torch.equal(u_alone[:, 0], u_second[:, 1])
+    assert not torch.equal(u_first[:, 0], u_first[:, 1])
+
+
+def test_proposal_tree_crn_samples_the_right_distribution():
+    """The inverse CDF must reproduce q, not merely be deterministic.
+
+    A `searchsorted` off by one, or a CDF built on the wrong axis, would pass
+    every equality test above and silently sample the wrong proposal -- which
+    biases nothing (the IS weights use the reported log q) but destroys the
+    variance reduction the proposal exists for. Chi-square over all 24 joint
+    states against the brute-force q, at the 1e-6 upper tail for df = 23
+    (~68.0), and the same check on the multinomial path as a control.
+    """
+    n = 200000
+    q = _toy_exact_q().reshape(-1)
+    tree = _toy_tree()
+    for label, kw in (('crn', dict(crn_key=TOY_KEY)), ('multinomial', {})):
+        s, _ = tree.sample(n, **kw)
+        flat = s[5] * 8 + s[9] * 4 + s[12]
+        counts = torch.bincount(flat, minlength=24).double()
+        expected = q * n
+        chi2 = float(((counts - expected) ** 2 / expected).sum())
+        assert chi2 < 68.0, (
+            '%s path does not sample the proposal distribution: chi2 %.1f over '
+            '24 states\n counts  %r\n expected %r'
+            % (label, chi2, counts.tolist(), [round(float(e), 1) for e in expected]))
+
+
+def test_proposal_tree_reports_the_log_prob_of_what_it_sampled():
+    """log q must belong to the row that was drawn -- the IS weight depends on it."""
+    tree = _toy_tree()
+    s, lp = tree.sample(4000, crn_key=TOY_KEY)
+    q = _toy_exact_q()
+    want = torch.log10(q[s[5], s[9], s[12]].double())
+    assert torch.allclose(lp.double(), want, atol=1e-4), (
+        'reported log10 q does not match the brute-force joint probability of '
+        'the sampled state; max err %.3e'
+        % float((lp.double() - want).abs().max()))
+
+
+def test_a_different_proposal_gives_different_but_coupled_samples():
+    """The requirement's carve-out, measured.
+
+    "If proposal hyperparameters genuinely change the proposal distribution,
+    different samples are fine." They do differ -- but under a shared uniform
+    they are far MORE likely to coincide than two independent draws would be,
+    which is the whole point of driving the tree by inverse CDF instead of
+    re-seeding a generator. The independence baseline is sum_x q1(x) q2(x),
+    computed exactly, not estimated.
+    """
+    n = 40000
+    a, _ = _toy_tree(scale=1.0).sample(n, crn_key=TOY_KEY)
+    b, _ = _toy_tree(scale=2.5).sample(n, crn_key=TOY_KEY)
+    agree = torch.stack([a[v] == b[v] for v in (5, 9, 12)]).all(dim=0)
+    frac = float(agree.double().mean())
+
+    q1 = _toy_exact_q(scale=1.0).reshape(-1)
+    q2 = _toy_exact_q(scale=2.5).reshape(-1)
+    baseline = float((q1 * q2).sum())
+
+    assert frac < 1.0, (
+        'the two proposals produced identical samples, so `scale` did not '
+        'change q and this test measures nothing')
+    assert frac > baseline + 0.05, (
+        'shared-uniform coupling bought nothing: agreement %.3f vs independent '
+        'baseline %.3f' % (frac, baseline))

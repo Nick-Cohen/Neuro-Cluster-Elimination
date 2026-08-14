@@ -78,6 +78,24 @@ _MUL1 = _signed(0xBF58476D1CE4E5B9)
 _MUL2 = _signed(0x94D049BB133111EB)
 
 STREAM_VERSION = 'nce-crn-v1'
+SEED_VERSION = 'nce-seed-v1'
+
+# Role tags. Kept as named constants because they are part of the stream
+# identity: renaming one silently re-rolls every assignment drawn under it.
+ROLE_TRAIN = 'train'            # sampling_scheme='uniform', training draw
+ROLE_VAL = 'val'                # sampling_scheme='uniform', validation draw
+ROLE_PROP_UNIFORM = 'prop-uniform'   # the uniform half of a mixed proposal
+ROLE_PROP_TREE = 'prop-tree'         # the WMB-proposal half (inverse CDF)
+ROLE_PROP_NR = 'prop-nr'             # the no-replacement half (generator seed)
+ROLE_MEMO = 'memo'                   # build_memorization_table's NR sampler
+
+# Draw indices for the proposal path. The training draw and the (optional)
+# correction draw are two draws of the SAME role, separated by this index --
+# never by perturbing the seed (`seed + 1`), which is the collision-prone
+# family this branch removes: run seed 42's correction draw and run seed 43's
+# training draw would share a stream.
+DRAW_TRAIN = 0
+DRAW_CORRECTION = 1
 
 
 def _lshr(x, k):
@@ -138,6 +156,102 @@ def stream_key(seed, scope, domain_sizes, role, draw_index):
     return int.from_bytes(digest, 'big', signed=True)
 
 
+def stream_seed(seed, scope, domain_sizes, role, draw_index):
+    """A non-negative 63-bit RNG seed for the same stream identity as `stream_key`.
+
+    For samplers that cannot be re-expressed as a counter-based pure function --
+    the no-replacement Gumbel-top-k sampler is the only one in this project --
+    the next best thing is a stateful generator whose SEED is a function of the
+    separator rather than of the bucket label or of the execution order. That
+    buys arm pairing (same separator + same proposal tree => same samples) and
+    collision-freedom; it does NOT buy the shared-prefix property, which for a
+    stateful generator is unobtainable. Said plainly in the design doc.
+    """
+    return stream_key(seed, scope, domain_sizes, role, draw_index) & ((1 << 63) - 1)
+
+
+def seed_payload(kind, **parts):
+    """The exact string a `derive_seed` value is a digest of."""
+    body = '|'.join('%s=%s' % (k, parts[k]) for k in sorted(parts))
+    return '%s|kind=%s|%s' % (SEED_VERSION, kind, body)
+
+
+def derive_seed(kind, **parts):
+    """Collision-free replacement for arithmetic seed formulas.
+
+    WHY THIS EXISTS. The pipeline used to build RNG seeds by adding scaled
+    integers together -- `bucket_label + 10000*seed + 100*draw_index` in
+    `SampleGenerator._compute_seed`, `seed*1000003 + bucket.label` in
+    `build_memorization_table`, and a bare `seed` (or `seed + 1`) for the
+    proposal generators. The first of those is not injective: bucket 145 draw 0
+    and bucket 45 draw 1 produce the same seed, so two different separators are
+    sampled from one stream. MEASURED (doc 46 appendix) on 173 of 519 study
+    cells, with 63 pairs byte-identical. The third is worse in a different way:
+    every bucket in a run shares one seed, and `seed + 1` for the correction
+    draw is the training stream of the run at `seed + 1`.
+
+    Field-tagged digest instead of arithmetic: distinct `(kind, parts)` tuples
+    give unrelated 63-bit values, and there is no carry structure for two
+    different tuples to exploit. Field names are sorted and the values are
+    rendered as `name=value`, so `(label=1, draw=23)` and `(label=12, draw=3)`
+    cannot collapse onto the same payload the way `1 + 100*23` and `12 + 100*3`
+    almost can. Range is [0, 2**63), accepted by both `torch.manual_seed` and
+    `torch.Generator.manual_seed`; `np.random.seed` still needs the caller's
+    `% 2**31`.
+
+    Not injective in the mathematical sense -- it is a truncated SHA-256, so
+    collisions exist in principle at a rate of ~n**2 / 2**64. Exhaustively
+    checked to have none over the pedigree-scale domain the old formula broke
+    on: `tests/test_common_random_numbers.py::
+    test_derive_seed_has_no_collisions_over_the_pedigree_domain`.
+    """
+    payload = seed_payload(kind, **parts)
+    digest = hashlib.sha256(payload.encode('utf-8')).digest()[:8]
+    return int.from_bytes(digest, 'big', signed=False) >> 1
+
+
+def _hash_grid(key, num_rows, col_ids, device='cpu'):
+    """h[i, j] = mix64(mix64(key ^ mix64(i)) ^ mix64(col_ids[j])), as int64.
+
+    `col_ids` is the COLUMN IDENTITY, not merely a position. For separator
+    assignments it is the position within `sorted(scope)` (positions and the
+    set determine each other, see the module docstring). For the proposal path
+    it is the VARIABLE LABEL being sampled at that level, so that a variable
+    appearing in two arms' proposal trees at different depths still draws from
+    the same column -- the same "key on the object, not on the execution
+    position" argument that chose the separator over the bucket label.
+    """
+    rows = torch.arange(int(num_rows), dtype=torch.long, device=device)
+    cols = torch.as_tensor(list(col_ids), dtype=torch.long, device=device)
+    # Mix row and column indices SEPARATELY before combining, so that two keys
+    # differing by a small amount cannot produce streams that are shifts of one
+    # another (`mix64(key + row)` would have exactly that defect).
+    row_seed = mix64(key ^ mix64(rows))
+    return mix64(row_seed.unsqueeze(1) ^ mix64(cols).unsqueeze(0))
+
+
+def uniform01(num_rows, col_ids, key, device='cpu'):
+    """Rows 0..num_rows-1 of the CRN stream as float64 uniforms on [0, 1).
+
+    Same pure-function contract as `uniform_assignments`: value (i, j) depends
+    only on (key, i, col_ids[j]). Used to drive the WMB proposal tree by
+    inverse CDF, which is what makes the proposal path paired: two arms whose
+    proposal distribution is identical draw identical samples, and two arms
+    whose proposal distribution genuinely differs draw DIFFERENT but
+    inverse-CDF-COUPLED samples (the strongest coupling available), instead of
+    the independent streams a global-RNG `torch.multinomial` gives.
+
+    Exactly representable: `top32 / 2**32` with top32 < 2**32 is exact in
+    float64, so the value is a deterministic function of the integer stream and
+    cannot wobble with the FPU.
+    """
+    if num_rows <= 0 or len(col_ids) == 0:
+        return torch.zeros((max(0, int(num_rows)), len(col_ids)),
+                           dtype=torch.float64, device=device)
+    h = _hash_grid(key, num_rows, col_ids, device=device)
+    return _lshr(h, 32).to(torch.float64) / float(1 << 32)
+
+
 def uniform_assignments(num_samples, scope, domain_sizes, seed, role,
                         draw_index, device='cpu'):
     """Rows 0..num_samples-1 of the CRN stream for one separator.
@@ -163,17 +277,87 @@ def uniform_assignments(num_samples, scope, domain_sizes, seed, role,
         raise ValueError('CRN: non-positive domain size in %r' % (list(doms),))
 
     key = stream_key(seed, scope, domain_sizes, role, draw_index)
-
-    rows = torch.arange(int(num_samples), dtype=torch.long, device=device)
-    cols = torch.arange(n_cols, dtype=torch.long, device=device)
-    # Mix row and column indices SEPARATELY before combining, so that two keys
-    # differing by a small amount cannot produce streams that are shifts of one
-    # another (`mix64(key + row)` would have exactly that defect).
-    row_seed = mix64(key ^ mix64(rows))
-    h = mix64(row_seed.unsqueeze(1) ^ mix64(cols).unsqueeze(0))
+    h = _hash_grid(key, num_samples, range(n_cols), device=device)
 
     top32 = _lshr(h, 32)                      # uniform on [0, 2**32)
     return (top32 * doms) >> 32               # < 2**42, no overflow
+
+
+# ---------------------------------------------------------------------------
+# Proposal-path helpers.
+#
+# The proposal arms draw from three different mechanisms and each needs a
+# different treatment. The rule that decides all three is the requirement's own
+# carve-out: the key must contain whatever GENUINELY determines the proposal
+# distribution and nothing else.
+#
+#   uniform half   q is uniform on the separator, so the separator determines q
+#                  completely -> full CRN, same mechanism as the uniform
+#                  sampling scheme, prefix property and all.
+#   WMB tree half  q is determined by the proposal tree (the cluster's factors,
+#                  proposal_ecl, proposal_temperature). Those are NOT in the
+#                  key: putting them in would break pairing between arms whose
+#                  q is in fact identical, and leaving them out cannot create
+#                  false pairing, because the samples are the uniforms pushed
+#                  through q -- a different q yields different samples on its
+#                  own. Inverse CDF off the shared uniform.
+#   no-replacement Gumbel-top-k over an algorithm-dependent frontier; it cannot
+#                  be re-expressed as a counter-based pure function without
+#                  redesigning that sampler. Its GENERATOR SEED is keyed on the
+#                  separator instead, which gives pairing and collision-freedom
+#                  but not the prefix property.
+# ---------------------------------------------------------------------------
+def enabled(config):
+    """Is CRN on for this config? Default True since 2026-08-14."""
+    return bool((config or {}).get('common_random_numbers', True))
+
+
+def _run_seed(config):
+    return int((config or {}).get('seed', 42))
+
+
+def proposal_uniform(config, num_samples, scope, domain_sizes, device,
+                     draw_index=DRAW_TRAIN):
+    """The uniform half of a mixed proposal draw, CRN or legacy.
+
+    Legacy behaviour (`common_random_numbers=False`) is the bare per-column
+    `torch.randint` the call sites used to inline, kept byte-identical so the
+    flag still means "the old sampler".
+    """
+    n = int(num_samples)
+    if not enabled(config):
+        return torch.stack(
+            [torch.randint(0, int(d), (n,), device=device, dtype=torch.long)
+             for d in domain_sizes], dim=1)
+    return uniform_assignments(
+        num_samples=n, scope=scope, domain_sizes=[int(d) for d in domain_sizes],
+        seed=_run_seed(config), role=ROLE_PROP_UNIFORM, draw_index=draw_index,
+        device=device)
+
+
+def proposal_tree_key(config, scope, domain_sizes, draw_index=DRAW_TRAIN):
+    """Stream key for `ProposalTree.sample`, or None to keep the legacy path."""
+    if not enabled(config):
+        return None
+    return stream_key(_run_seed(config), scope, [int(d) for d in domain_sizes],
+                      ROLE_PROP_TREE, draw_index)
+
+
+def no_replacement_generator(config, scope, domain_sizes, device,
+                             draw_index=DRAW_TRAIN, role=ROLE_PROP_NR):
+    """A `torch.Generator` for the no-replacement sampler, seeded off the separator.
+
+    Unconditional -- it does NOT check `common_random_numbers`. What it replaces
+    (`rng.manual_seed(int(seed))`, and `int(seed) + 1` for the correction draw)
+    is not a legacy behaviour worth preserving under any flag: it gave every
+    cluster in a run the SAME stream, and it made run `seed`'s correction draw
+    identical to run `seed + 1`'s training draw. Removing collision-prone seed
+    derivation is a separate requirement from CRN and applies either way.
+    """
+    rng = torch.Generator(device=device)
+    rng.manual_seed(stream_seed(_run_seed(config), scope,
+                                [int(d) for d in domain_sizes], role, draw_index))
+    return rng
 
 
 def assignments_digest(assignments):

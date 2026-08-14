@@ -12,6 +12,7 @@ from typing import List, Dict, Tuple
 
 from nce.inference.factor import FastFactor
 from nce.inference.elimination_order import wtminfill_order
+from nce.sampling import crn
 
 
 class BucketRecord:
@@ -37,7 +38,8 @@ class ProposalTree:
         self.levels = levels  # In elimination order (first eliminated first)
         self.device = device
 
-    def sample(self, num_samples: int) -> Tuple[Dict[int, torch.Tensor], torch.Tensor]:
+    def sample(self, num_samples: int, crn_key: int = None
+               ) -> Tuple[Dict[int, torch.Tensor], torch.Tensor]:
         """
         Generate samples via backward traversal.
 
@@ -46,6 +48,28 @@ class ProposalTree:
 
         Args:
             num_samples: Number of samples to generate
+            crn_key: Optional common-random-numbers stream key
+                (`nce.sampling.crn.stream_key`). When given, each level is
+                sampled by INVERSE CDF from the counter-based CRN stream
+                instead of by `torch.multinomial` on the global RNG.
+
+                Why inverse CDF and not "seed the generator": the proposal
+                distribution q is a function of the cluster's factors, so two
+                merge arms that build genuinely different clusters have
+                genuinely different q -- which the requirement explicitly
+                permits to give different samples. What must NOT differ is the
+                underlying randomness. Driving the multinomial by a shared
+                uniform makes the arms coincide exactly when q coincides, and
+                maximally coupled (the inverse-CDF / monotone coupling) when it
+                does not, instead of independent. It also carries the row-wise
+                purity of the uniform path through unchanged: row i depends
+                only on row i's uniforms, so a larger draw still extends a
+                smaller one, and the stream does not depend on the device or on
+                how many other clusters were sampled first.
+
+                The stream column is keyed on the eliminated VARIABLE LABEL,
+                not on the level position, so a variable that sits at a
+                different depth in two arms' trees still draws the same column.
 
         Returns:
             samples: Dict mapping variable label -> LongTensor of shape (num_samples,)
@@ -81,7 +105,20 @@ class ProposalTree:
             probs = ln_probs.exp().clamp(min=0)
             # Renormalize for numerical safety
             probs = probs / probs.sum(dim=1, keepdim=True)
-            sampled_states = torch.multinomial(probs, 1).squeeze(1)  # (num_samples,)
+            if crn_key is None:
+                sampled_states = torch.multinomial(probs, 1).squeeze(1)  # (num_samples,)
+            else:
+                # Inverse CDF against the CRN uniform for THIS variable.
+                # float64 throughout: the uniform is exactly representable
+                # (top32 / 2**32), and a float32 CDF would quantise nearby
+                # uniforms onto the same state and lose the coupling.
+                u = crn.uniform01(num_samples, [var_label], crn_key,
+                                  device=self.device)          # (n, 1)
+                cdf = probs.to(torch.float64).cumsum(dim=1).contiguous()
+                # right=True gives the k with cdf[k-1] <= u < cdf[k]; the clamp
+                # covers u >= cdf[-1], reachable when the row sums to 1 - eps.
+                sampled_states = torch.searchsorted(
+                    cdf, u, right=True).squeeze(1).clamp_(max=D - 1)
 
             samples[var_label] = sampled_states
 

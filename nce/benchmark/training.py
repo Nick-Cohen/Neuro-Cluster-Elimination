@@ -34,6 +34,7 @@ from nce.utils.backward_message import get_backward_message
 from nce.benchmark.plots import plot_loss_curve, plot_local_error_curve, plot_top_assignments
 from nce.utils.plots import plot_fastfactor_comparison
 from nce.utils.dtype_utils import get_dtype
+from nce.sampling import crn as _crn
 
 
 BW_CACHE_DIR = Path('/home/cohenn1/NCE/data/hard_buckets/bw_cache')
@@ -521,10 +522,8 @@ def train_single_bucket(bucket_pt_path, nn_config, time_limit_seconds,
             #   phase-2: eff = log10(q)     → weight = 1/q
             print(f"[BenchmarkTraining] No-replacement sampling (v3): "
                   f"N={num_proposal_samples}")
-            import torch as _torch
-            rng = _torch.Generator(device=device)
-            seed = config.get('seed', 42)
-            rng.manual_seed(int(seed))
+            rng = _crn.no_replacement_generator(
+                config, msg_scope, domain_sizes, device, _crn.DRAW_TRAIN)
             nr_samples, nr_log_probs_log10, nr_eff_log_probs_log10 = \
                 proposal_tree.sample_no_replacement_v3_recursive(
                     num_proposal_samples, M=1, rng=rng, mode='save')
@@ -546,12 +545,9 @@ def train_single_bucket(bucket_pt_path, nn_config, time_limit_seconds,
             n_wmb = num_proposal_samples - n_half  # give the remainder to proposal
             print(f"[BenchmarkTraining] Mixed proposal: {n_half} uniform + {n_wmb} WMB samples")
 
-            # Uniform samples: independent draw per variable
-            uniform_cols = [
-                torch.randint(0, d, (n_half,), device=device, dtype=torch.long)
-                for d in domain_sizes
-            ]
-            uniform_assignments = torch.stack(uniform_cols, dim=1)
+            # Uniform samples: CRN stream on the separator (see nce/sampling/crn.py)
+            uniform_assignments = _crn.proposal_uniform(
+                config, n_half, msg_scope, domain_sizes, device, _crn.DRAW_TRAIN)
             # log q_u(x) = -sum log(d_v), same for every uniform sample (natural log)
             log_uniform_density = -sum(_math.log(d) for d in domain_sizes)
             uniform_log_probs = torch.full(
@@ -559,7 +555,9 @@ def train_single_bucket(bucket_pt_path, nn_config, time_limit_seconds,
             )
 
             # WMB samples from the proposal tree (returns log-probs in log10)
-            wmb_samples_dict, wmb_log_probs_log10 = proposal_tree.sample(n_wmb)
+            wmb_samples_dict, wmb_log_probs_log10 = proposal_tree.sample(
+                n_wmb, crn_key=_crn.proposal_tree_key(
+                    config, msg_scope, domain_sizes, _crn.DRAW_TRAIN))
             wmb_assignments = torch.stack(
                 [wmb_samples_dict[v] for v in msg_scope], dim=1
             ).to(device)
@@ -574,22 +572,21 @@ def train_single_bucket(bucket_pt_path, nn_config, time_limit_seconds,
             n_nr = num_proposal_samples - n_half
             print(f"[BenchmarkTraining] Mixed proposal: {n_half} uniform + {n_nr} NR samples")
 
-            # Uniform half — log q_u(x) = -sum log(d_v) per sample
-            uniform_cols = [
-                torch.randint(0, d, (n_half,), device=device, dtype=torch.long)
-                for d in domain_sizes
-            ]
-            uniform_assignments = torch.stack(uniform_cols, dim=1)
+            # Uniform half — log q_u(x) = -sum log(d_v) per sample.
+            # Same CRN role/draw as the 'half' arm's uniform part, so the two
+            # arms' uniform halves are the same points (prefix-shared when the
+            # counts differ): the uniform half's distribution is identical in
+            # both, so there is nothing to un-pair.
+            uniform_assignments = _crn.proposal_uniform(
+                config, n_half, msg_scope, domain_sizes, device, _crn.DRAW_TRAIN)
             log_uniform_density = -sum(_math.log(d) for d in domain_sizes)
             uniform_log_probs = torch.full(
                 (n_half,), log_uniform_density, device=device, dtype=torch.float32
             )
 
             # No-replacement half — uses the IS-wrapper's "effective q" convention
-            import torch as _torch
-            rng = _torch.Generator(device=device)
-            seed = config.get('seed', 42)
-            rng.manual_seed(int(seed))
+            rng = _crn.no_replacement_generator(
+                config, msg_scope, domain_sizes, device, _crn.DRAW_TRAIN)
             nr_samples, _, nr_eff_log_probs_log10 = \
                 proposal_tree.sample_no_replacement_v3_recursive(
                     n_nr, M=1, rng=rng, mode='save')
@@ -606,7 +603,9 @@ def train_single_bucket(bucket_pt_path, nn_config, time_limit_seconds,
         else:
             # Pure proposal sampling (original behavior)
             print(f"[BenchmarkTraining] Sampling {num_proposal_samples} proposal samples...")
-            samples_dict, proposal_log_probs = proposal_tree.sample(num_proposal_samples)
+            samples_dict, proposal_log_probs = proposal_tree.sample(
+                num_proposal_samples, crn_key=_crn.proposal_tree_key(
+                    config, msg_scope, domain_sizes, _crn.DRAW_TRAIN))
             assignments = torch.stack(
                 [samples_dict[v] for v in msg_scope], dim=1
             ).to(device)

@@ -15,6 +15,7 @@ import time
 import torch
 
 from nce.training_logger import log_epoch_loss, log_val_loss
+from nce.sampling import crn as _crn
 
 
 def _is_loss_wrapper(trainer, base_loss_fn, loss_name):
@@ -155,8 +156,8 @@ def train_bucket_with_proposal_sampling(bucket, fastgm, trainer, config):
 
     # ---- Sample according to proposal_mix ----
     if proposal_mix == 'no_replacement':
-        rng = torch.Generator(device=device)
-        rng.manual_seed(int(config.get('seed', 42)))
+        rng = _crn.no_replacement_generator(
+            config, msg_scope, domain_sizes, device, _crn.DRAW_TRAIN)
         # Use recursive NR — non-recursive caps at frontier_size phase-2 samples
         # via clamp(max=1.0), which fails for peaked distributions.
         nr_samples, _, nr_eff_log_probs_log10 = \
@@ -173,17 +174,16 @@ def train_bucket_with_proposal_sampling(bucket, fastgm, trainer, config):
     elif proposal_mix == 'half':
         n_half = num_proposal_samples // 2
         n_wmb = num_proposal_samples - n_half
-        uniform_cols = [
-            torch.randint(0, d, (n_half,), device=device, dtype=torch.long)
-            for d in domain_sizes
-        ]
-        uniform_assignments = torch.stack(uniform_cols, dim=1)
+        uniform_assignments = _crn.proposal_uniform(
+            config, n_half, msg_scope, domain_sizes, device, _crn.DRAW_TRAIN)
         log_uniform_density = -sum(_math.log(d) for d in domain_sizes)
         uniform_log_probs = torch.full(
             (n_half,), log_uniform_density, device=device, dtype=torch.float32
         )
 
-        wmb_samples_dict, wmb_log_probs_log10 = proposal_tree.sample(n_wmb)
+        wmb_samples_dict, wmb_log_probs_log10 = proposal_tree.sample(
+            n_wmb, crn_key=_crn.proposal_tree_key(
+                config, msg_scope, domain_sizes, _crn.DRAW_TRAIN))
         wmb_assignments = torch.stack(
             [wmb_samples_dict[v] for v in msg_scope], dim=1
         ).to(device)
@@ -198,18 +198,15 @@ def train_bucket_with_proposal_sampling(bucket, fastgm, trainer, config):
     elif proposal_mix == 'half_nr':
         n_half = num_proposal_samples // 2
         n_nr = num_proposal_samples - n_half
-        uniform_cols = [
-            torch.randint(0, d, (n_half,), device=device, dtype=torch.long)
-            for d in domain_sizes
-        ]
-        uniform_assignments = torch.stack(uniform_cols, dim=1)
+        uniform_assignments = _crn.proposal_uniform(
+            config, n_half, msg_scope, domain_sizes, device, _crn.DRAW_TRAIN)
         log_uniform_density = -sum(_math.log(d) for d in domain_sizes)
         uniform_log_probs = torch.full(
             (n_half,), log_uniform_density, device=device, dtype=torch.float32
         )
 
-        rng = torch.Generator(device=device)
-        rng.manual_seed(int(config.get('seed', 42)))
+        rng = _crn.no_replacement_generator(
+            config, msg_scope, domain_sizes, device, _crn.DRAW_TRAIN)
         nr_samples, _, nr_eff_log_probs_log10 = \
             proposal_tree.sample_no_replacement_v3_recursive(
                 n_nr, M=1, rng=rng, mode='save')
@@ -228,11 +225,9 @@ def train_bucket_with_proposal_sampling(bucket, fastgm, trainer, config):
         # Pure uniform sampling, no proposal/NR cost. Used with
         # correction_proposal_mix='nr' or 'half_nr' to keep training cheap
         # while doing correction on harder-to-reach samples.
-        uniform_cols = [
-            torch.randint(0, d, (num_proposal_samples,), device=device, dtype=torch.long)
-            for d in domain_sizes
-        ]
-        assignments = torch.stack(uniform_cols, dim=1)
+        assignments = _crn.proposal_uniform(
+            config, num_proposal_samples, msg_scope, domain_sizes, device,
+            _crn.DRAW_TRAIN)
         log_uniform_density = -sum(_math.log(d) for d in domain_sizes)
         proposal_log_probs_nat = torch.full(
             (num_proposal_samples,), log_uniform_density,
@@ -242,7 +237,9 @@ def train_bucket_with_proposal_sampling(bucket, fastgm, trainer, config):
 
     else:
         # 'full' — pure proposal sampling
-        samples_dict, proposal_log_probs = proposal_tree.sample(num_proposal_samples)
+        samples_dict, proposal_log_probs = proposal_tree.sample(
+            num_proposal_samples, crn_key=_crn.proposal_tree_key(
+                config, msg_scope, domain_sizes, _crn.DRAW_TRAIN))
         assignments = torch.stack(
             [samples_dict[v] for v in msg_scope], dim=1
         ).to(device)
@@ -303,7 +300,17 @@ def train_bucket_with_proposal_sampling(bucket, fastgm, trainer, config):
     restore_best_val = bool(config.get('restore_best_val', True))
     if use_holdout_val:
         n_val = int(holdout_val_frac * len(x_all))
-        gen = torch.Generator(device=x_all.device).manual_seed(int(bucket.label) + 1)
+        # Keyed on the separator + the run seed, not on the bucket label
+        # (an execution artefact) -- and the run seed was missing
+        # entirely, so two seeds got the SAME train/val split.
+        gen = torch.Generator(device=x_all.device).manual_seed(
+            _crn.derive_seed('holdout-val-split',
+                             run_seed=int(config.get('seed', 42)),
+                             sep=_crn.stream_payload(
+                                 int(config.get('seed', 42)), msg_scope,
+                                 [int(d) for d in domain_sizes],
+                                 'holdout', 0),
+                             n=int(len(x_all))))
         perm = torch.randperm(len(x_all), device=x_all.device, generator=gen)
         val_idx = perm[:n_val]
         train_idx = perm[n_val:]
@@ -577,8 +584,9 @@ def train_bucket_with_proposal_sampling(bucket, fastgm, trainer, config):
             else:
                 # Regenerate samples using correction_proposal_mix
                 if corr_mix == 'no_replacement':
-                    rng = torch.Generator(device=device)
-                    rng.manual_seed(int(config.get('seed', 42)) + 1)
+                    rng = _crn.no_replacement_generator(
+                        config, msg_scope, domain_sizes, device,
+                        _crn.DRAW_CORRECTION)
                     nr_samples, _, nr_eff_log_probs_log10 = \
                         proposal_tree.sample_no_replacement_v3_recursive(
                             corr_n, M=1, rng=rng, mode='save')
@@ -591,17 +599,16 @@ def train_bucket_with_proposal_sampling(bucket, fastgm, trainer, config):
                 elif corr_mix == 'half_nr':
                     n_half = corr_n // 2
                     n_nr = corr_n - n_half
-                    uniform_cols = [
-                        torch.randint(0, d, (n_half,), device=device, dtype=torch.long)
-                        for d in domain_sizes
-                    ]
-                    u_assignments = torch.stack(uniform_cols, dim=1)
+                    u_assignments = _crn.proposal_uniform(
+                        config, n_half, msg_scope, domain_sizes, device,
+                        _crn.DRAW_CORRECTION)
                     log_uniform_density = -sum(_math.log(d) for d in domain_sizes)
                     u_log_probs = torch.full(
                         (n_half,), log_uniform_density, device=device, dtype=torch.float32
                     )
-                    rng = torch.Generator(device=device)
-                    rng.manual_seed(int(config.get('seed', 42)) + 1)
+                    rng = _crn.no_replacement_generator(
+                        config, msg_scope, domain_sizes, device,
+                        _crn.DRAW_CORRECTION)
                     nr_samples, _, nr_eff_log_probs_log10 = \
                         proposal_tree.sample_no_replacement_v3_recursive(
                             n_nr, M=1, rng=rng, mode='save')
@@ -614,7 +621,10 @@ def train_bucket_with_proposal_sampling(bucket, fastgm, trainer, config):
                     corr_assignments = torch.cat([u_assignments, nr_assignments], dim=0)
                     corr_plp_nat = torch.cat([u_log_probs, nr_lp], dim=0)
                 else:  # 'full'
-                    samples_dict, corr_plp_log10 = proposal_tree.sample(corr_n)
+                    samples_dict, corr_plp_log10 = proposal_tree.sample(
+                        corr_n, crn_key=_crn.proposal_tree_key(
+                            config, msg_scope, domain_sizes,
+                            _crn.DRAW_CORRECTION))
                     corr_assignments = torch.stack(
                         [samples_dict[v] for v in msg_scope], dim=1
                     ).to(device)
