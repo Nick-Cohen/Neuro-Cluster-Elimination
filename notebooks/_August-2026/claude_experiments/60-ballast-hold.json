@@ -1,0 +1,3836 @@
+{
+ "gpu": 0,
+ "warm_s": 360.0,
+ "gap_s": 120.0,
+ "arms": {
+  "noballast": {
+   "equilibrium_temp": 83,
+   "equilibrium_power": 280.07,
+   "gap_end_temp": 49,
+   "gap_min_temp": 49,
+   "gap_mean_power": 25.3,
+   "drop_C": 34,
+   "trace": [
+    {
+     "temp": 36,
+     "power": 20.43,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 0.0,
+     "phase": "warm"
+    },
+    {
+     "temp": 36,
+     "power": 20.38,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 2.1,
+     "phase": "warm"
+    },
+    {
+     "temp": 36,
+     "power": 20.44,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 4.1,
+     "phase": "warm"
+    },
+    {
+     "temp": 37,
+     "power": 61.47,
+     "util": 5,
+     "sm_clock": 1350,
+     "t": 6.1,
+     "phase": "warm"
+    },
+    {
+     "temp": 38,
+     "power": 61.38,
+     "util": 5,
+     "sm_clock": 1350,
+     "t": 8.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 46,
+     "power": 283.65,
+     "util": 100,
+     "sm_clock": 1635,
+     "t": 10.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 47,
+     "power": 283.39,
+     "util": 100,
+     "sm_clock": 1620,
+     "t": 12.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 48,
+     "power": 281.34,
+     "util": 100,
+     "sm_clock": 1650,
+     "t": 14.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 49,
+     "power": 275.85,
+     "util": 100,
+     "sm_clock": 1650,
+     "t": 16.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 50,
+     "power": 278.53,
+     "util": 100,
+     "sm_clock": 1650,
+     "t": 18.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 51,
+     "power": 282.04,
+     "util": 100,
+     "sm_clock": 1620,
+     "t": 20.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 52,
+     "power": 282.3,
+     "util": 100,
+     "sm_clock": 1635,
+     "t": 22.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 53,
+     "power": 281.43,
+     "util": 100,
+     "sm_clock": 1635,
+     "t": 24.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 53,
+     "power": 278.98,
+     "util": 100,
+     "sm_clock": 1620,
+     "t": 26.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 54,
+     "power": 277.68,
+     "util": 100,
+     "sm_clock": 1635,
+     "t": 28.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 55,
+     "power": 277.89,
+     "util": 100,
+     "sm_clock": 1635,
+     "t": 30.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 56,
+     "power": 281.13,
+     "util": 100,
+     "sm_clock": 1620,
+     "t": 32.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 57,
+     "power": 280.96,
+     "util": 100,
+     "sm_clock": 1590,
+     "t": 34.6,
+     "phase": "warm"
+    },
+    {
+     "temp": 57,
+     "power": 278.9,
+     "util": 100,
+     "sm_clock": 1605,
+     "t": 36.6,
+     "phase": "warm"
+    },
+    {
+     "temp": 58,
+     "power": 275.5,
+     "util": 100,
+     "sm_clock": 1620,
+     "t": 38.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 59,
+     "power": 278.41,
+     "util": 100,
+     "sm_clock": 1605,
+     "t": 40.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 59,
+     "power": 279.28,
+     "util": 100,
+     "sm_clock": 1605,
+     "t": 42.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 60,
+     "power": 276.61,
+     "util": 100,
+     "sm_clock": 1590,
+     "t": 44.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 61,
+     "power": 274.14,
+     "util": 100,
+     "sm_clock": 1620,
+     "t": 46.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 61,
+     "power": 276.31,
+     "util": 100,
+     "sm_clock": 1590,
+     "t": 48.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 62,
+     "power": 279.19,
+     "util": 100,
+     "sm_clock": 1590,
+     "t": 50.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 62,
+     "power": 276.24,
+     "util": 100,
+     "sm_clock": 1620,
+     "t": 52.9,
+     "phase": "warm"
+    },
+    {
+     "temp": 63,
+     "power": 275.98,
+     "util": 100,
+     "sm_clock": 1605,
+     "t": 54.9,
+     "phase": "warm"
+    },
+    {
+     "temp": 64,
+     "power": 280.14,
+     "util": 100,
+     "sm_clock": 1590,
+     "t": 56.9,
+     "phase": "warm"
+    },
+    {
+     "temp": 64,
+     "power": 278.94,
+     "util": 100,
+     "sm_clock": 1590,
+     "t": 59.0,
+     "phase": "warm"
+    },
+    {
+     "temp": 65,
+     "power": 278.95,
+     "util": 100,
+     "sm_clock": 1590,
+     "t": 61.0,
+     "phase": "warm"
+    },
+    {
+     "temp": 65,
+     "power": 279.23,
+     "util": 100,
+     "sm_clock": 1605,
+     "t": 63.0,
+     "phase": "warm"
+    },
+    {
+     "temp": 66,
+     "power": 279.55,
+     "util": 100,
+     "sm_clock": 1605,
+     "t": 65.1,
+     "phase": "warm"
+    },
+    {
+     "temp": 66,
+     "power": 280.54,
+     "util": 100,
+     "sm_clock": 1590,
+     "t": 67.1,
+     "phase": "warm"
+    },
+    {
+     "temp": 67,
+     "power": 279.64,
+     "util": 100,
+     "sm_clock": 1605,
+     "t": 69.1,
+     "phase": "warm"
+    },
+    {
+     "temp": 67,
+     "power": 279.25,
+     "util": 100,
+     "sm_clock": 1590,
+     "t": 71.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 68,
+     "power": 278.35,
+     "util": 100,
+     "sm_clock": 1605,
+     "t": 73.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 68,
+     "power": 276.78,
+     "util": 100,
+     "sm_clock": 1590,
+     "t": 75.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 68,
+     "power": 278.4,
+     "util": 100,
+     "sm_clock": 1590,
+     "t": 77.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 69,
+     "power": 277.09,
+     "util": 100,
+     "sm_clock": 1590,
+     "t": 79.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 69,
+     "power": 276.84,
+     "util": 100,
+     "sm_clock": 1590,
+     "t": 81.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 70,
+     "power": 280.48,
+     "util": 100,
+     "sm_clock": 1575,
+     "t": 83.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 70,
+     "power": 281.0,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 85.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 70,
+     "power": 278.18,
+     "util": 100,
+     "sm_clock": 1575,
+     "t": 87.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 71,
+     "power": 282.0,
+     "util": 100,
+     "sm_clock": 1575,
+     "t": 89.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 71,
+     "power": 281.37,
+     "util": 100,
+     "sm_clock": 1590,
+     "t": 91.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 71,
+     "power": 280.59,
+     "util": 100,
+     "sm_clock": 1590,
+     "t": 93.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 72,
+     "power": 278.12,
+     "util": 100,
+     "sm_clock": 1575,
+     "t": 95.6,
+     "phase": "warm"
+    },
+    {
+     "temp": 72,
+     "power": 280.77,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 97.6,
+     "phase": "warm"
+    },
+    {
+     "temp": 72,
+     "power": 279.56,
+     "util": 100,
+     "sm_clock": 1575,
+     "t": 99.6,
+     "phase": "warm"
+    },
+    {
+     "temp": 72,
+     "power": 275.71,
+     "util": 100,
+     "sm_clock": 1575,
+     "t": 101.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 73,
+     "power": 279.8,
+     "util": 100,
+     "sm_clock": 1575,
+     "t": 103.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 73,
+     "power": 279.29,
+     "util": 100,
+     "sm_clock": 1575,
+     "t": 105.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 73,
+     "power": 276.15,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 107.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 73,
+     "power": 279.21,
+     "util": 100,
+     "sm_clock": 1575,
+     "t": 109.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 74,
+     "power": 279.45,
+     "util": 100,
+     "sm_clock": 1575,
+     "t": 111.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 74,
+     "power": 277.96,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 113.9,
+     "phase": "warm"
+    },
+    {
+     "temp": 74,
+     "power": 279.39,
+     "util": 100,
+     "sm_clock": 1575,
+     "t": 115.9,
+     "phase": "warm"
+    },
+    {
+     "temp": 74,
+     "power": 276.11,
+     "util": 100,
+     "sm_clock": 1575,
+     "t": 117.9,
+     "phase": "warm"
+    },
+    {
+     "temp": 75,
+     "power": 276.04,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 120.0,
+     "phase": "warm"
+    },
+    {
+     "temp": 75,
+     "power": 280.38,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 122.0,
+     "phase": "warm"
+    },
+    {
+     "temp": 75,
+     "power": 278.29,
+     "util": 100,
+     "sm_clock": 1575,
+     "t": 124.0,
+     "phase": "warm"
+    },
+    {
+     "temp": 75,
+     "power": 280.71,
+     "util": 100,
+     "sm_clock": 1575,
+     "t": 126.1,
+     "phase": "warm"
+    },
+    {
+     "temp": 75,
+     "power": 277.0,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 128.1,
+     "phase": "warm"
+    },
+    {
+     "temp": 76,
+     "power": 279.88,
+     "util": 100,
+     "sm_clock": 1575,
+     "t": 130.1,
+     "phase": "warm"
+    },
+    {
+     "temp": 76,
+     "power": 278.2,
+     "util": 100,
+     "sm_clock": 1575,
+     "t": 132.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 76,
+     "power": 276.08,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 134.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 76,
+     "power": 279.67,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 136.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 76,
+     "power": 276.61,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 138.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 76,
+     "power": 278.66,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 140.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 77,
+     "power": 274.27,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 142.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 77,
+     "power": 277.67,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 144.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 77,
+     "power": 276.97,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 146.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 77,
+     "power": 281.33,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 148.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 77,
+     "power": 280.34,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 150.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 77,
+     "power": 279.5,
+     "util": 100,
+     "sm_clock": 1575,
+     "t": 152.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 77,
+     "power": 276.05,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 154.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 78,
+     "power": 278.81,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 156.6,
+     "phase": "warm"
+    },
+    {
+     "temp": 78,
+     "power": 277.63,
+     "util": 100,
+     "sm_clock": 1575,
+     "t": 158.6,
+     "phase": "warm"
+    },
+    {
+     "temp": 78,
+     "power": 279.96,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 160.6,
+     "phase": "warm"
+    },
+    {
+     "temp": 78,
+     "power": 281.52,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 162.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 78,
+     "power": 275.34,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 164.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 78,
+     "power": 281.38,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 166.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 78,
+     "power": 280.93,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 168.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 78,
+     "power": 277.9,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 170.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 79,
+     "power": 278.73,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 172.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 79,
+     "power": 278.02,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 174.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 79,
+     "power": 280.89,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 176.9,
+     "phase": "warm"
+    },
+    {
+     "temp": 79,
+     "power": 279.11,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 178.9,
+     "phase": "warm"
+    },
+    {
+     "temp": 79,
+     "power": 278.17,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 180.9,
+     "phase": "warm"
+    },
+    {
+     "temp": 79,
+     "power": 279.85,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 183.0,
+     "phase": "warm"
+    },
+    {
+     "temp": 79,
+     "power": 276.66,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 185.0,
+     "phase": "warm"
+    },
+    {
+     "temp": 79,
+     "power": 279.15,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 187.0,
+     "phase": "warm"
+    },
+    {
+     "temp": 79,
+     "power": 280.47,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 189.1,
+     "phase": "warm"
+    },
+    {
+     "temp": 79,
+     "power": 276.15,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 191.1,
+     "phase": "warm"
+    },
+    {
+     "temp": 80,
+     "power": 280.65,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 193.1,
+     "phase": "warm"
+    },
+    {
+     "temp": 79,
+     "power": 280.42,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 195.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 80,
+     "power": 275.93,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 197.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 80,
+     "power": 280.87,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 199.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 80,
+     "power": 279.02,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 201.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 80,
+     "power": 276.67,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 203.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 80,
+     "power": 276.93,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 205.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 80,
+     "power": 280.58,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 207.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 80,
+     "power": 277.46,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 209.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 80,
+     "power": 276.02,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 211.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 80,
+     "power": 277.37,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 213.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 80,
+     "power": 280.72,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 215.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 80,
+     "power": 281.17,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 217.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 80,
+     "power": 277.28,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 219.6,
+     "phase": "warm"
+    },
+    {
+     "temp": 80,
+     "power": 281.36,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 221.6,
+     "phase": "warm"
+    },
+    {
+     "temp": 80,
+     "power": 282.8,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 223.6,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 280.93,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 225.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 279.66,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 227.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 278.29,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 229.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 277.2,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 231.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 276.82,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 233.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 275.46,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 235.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 280.16,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 237.9,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 283.31,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 239.9,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 280.86,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 241.9,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 278.85,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 244.0,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 281.12,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 246.0,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 279.43,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 248.0,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 279.97,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 250.1,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 280.39,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 252.1,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 278.55,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 254.1,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 277.47,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 256.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 278.64,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 258.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 278.67,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 260.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 281.72,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 262.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 279.82,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 264.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 274.8,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 266.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 274.87,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 268.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 280.07,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 270.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 279.7,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 272.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 279.18,
+     "util": 100,
+     "sm_clock": 1515,
+     "t": 274.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 279.77,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 276.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 276.7,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 278.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 276.12,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 280.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 277.81,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 282.6,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 280.17,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 284.6,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 279.84,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 286.6,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 279.28,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 288.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 281.81,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 290.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 282.11,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 292.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 278.28,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 294.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 278.35,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 296.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 280.11,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 298.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 279.96,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 300.9,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 279.82,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 302.9,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 279.99,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 304.9,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 281.0,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 307.0,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 279.92,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 309.0,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 278.85,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 311.0,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 278.12,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 313.1,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 278.67,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 315.1,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 280.52,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 317.1,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 280.84,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 319.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 280.14,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 321.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 280.73,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 323.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 280.17,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 325.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 279.4,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 327.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 280.07,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 329.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 276.87,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 331.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 279.11,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 333.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 280.17,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 335.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 280.28,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 337.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 280.45,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 339.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 280.11,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 341.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 279.76,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 343.6,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 280.89,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 345.6,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 275.9,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 347.6,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 275.99,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 349.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 83,
+     "power": 276.41,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 351.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 83,
+     "power": 278.3,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 353.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 279.83,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 355.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 280.03,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 357.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 280.49,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 359.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 79,
+     "power": 114.18,
+     "util": 67,
+     "sm_clock": 1845,
+     "t": 363.1,
+     "phase": "gap"
+    },
+    {
+     "temp": 76,
+     "power": 63.82,
+     "util": 0,
+     "sm_clock": 495,
+     "t": 365.1,
+     "phase": "gap"
+    },
+    {
+     "temp": 74,
+     "power": 33.27,
+     "util": 0,
+     "sm_clock": 360,
+     "t": 367.1,
+     "phase": "gap"
+    },
+    {
+     "temp": 73,
+     "power": 29.09,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 369.2,
+     "phase": "gap"
+    },
+    {
+     "temp": 72,
+     "power": 29.06,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 371.2,
+     "phase": "gap"
+    },
+    {
+     "temp": 71,
+     "power": 27.96,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 373.2,
+     "phase": "gap"
+    },
+    {
+     "temp": 70,
+     "power": 27.78,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 375.3,
+     "phase": "gap"
+    },
+    {
+     "temp": 69,
+     "power": 27.75,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 377.3,
+     "phase": "gap"
+    },
+    {
+     "temp": 68,
+     "power": 27.53,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 379.3,
+     "phase": "gap"
+    },
+    {
+     "temp": 67,
+     "power": 26.94,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 381.4,
+     "phase": "gap"
+    },
+    {
+     "temp": 66,
+     "power": 26.54,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 383.4,
+     "phase": "gap"
+    },
+    {
+     "temp": 66,
+     "power": 26.21,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 385.4,
+     "phase": "gap"
+    },
+    {
+     "temp": 65,
+     "power": 26.24,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 387.4,
+     "phase": "gap"
+    },
+    {
+     "temp": 64,
+     "power": 25.7,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 389.5,
+     "phase": "gap"
+    },
+    {
+     "temp": 64,
+     "power": 25.39,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 391.5,
+     "phase": "gap"
+    },
+    {
+     "temp": 63,
+     "power": 24.96,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 393.5,
+     "phase": "gap"
+    },
+    {
+     "temp": 62,
+     "power": 24.73,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 395.6,
+     "phase": "gap"
+    },
+    {
+     "temp": 62,
+     "power": 24.13,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 397.6,
+     "phase": "gap"
+    },
+    {
+     "temp": 61,
+     "power": 23.87,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 399.6,
+     "phase": "gap"
+    },
+    {
+     "temp": 61,
+     "power": 24.41,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 401.7,
+     "phase": "gap"
+    },
+    {
+     "temp": 60,
+     "power": 23.83,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 403.7,
+     "phase": "gap"
+    },
+    {
+     "temp": 60,
+     "power": 23.46,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 405.7,
+     "phase": "gap"
+    },
+    {
+     "temp": 60,
+     "power": 23.2,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 407.8,
+     "phase": "gap"
+    },
+    {
+     "temp": 59,
+     "power": 22.76,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 409.8,
+     "phase": "gap"
+    },
+    {
+     "temp": 59,
+     "power": 22.17,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 411.9,
+     "phase": "gap"
+    },
+    {
+     "temp": 58,
+     "power": 21.91,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 413.9,
+     "phase": "gap"
+    },
+    {
+     "temp": 58,
+     "power": 22.01,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 415.9,
+     "phase": "gap"
+    },
+    {
+     "temp": 57,
+     "power": 22.21,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 418.0,
+     "phase": "gap"
+    },
+    {
+     "temp": 57,
+     "power": 21.59,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 420.0,
+     "phase": "gap"
+    },
+    {
+     "temp": 57,
+     "power": 21.72,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 422.0,
+     "phase": "gap"
+    },
+    {
+     "temp": 56,
+     "power": 21.9,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 424.1,
+     "phase": "gap"
+    },
+    {
+     "temp": 56,
+     "power": 21.72,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 426.1,
+     "phase": "gap"
+    },
+    {
+     "temp": 56,
+     "power": 21.6,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 428.1,
+     "phase": "gap"
+    },
+    {
+     "temp": 55,
+     "power": 21.5,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 430.2,
+     "phase": "gap"
+    },
+    {
+     "temp": 55,
+     "power": 21.63,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 432.2,
+     "phase": "gap"
+    },
+    {
+     "temp": 55,
+     "power": 21.16,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 434.2,
+     "phase": "gap"
+    },
+    {
+     "temp": 55,
+     "power": 21.23,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 436.3,
+     "phase": "gap"
+    },
+    {
+     "temp": 54,
+     "power": 21.38,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 438.3,
+     "phase": "gap"
+    },
+    {
+     "temp": 54,
+     "power": 21.18,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 440.3,
+     "phase": "gap"
+    },
+    {
+     "temp": 54,
+     "power": 21.16,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 442.4,
+     "phase": "gap"
+    },
+    {
+     "temp": 53,
+     "power": 20.94,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 444.4,
+     "phase": "gap"
+    },
+    {
+     "temp": 53,
+     "power": 20.98,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 446.4,
+     "phase": "gap"
+    },
+    {
+     "temp": 53,
+     "power": 21.02,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 448.5,
+     "phase": "gap"
+    },
+    {
+     "temp": 53,
+     "power": 20.71,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 450.5,
+     "phase": "gap"
+    },
+    {
+     "temp": 53,
+     "power": 20.8,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 452.5,
+     "phase": "gap"
+    },
+    {
+     "temp": 52,
+     "power": 21.23,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 454.6,
+     "phase": "gap"
+    },
+    {
+     "temp": 52,
+     "power": 21.03,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 456.6,
+     "phase": "gap"
+    },
+    {
+     "temp": 52,
+     "power": 21.21,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 458.6,
+     "phase": "gap"
+    },
+    {
+     "temp": 52,
+     "power": 21.44,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 460.7,
+     "phase": "gap"
+    },
+    {
+     "temp": 51,
+     "power": 21.08,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 462.7,
+     "phase": "gap"
+    },
+    {
+     "temp": 51,
+     "power": 21.03,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 464.7,
+     "phase": "gap"
+    },
+    {
+     "temp": 51,
+     "power": 20.83,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 466.8,
+     "phase": "gap"
+    },
+    {
+     "temp": 51,
+     "power": 20.76,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 468.8,
+     "phase": "gap"
+    },
+    {
+     "temp": 51,
+     "power": 20.63,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 470.8,
+     "phase": "gap"
+    },
+    {
+     "temp": 50,
+     "power": 20.56,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 472.9,
+     "phase": "gap"
+    },
+    {
+     "temp": 50,
+     "power": 20.9,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 474.9,
+     "phase": "gap"
+    },
+    {
+     "temp": 50,
+     "power": 20.66,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 476.9,
+     "phase": "gap"
+    },
+    {
+     "temp": 50,
+     "power": 20.64,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 479.0,
+     "phase": "gap"
+    },
+    {
+     "temp": 50,
+     "power": 20.43,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 481.0,
+     "phase": "gap"
+    },
+    {
+     "temp": 49,
+     "power": 20.41,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 483.0,
+     "phase": "gap"
+    }
+   ]
+  },
+  "ballast": {
+   "equilibrium_temp": 83,
+   "equilibrium_power": 279.38,
+   "gap_end_temp": 83,
+   "gap_min_temp": 83,
+   "gap_mean_power": 279.2,
+   "drop_C": 0,
+   "trace": [
+    {
+     "temp": 42,
+     "power": 20.2,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 0.0,
+     "phase": "warm"
+    },
+    {
+     "temp": 42,
+     "power": 20.41,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 2.1,
+     "phase": "warm"
+    },
+    {
+     "temp": 42,
+     "power": 20.18,
+     "util": 0,
+     "sm_clock": 300,
+     "t": 4.1,
+     "phase": "warm"
+    },
+    {
+     "temp": 43,
+     "power": 62.05,
+     "util": 5,
+     "sm_clock": 1350,
+     "t": 6.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 43,
+     "power": 70.58,
+     "util": 4,
+     "sm_clock": 1350,
+     "t": 8.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 51,
+     "power": 277.48,
+     "util": 100,
+     "sm_clock": 1635,
+     "t": 10.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 52,
+     "power": 277.31,
+     "util": 100,
+     "sm_clock": 1620,
+     "t": 12.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 53,
+     "power": 277.67,
+     "util": 100,
+     "sm_clock": 1620,
+     "t": 14.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 54,
+     "power": 278.64,
+     "util": 100,
+     "sm_clock": 1620,
+     "t": 16.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 55,
+     "power": 277.12,
+     "util": 100,
+     "sm_clock": 1620,
+     "t": 18.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 56,
+     "power": 277.89,
+     "util": 100,
+     "sm_clock": 1620,
+     "t": 20.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 56,
+     "power": 277.78,
+     "util": 100,
+     "sm_clock": 1605,
+     "t": 22.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 57,
+     "power": 277.39,
+     "util": 100,
+     "sm_clock": 1620,
+     "t": 24.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 58,
+     "power": 279.38,
+     "util": 100,
+     "sm_clock": 1605,
+     "t": 26.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 59,
+     "power": 277.15,
+     "util": 100,
+     "sm_clock": 1605,
+     "t": 28.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 60,
+     "power": 278.75,
+     "util": 100,
+     "sm_clock": 1590,
+     "t": 30.6,
+     "phase": "warm"
+    },
+    {
+     "temp": 60,
+     "power": 280.41,
+     "util": 100,
+     "sm_clock": 1590,
+     "t": 32.6,
+     "phase": "warm"
+    },
+    {
+     "temp": 61,
+     "power": 280.7,
+     "util": 100,
+     "sm_clock": 1620,
+     "t": 34.6,
+     "phase": "warm"
+    },
+    {
+     "temp": 62,
+     "power": 277.1,
+     "util": 100,
+     "sm_clock": 1590,
+     "t": 36.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 62,
+     "power": 274.41,
+     "util": 100,
+     "sm_clock": 1590,
+     "t": 38.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 63,
+     "power": 275.26,
+     "util": 100,
+     "sm_clock": 1605,
+     "t": 40.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 64,
+     "power": 275.19,
+     "util": 100,
+     "sm_clock": 1605,
+     "t": 42.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 64,
+     "power": 278.0,
+     "util": 100,
+     "sm_clock": 1605,
+     "t": 44.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 65,
+     "power": 276.84,
+     "util": 100,
+     "sm_clock": 1605,
+     "t": 46.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 66,
+     "power": 278.65,
+     "util": 100,
+     "sm_clock": 1590,
+     "t": 48.9,
+     "phase": "warm"
+    },
+    {
+     "temp": 66,
+     "power": 279.69,
+     "util": 100,
+     "sm_clock": 1590,
+     "t": 50.9,
+     "phase": "warm"
+    },
+    {
+     "temp": 67,
+     "power": 274.88,
+     "util": 100,
+     "sm_clock": 1590,
+     "t": 52.9,
+     "phase": "warm"
+    },
+    {
+     "temp": 67,
+     "power": 276.17,
+     "util": 100,
+     "sm_clock": 1590,
+     "t": 54.9,
+     "phase": "warm"
+    },
+    {
+     "temp": 67,
+     "power": 276.73,
+     "util": 100,
+     "sm_clock": 1590,
+     "t": 57.0,
+     "phase": "warm"
+    },
+    {
+     "temp": 68,
+     "power": 280.7,
+     "util": 100,
+     "sm_clock": 1590,
+     "t": 59.0,
+     "phase": "warm"
+    },
+    {
+     "temp": 68,
+     "power": 280.67,
+     "util": 100,
+     "sm_clock": 1590,
+     "t": 61.1,
+     "phase": "warm"
+    },
+    {
+     "temp": 69,
+     "power": 277.86,
+     "util": 100,
+     "sm_clock": 1590,
+     "t": 63.1,
+     "phase": "warm"
+    },
+    {
+     "temp": 69,
+     "power": 277.33,
+     "util": 100,
+     "sm_clock": 1605,
+     "t": 65.1,
+     "phase": "warm"
+    },
+    {
+     "temp": 70,
+     "power": 278.11,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 67.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 70,
+     "power": 282.38,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 69.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 71,
+     "power": 280.07,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 71.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 71,
+     "power": 279.83,
+     "util": 100,
+     "sm_clock": 1575,
+     "t": 73.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 71,
+     "power": 274.48,
+     "util": 100,
+     "sm_clock": 1590,
+     "t": 75.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 72,
+     "power": 281.18,
+     "util": 100,
+     "sm_clock": 1575,
+     "t": 77.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 72,
+     "power": 280.9,
+     "util": 100,
+     "sm_clock": 1575,
+     "t": 79.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 72,
+     "power": 275.71,
+     "util": 100,
+     "sm_clock": 1575,
+     "t": 81.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 73,
+     "power": 275.58,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 83.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 73,
+     "power": 281.23,
+     "util": 100,
+     "sm_clock": 1575,
+     "t": 85.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 73,
+     "power": 276.63,
+     "util": 100,
+     "sm_clock": 1575,
+     "t": 87.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 74,
+     "power": 275.75,
+     "util": 100,
+     "sm_clock": 1575,
+     "t": 89.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 74,
+     "power": 279.17,
+     "util": 100,
+     "sm_clock": 1575,
+     "t": 91.6,
+     "phase": "warm"
+    },
+    {
+     "temp": 74,
+     "power": 279.31,
+     "util": 100,
+     "sm_clock": 1575,
+     "t": 93.6,
+     "phase": "warm"
+    },
+    {
+     "temp": 74,
+     "power": 282.05,
+     "util": 100,
+     "sm_clock": 1575,
+     "t": 95.6,
+     "phase": "warm"
+    },
+    {
+     "temp": 74,
+     "power": 280.77,
+     "util": 100,
+     "sm_clock": 1575,
+     "t": 97.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 75,
+     "power": 277.94,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 99.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 75,
+     "power": 279.15,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 101.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 75,
+     "power": 278.34,
+     "util": 100,
+     "sm_clock": 1575,
+     "t": 103.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 75,
+     "power": 280.46,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 105.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 76,
+     "power": 280.67,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 107.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 76,
+     "power": 275.18,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 109.9,
+     "phase": "warm"
+    },
+    {
+     "temp": 76,
+     "power": 280.7,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 111.9,
+     "phase": "warm"
+    },
+    {
+     "temp": 76,
+     "power": 276.23,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 113.9,
+     "phase": "warm"
+    },
+    {
+     "temp": 76,
+     "power": 280.25,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 116.0,
+     "phase": "warm"
+    },
+    {
+     "temp": 76,
+     "power": 274.19,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 118.0,
+     "phase": "warm"
+    },
+    {
+     "temp": 77,
+     "power": 277.76,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 120.0,
+     "phase": "warm"
+    },
+    {
+     "temp": 77,
+     "power": 275.84,
+     "util": 100,
+     "sm_clock": 1575,
+     "t": 122.1,
+     "phase": "warm"
+    },
+    {
+     "temp": 77,
+     "power": 279.42,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 124.1,
+     "phase": "warm"
+    },
+    {
+     "temp": 77,
+     "power": 277.38,
+     "util": 100,
+     "sm_clock": 1575,
+     "t": 126.1,
+     "phase": "warm"
+    },
+    {
+     "temp": 77,
+     "power": 280.77,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 128.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 77,
+     "power": 279.25,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 130.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 78,
+     "power": 280.43,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 132.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 78,
+     "power": 277.98,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 134.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 78,
+     "power": 276.78,
+     "util": 100,
+     "sm_clock": 1575,
+     "t": 136.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 78,
+     "power": 281.2,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 138.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 78,
+     "power": 277.72,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 140.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 78,
+     "power": 280.04,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 142.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 78,
+     "power": 278.58,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 144.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 79,
+     "power": 277.33,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 146.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 79,
+     "power": 279.4,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 148.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 79,
+     "power": 276.05,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 150.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 79,
+     "power": 279.4,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 152.6,
+     "phase": "warm"
+    },
+    {
+     "temp": 79,
+     "power": 279.99,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 154.6,
+     "phase": "warm"
+    },
+    {
+     "temp": 79,
+     "power": 280.06,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 156.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 79,
+     "power": 280.13,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 158.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 79,
+     "power": 278.95,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 160.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 79,
+     "power": 279.6,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 162.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 79,
+     "power": 280.47,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 164.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 79,
+     "power": 275.77,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 166.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 80,
+     "power": 281.22,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 168.9,
+     "phase": "warm"
+    },
+    {
+     "temp": 80,
+     "power": 281.48,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 170.9,
+     "phase": "warm"
+    },
+    {
+     "temp": 80,
+     "power": 280.34,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 172.9,
+     "phase": "warm"
+    },
+    {
+     "temp": 80,
+     "power": 277.02,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 175.0,
+     "phase": "warm"
+    },
+    {
+     "temp": 80,
+     "power": 279.57,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 177.0,
+     "phase": "warm"
+    },
+    {
+     "temp": 80,
+     "power": 277.58,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 179.0,
+     "phase": "warm"
+    },
+    {
+     "temp": 80,
+     "power": 279.25,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 181.1,
+     "phase": "warm"
+    },
+    {
+     "temp": 80,
+     "power": 273.66,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 183.1,
+     "phase": "warm"
+    },
+    {
+     "temp": 80,
+     "power": 279.68,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 185.1,
+     "phase": "warm"
+    },
+    {
+     "temp": 80,
+     "power": 281.01,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 187.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 80,
+     "power": 277.96,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 189.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 80,
+     "power": 278.99,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 191.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 276.95,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 193.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 278.53,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 195.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 276.96,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 197.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 280.66,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 199.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 275.48,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 201.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 278.83,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 203.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 281.17,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 205.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 278.48,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 207.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 279.73,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 209.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 277.74,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 211.6,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 280.29,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 213.6,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 279.68,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 215.6,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 282.15,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 217.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 277.71,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 219.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 276.54,
+     "util": 100,
+     "sm_clock": 1560,
+     "t": 221.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 279.84,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 223.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 282.42,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 225.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 279.0,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 227.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 278.73,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 229.9,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 278.57,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 231.9,
+     "phase": "warm"
+    },
+    {
+     "temp": 81,
+     "power": 278.2,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 233.9,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 279.31,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 236.0,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 281.92,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 238.0,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 279.74,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 240.0,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 283.1,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 242.1,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 279.47,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 244.1,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 281.94,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 246.1,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 274.48,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 248.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 276.39,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 250.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 283.04,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 252.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 280.31,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 254.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 282.07,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 256.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 279.07,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 258.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 277.94,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 260.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 274.44,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 262.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 275.82,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 264.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 279.72,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 266.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 279.8,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 268.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 282.71,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 270.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 279.54,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 272.6,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 276.11,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 274.6,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 277.39,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 276.6,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 275.86,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 278.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 278.98,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 280.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 279.56,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 282.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 278.48,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 284.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 280.5,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 286.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 277.89,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 288.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 276.17,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 290.9,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 276.07,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 292.9,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 278.9,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 294.9,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 280.05,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 297.0,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 279.47,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 299.0,
+     "phase": "warm"
+    },
+    {
+     "temp": 83,
+     "power": 279.76,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 301.0,
+     "phase": "warm"
+    },
+    {
+     "temp": 83,
+     "power": 279.82,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 303.1,
+     "phase": "warm"
+    },
+    {
+     "temp": 83,
+     "power": 276.9,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 305.1,
+     "phase": "warm"
+    },
+    {
+     "temp": 82,
+     "power": 276.33,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 307.1,
+     "phase": "warm"
+    },
+    {
+     "temp": 83,
+     "power": 276.09,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 309.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 83,
+     "power": 277.73,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 311.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 83,
+     "power": 279.3,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 313.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 83,
+     "power": 279.34,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 315.2,
+     "phase": "warm"
+    },
+    {
+     "temp": 83,
+     "power": 279.61,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 317.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 83,
+     "power": 283.91,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 319.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 83,
+     "power": 280.97,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 321.3,
+     "phase": "warm"
+    },
+    {
+     "temp": 83,
+     "power": 278.89,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 323.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 83,
+     "power": 276.55,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 325.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 83,
+     "power": 276.82,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 327.4,
+     "phase": "warm"
+    },
+    {
+     "temp": 83,
+     "power": 276.74,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 329.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 83,
+     "power": 278.45,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 331.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 83,
+     "power": 280.03,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 333.5,
+     "phase": "warm"
+    },
+    {
+     "temp": 83,
+     "power": 280.03,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 335.6,
+     "phase": "warm"
+    },
+    {
+     "temp": 83,
+     "power": 279.24,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 337.6,
+     "phase": "warm"
+    },
+    {
+     "temp": 83,
+     "power": 278.82,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 339.6,
+     "phase": "warm"
+    },
+    {
+     "temp": 83,
+     "power": 279.21,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 341.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 83,
+     "power": 278.65,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 343.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 83,
+     "power": 280.3,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 345.7,
+     "phase": "warm"
+    },
+    {
+     "temp": 83,
+     "power": 276.32,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 347.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 83,
+     "power": 275.73,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 349.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 83,
+     "power": 278.15,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 351.8,
+     "phase": "warm"
+    },
+    {
+     "temp": 83,
+     "power": 279.94,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 353.9,
+     "phase": "warm"
+    },
+    {
+     "temp": 83,
+     "power": 278.88,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 355.9,
+     "phase": "warm"
+    },
+    {
+     "temp": 83,
+     "power": 280.18,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 357.9,
+     "phase": "warm"
+    },
+    {
+     "temp": 83,
+     "power": 279.2,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 360.0,
+     "phase": "warm"
+    },
+    {
+     "temp": 83,
+     "power": 279.38,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 362.0,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 278.8,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 364.1,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 276.79,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 366.1,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 276.93,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 368.1,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 276.3,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 370.2,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 276.73,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 372.2,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 280.93,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 374.2,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 280.61,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 376.3,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 281.38,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 378.3,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 280.83,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 380.3,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 279.79,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 382.4,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 280.39,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 384.4,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 279.66,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 386.4,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 279.52,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 388.5,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 278.83,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 390.5,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 278.92,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 392.5,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 279.51,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 394.6,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 279.42,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 396.6,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 280.74,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 398.6,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 280.56,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 400.7,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 280.44,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 402.7,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 279.77,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 404.7,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 279.83,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 406.8,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 280.52,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 408.8,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 277.49,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 410.8,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 277.7,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 412.9,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 276.96,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 414.9,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 276.84,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 416.9,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 276.51,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 419.0,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 276.82,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 421.0,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 280.46,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 423.0,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 280.55,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 425.1,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 280.12,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 427.1,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 279.35,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 429.1,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 279.63,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 431.2,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 280.07,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 433.2,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 280.14,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 435.2,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 279.9,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 437.3,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 280.87,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 439.3,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 279.82,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 441.3,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 280.13,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 443.4,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 278.2,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 445.4,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 279.99,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 447.4,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 279.69,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 449.4,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 279.6,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 451.5,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 280.1,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 453.5,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 280.52,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 455.6,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 281.18,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 457.6,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 280.7,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 459.6,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 281.25,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 461.7,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 279.38,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 463.7,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 278.6,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 465.7,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 276.09,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 467.8,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 279.68,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 469.8,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 279.64,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 471.8,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 277.42,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 473.8,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 277.22,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 475.9,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 276.24,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 477.9,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 276.61,
+     "util": 100,
+     "sm_clock": 1545,
+     "t": 479.9,
+     "phase": "gap"
+    },
+    {
+     "temp": 83,
+     "power": 281.08,
+     "util": 100,
+     "sm_clock": 1530,
+     "t": 482.0,
+     "phase": "gap"
+    }
+   ]
+  }
+ },
+ "verdict": "HOLDS"
+}

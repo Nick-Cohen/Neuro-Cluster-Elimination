@@ -1,0 +1,41 @@
+..............F......................................................... [ 18%]
+..........FFFFF........s..........................F..................... [ 36%]
+...............................s.............ssssss..................... [ 54%]
+..............................................................s......... [ 72%]
+...................ss..........ss..........ss........................... [ 90%]
+.......................................                                  [100%]
+=============================== warnings summary ===============================
+tests/test_config_schema.py::TestNestedToFlatTranslation::test_nested_and_flat_produce_same_result
+  /tmp/claude-58902/wt-frozen/tests/test_config_schema.py:84: UserWarning: Dead field 'backward_ecl'. Use 'bw_ecl' instead.
+    flat_result = prepare_config(reference_flat_config)
+
+tests/test_config_schema.py::TestNestedToFlatTranslation::test_nested_and_flat_produce_same_result
+  /tmp/claude-58902/wt-frozen/tests/test_config_schema.py:84: UserWarning: Dead field 'num_batches_per_set'. This value is computed internally from set_size // batch_size.
+    flat_result = prepare_config(reference_flat_config)
+
+tests/test_config_schema.py::TestFlatPassthrough::test_flat_passthrough
+  /tmp/claude-58902/wt-frozen/tests/test_config_schema.py:383: UserWarning: Dead field 'backward_ecl'. Use 'bw_ecl' instead.
+    result = prepare_config(reference_flat_config)
+
+tests/test_config_schema.py::TestFlatPassthrough::test_flat_passthrough
+  /tmp/claude-58902/wt-frozen/tests/test_config_schema.py:383: UserWarning: Dead field 'num_batches_per_set'. This value is computed internally from set_size // batch_size.
+    result = prepare_config(reference_flat_config)
+
+tests/test_config_schema.py::TestFastGMIntegration::test_nested_equivalent_matches_flat
+  /tmp/claude-58902/wt-frozen/tests/test_config_schema.py:647: UserWarning: Dead field 'backward_ecl'. Use 'bw_ecl' instead.
+    flat_result = prepare_config(reference_flat_config)
+
+tests/test_config_schema.py::TestFastGMIntegration::test_nested_equivalent_matches_flat
+  /tmp/claude-58902/wt-frozen/tests/test_config_schema.py:647: UserWarning: Dead field 'num_batches_per_set'. This value is computed internally from set_size // batch_size.
+    flat_result = prepare_config(reference_flat_config)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_benchmark_configs.py::TestCleanBenchmarkConfigs::test_default_configs_no_backward_ecl
+FAILED tests/test_benchmark_configs.py::TestWorkerConfigClean::test_no_backward_ecl
+FAILED tests/test_benchmark_configs.py::TestWorkerConfigClean::test_no_num_batches_per_set
+FAILED tests/test_benchmark_configs.py::TestWorkerConfigClean::test_prepare_config_no_warnings
+FAILED tests/test_benchmark_configs.py::TestWorkerConfigClean::test_bw_ecl_zero_config
+FAILED tests/test_benchmark_configs.py::TestWorkerConfigClean::test_bw_ecl_positive_config
+FAILED tests/test_config_docs.py::TestSchemaDocSync::test_every_schema_field_documented
+7 failed, 377 passed, 15 skipped, 6 warnings in 395.21s (0:06:35)

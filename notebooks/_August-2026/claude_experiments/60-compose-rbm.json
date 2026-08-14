@@ -1,0 +1,19 @@
+{
+ "case": "cuda_rbm",
+ "emax": 16,
+ "log_z": "62.968421936035156",
+ "stats": {
+  "FastFactor._get_slices_prepared": {
+   "compared": 292158,
+   "bit_equal": 292158,
+   "max_dev": 0.0,
+   "shape_mismatch": 0
+  },
+  "FactorNN._get_slices": {
+   "compared": 4395,
+   "bit_equal": 4395,
+   "max_dev": 0.0,
+   "shape_mismatch": 0
+  }
+ }
+}

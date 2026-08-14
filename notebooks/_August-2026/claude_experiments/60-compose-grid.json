@@ -1,0 +1,19 @@
+{
+ "case": "cuda_grid_merged",
+ "emax": 8,
+ "log_z": "333.6826477050781",
+ "stats": {
+  "FastFactor._get_slices_prepared": {
+   "compared": 134,
+   "bit_equal": 134,
+   "max_dev": 0.0,
+   "shape_mismatch": 0
+  },
+  "FactorNN._get_slices": {
+   "compared": 8,
+   "bit_equal": 8,
+   "max_dev": 0.0,
+   "shape_mismatch": 0
+  }
+ }
+}

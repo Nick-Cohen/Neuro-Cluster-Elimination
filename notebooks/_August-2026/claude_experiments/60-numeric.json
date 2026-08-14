@@ -1,0 +1,53 @@
+{
+ "case": "cpu_grid_plain",
+ "golden_log_z": "305.3193054199219",
+ "rows": [
+  {
+   "rel": 0.0,
+   "log_z": "305.3193054199219",
+   "detected": false,
+   "applied": 0,
+   "before": null,
+   "after": null,
+   "applied_ok": true
+  },
+  {
+   "rel": 1e-07,
+   "log_z": "305.3193054199219",
+   "detected": false,
+   "applied": 1,
+   "before": -0.36755281686782837,
+   "after": -0.36755284667015076,
+   "applied_ok": true
+  },
+  {
+   "rel": 1e-06,
+   "log_z": "305.3193054199219",
+   "detected": false,
+   "applied": 1,
+   "before": -0.36755281686782837,
+   "after": -0.367553174495697,
+   "applied_ok": true
+  },
+  {
+   "rel": 0.0001,
+   "log_z": "305.3193054199219",
+   "detected": false,
+   "applied": 1,
+   "before": -0.36755281686782837,
+   "after": -0.3675895929336548,
+   "applied_ok": true
+  },
+  {
+   "rel": 0.01,
+   "log_z": "305.3248291015625",
+   "detected": true,
+   "applied": 1,
+   "before": -0.36755281686782837,
+   "after": -0.37122833728790283,
+   "applied_ok": true
+  }
+ ],
+ "all_perturbations_applied": true,
+ "smallest_detected_rel": 0.01
+}

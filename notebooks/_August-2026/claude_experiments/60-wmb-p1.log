@@ -1,0 +1,255 @@
+Populating backward factors using WMB approximations...
+  populate_bw_factors: bucket 1/100 (var=0)
+  populate_bw_factors: bucket 51/100 (var=2)
+  populate_bw_factors: bucket 100/100 (var=94)
+  populate_bw skipped 94/100 non-NN clusters
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 10, "strategy": "none", "route": "wmb", "status": "OK", "clusters": 100, "merged": 0, "max_elim": 1, "pop_up": 6, "pop_dn": 6, "bad_upstream": 0, "bad_upstream_ex": []}
+Populating backward factor LISTS via tree-collect (no per-bucket elim)...
+  fwd: bucket 1/100 (var=0)
+  fwd: bucket 100/100 (var=94)
+  populate_bw skipped 94/100 non-NN clusters
+  bwd distribute: 99/100 buckets processed (factor lists stored, lazy elim)
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 10, "strategy": "none", "route": "tree_collect", "status": "OK", "clusters": 100, "merged": 0, "max_elim": 1, "pop_up": 6, "pop_dn": 6, "bad_upstream": 0, "bad_upstream_ex": []}
+Populating backward factors using WMB approximations...
+  populate_bw_factors: bucket 1/100 (var=0)
+  populate_bw_factors: bucket 51/100 (var=2)
+  populate_bw_factors: bucket 100/100 (var=94)
+  populate_bw skipped 83/84 non-NN clusters
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 10, "strategy": "subsumption", "route": "wmb", "status": "OK", "clusters": 84, "merged": 5, "max_elim": 10, "pop_up": 1, "pop_dn": 1, "bad_upstream": 0, "bad_upstream_ex": []}
+Populating backward factor LISTS via tree-collect (no per-bucket elim)...
+  fwd: bucket 1/100 (var=0)
+  fwd: bucket 100/100 (var=94)
+  populate_bw skipped 83/84 non-NN clusters
+  bwd distribute: 99/100 buckets processed (factor lists stored, lazy elim)
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 10, "strategy": "subsumption", "route": "tree_collect", "status": "OK", "clusters": 84, "merged": 5, "max_elim": 10, "pop_up": 1, "pop_dn": 1, "bad_upstream": 0, "bad_upstream_ex": []}
+Populating backward factors using WMB approximations...
+  populate_bw_factors: bucket 1/100 (var=0)
+  populate_bw_factors: bucket 51/100 (var=2)
+  populate_bw_factors: bucket 100/100 (var=94)
+  populate_bw skipped 35/40 non-NN clusters
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 10, "strategy": "non_subsumption", "route": "wmb", "status": "OK", "clusters": 40, "merged": 10, "max_elim": 10, "pop_up": 5, "pop_dn": 5, "bad_upstream": 0, "bad_upstream_ex": []}
+Populating backward factor LISTS via tree-collect (no per-bucket elim)...
+  fwd: bucket 1/100 (var=0)
+  fwd: bucket 100/100 (var=94)
+  populate_bw skipped 35/40 non-NN clusters
+  bwd distribute: 99/100 buckets processed (factor lists stored, lazy elim)
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 10, "strategy": "non_subsumption", "route": "tree_collect", "status": "OK", "clusters": 40, "merged": 10, "max_elim": 10, "pop_up": 5, "pop_dn": 5, "bad_upstream": 0, "bad_upstream_ex": []}
+Populating backward factors using WMB approximations...
+  populate_bw_factors: bucket 1/100 (var=0)
+  populate_bw_factors: bucket 51/100 (var=2)
+  populate_bw_factors: bucket 100/100 (var=94)
+  populate_bw skipped 94/94 non-NN clusters
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 10, "strategy": "reduce_nn", "route": "wmb", "status": "OK", "clusters": 94, "merged": 2, "max_elim": 5, "pop_up": 0, "pop_dn": 0, "bad_upstream": 0, "bad_upstream_ex": []}
+Populating backward factor LISTS via tree-collect (no per-bucket elim)...
+  fwd: bucket 1/100 (var=0)
+  fwd: bucket 100/100 (var=94)
+  populate_bw skipped 94/94 non-NN clusters
+  bwd distribute: 99/100 buckets processed (factor lists stored, lazy elim)
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 10, "strategy": "reduce_nn", "route": "tree_collect", "status": "OK", "clusters": 94, "merged": 2, "max_elim": 5, "pop_up": 0, "pop_dn": 0, "bad_upstream": 0, "bad_upstream_ex": []}
+Populating backward factors using WMB approximations...
+  populate_bw_factors: bucket 1/100 (var=0)
+  populate_bw_factors: bucket 51/100 (var=2)
+  populate_bw_factors: bucket 100/100 (var=94)
+  populate_bw skipped 29/30 non-NN clusters
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 10, "strategy": "sub+nonsub", "route": "wmb", "status": "OK", "clusters": 30, "merged": 11, "max_elim": 10, "pop_up": 1, "pop_dn": 1, "bad_upstream": 0, "bad_upstream_ex": []}
+Populating backward factor LISTS via tree-collect (no per-bucket elim)...
+  fwd: bucket 1/100 (var=0)
+  fwd: bucket 100/100 (var=94)
+  populate_bw skipped 29/30 non-NN clusters
+  bwd distribute: 99/100 buckets processed (factor lists stored, lazy elim)
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 10, "strategy": "sub+nonsub", "route": "tree_collect", "status": "OK", "clusters": 30, "merged": 11, "max_elim": 10, "pop_up": 1, "pop_dn": 1, "bad_upstream": 0, "bad_upstream_ex": []}
+Populating backward factors using WMB approximations...
+  populate_bw_factors: bucket 1/100 (var=0)
+  populate_bw_factors: bucket 51/100 (var=2)
+  populate_bw_factors: bucket 100/100 (var=94)
+  populate_bw skipped 94/96 non-NN clusters
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 10, "strategy": "merge_degree", "route": "wmb", "status": "OK", "clusters": 96, "merged": 2, "max_elim": 4, "pop_up": 2, "pop_dn": 2, "bad_upstream": 0, "bad_upstream_ex": []}
+Populating backward factor LISTS via tree-collect (no per-bucket elim)...
+  fwd: bucket 1/100 (var=0)
+  fwd: bucket 100/100 (var=94)
+  populate_bw skipped 94/96 non-NN clusters
+  bwd distribute: 99/100 buckets processed (factor lists stored, lazy elim)
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 10, "strategy": "merge_degree", "route": "tree_collect", "status": "OK", "clusters": 96, "merged": 2, "max_elim": 4, "pop_up": 2, "pop_dn": 2, "bad_upstream": 0, "bad_upstream_ex": []}
+Populating backward factors using WMB approximations...
+  populate_bw_factors: bucket 1/100 (var=0)
+  populate_bw_factors: bucket 51/100 (var=2)
+  populate_bw_factors: bucket 100/100 (var=94)
+  populate_bw skipped 94/100 non-NN clusters
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 16, "strategy": "none", "route": "wmb", "status": "OK", "clusters": 100, "merged": 0, "max_elim": 1, "pop_up": 6, "pop_dn": 6, "bad_upstream": 0, "bad_upstream_ex": []}
+Populating backward factor LISTS via tree-collect (no per-bucket elim)...
+  fwd: bucket 1/100 (var=0)
+  fwd: bucket 100/100 (var=94)
+  populate_bw skipped 94/100 non-NN clusters
+  bwd distribute: 99/100 buckets processed (factor lists stored, lazy elim)
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 16, "strategy": "none", "route": "tree_collect", "status": "OK", "clusters": 100, "merged": 0, "max_elim": 1, "pop_up": 6, "pop_dn": 6, "bad_upstream": 0, "bad_upstream_ex": []}
+Populating backward factors using WMB approximations...
+  populate_bw_factors: bucket 1/100 (var=0)
+  populate_bw_factors: bucket 51/100 (var=2)
+  populate_bw_factors: bucket 100/100 (var=94)
+  populate_bw skipped 82/83 non-NN clusters
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 16, "strategy": "subsumption", "route": "wmb", "status": "OK", "clusters": 83, "merged": 4, "max_elim": 14, "pop_up": 1, "pop_dn": 1, "bad_upstream": 0, "bad_upstream_ex": []}
+Populating backward factor LISTS via tree-collect (no per-bucket elim)...
+  fwd: bucket 1/100 (var=0)
+  fwd: bucket 100/100 (var=94)
+  populate_bw skipped 82/83 non-NN clusters
+  bwd distribute: 99/100 buckets processed (factor lists stored, lazy elim)
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 16, "strategy": "subsumption", "route": "tree_collect", "status": "OK", "clusters": 83, "merged": 4, "max_elim": 14, "pop_up": 1, "pop_dn": 1, "bad_upstream": 0, "bad_upstream_ex": []}
+Populating backward factors using WMB approximations...
+  populate_bw_factors: bucket 1/100 (var=0)
+  populate_bw_factors: bucket 51/100 (var=2)
+  populate_bw_factors: bucket 100/100 (var=94)
+  populate_bw skipped 26/31 non-NN clusters
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 16, "strategy": "non_subsumption", "route": "wmb", "status": "OK", "clusters": 31, "merged": 7, "max_elim": 16, "pop_up": 5, "pop_dn": 5, "bad_upstream": 0, "bad_upstream_ex": []}
+Populating backward factor LISTS via tree-collect (no per-bucket elim)...
+  fwd: bucket 1/100 (var=0)
+  fwd: bucket 100/100 (var=94)
+  populate_bw skipped 26/31 non-NN clusters
+  bwd distribute: 99/100 buckets processed (factor lists stored, lazy elim)
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 16, "strategy": "non_subsumption", "route": "tree_collect", "status": "OK", "clusters": 31, "merged": 7, "max_elim": 16, "pop_up": 5, "pop_dn": 5, "bad_upstream": 0, "bad_upstream_ex": []}
+Populating backward factors using WMB approximations...
+  populate_bw_factors: bucket 1/100 (var=0)
+  populate_bw_factors: bucket 51/100 (var=2)
+  populate_bw_factors: bucket 100/100 (var=94)
+  populate_bw skipped 94/94 non-NN clusters
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 16, "strategy": "reduce_nn", "route": "wmb", "status": "OK", "clusters": 94, "merged": 2, "max_elim": 5, "pop_up": 0, "pop_dn": 0, "bad_upstream": 0, "bad_upstream_ex": []}
+Populating backward factor LISTS via tree-collect (no per-bucket elim)...
+  fwd: bucket 1/100 (var=0)
+  fwd: bucket 100/100 (var=94)
+  populate_bw skipped 94/94 non-NN clusters
+  bwd distribute: 99/100 buckets processed (factor lists stored, lazy elim)
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 16, "strategy": "reduce_nn", "route": "tree_collect", "status": "OK", "clusters": 94, "merged": 2, "max_elim": 5, "pop_up": 0, "pop_dn": 0, "bad_upstream": 0, "bad_upstream_ex": []}
+Populating backward factors using WMB approximations...
+  populate_bw_factors: bucket 1/100 (var=0)
+  populate_bw_factors: bucket 51/100 (var=2)
+  populate_bw_factors: bucket 100/100 (var=94)
+  populate_bw skipped 19/20 non-NN clusters
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 16, "strategy": "sub+nonsub", "route": "wmb", "status": "OK", "clusters": 20, "merged": 8, "max_elim": 16, "pop_up": 1, "pop_dn": 1, "bad_upstream": 0, "bad_upstream_ex": []}
+Populating backward factor LISTS via tree-collect (no per-bucket elim)...
+  fwd: bucket 1/100 (var=0)
+  fwd: bucket 100/100 (var=94)
+  populate_bw skipped 19/20 non-NN clusters
+  bwd distribute: 99/100 buckets processed (factor lists stored, lazy elim)
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 16, "strategy": "sub+nonsub", "route": "tree_collect", "status": "OK", "clusters": 20, "merged": 8, "max_elim": 16, "pop_up": 1, "pop_dn": 1, "bad_upstream": 0, "bad_upstream_ex": []}
+Populating backward factors using WMB approximations...
+  populate_bw_factors: bucket 1/100 (var=0)
+  populate_bw_factors: bucket 51/100 (var=2)
+  populate_bw_factors: bucket 100/100 (var=94)
+  populate_bw skipped 94/96 non-NN clusters
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 16, "strategy": "merge_degree", "route": "wmb", "status": "OK", "clusters": 96, "merged": 2, "max_elim": 4, "pop_up": 2, "pop_dn": 2, "bad_upstream": 0, "bad_upstream_ex": []}
+Populating backward factor LISTS via tree-collect (no per-bucket elim)...
+  fwd: bucket 1/100 (var=0)
+  fwd: bucket 100/100 (var=94)
+  populate_bw skipped 94/96 non-NN clusters
+  bwd distribute: 99/100 buckets processed (factor lists stored, lazy elim)
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 16, "strategy": "merge_degree", "route": "tree_collect", "status": "OK", "clusters": 96, "merged": 2, "max_elim": 4, "pop_up": 2, "pop_dn": 2, "bad_upstream": 0, "bad_upstream_ex": []}
+Populating backward factors using WMB approximations...
+  populate_bw_factors: bucket 1/100 (var=0)
+  populate_bw_factors: bucket 51/100 (var=2)
+  populate_bw_factors: bucket 100/100 (var=94)
+  populate_bw skipped 94/100 non-NN clusters
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 24, "strategy": "none", "route": "wmb", "status": "OK", "clusters": 100, "merged": 0, "max_elim": 1, "pop_up": 6, "pop_dn": 6, "bad_upstream": 0, "bad_upstream_ex": []}
+Populating backward factor LISTS via tree-collect (no per-bucket elim)...
+  fwd: bucket 1/100 (var=0)
+  fwd: bucket 100/100 (var=94)
+  populate_bw skipped 94/100 non-NN clusters
+  bwd distribute: 99/100 buckets processed (factor lists stored, lazy elim)
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 24, "strategy": "none", "route": "tree_collect", "status": "OK", "clusters": 100, "merged": 0, "max_elim": 1, "pop_up": 6, "pop_dn": 6, "bad_upstream": 0, "bad_upstream_ex": []}
+Populating backward factors using WMB approximations...
+  populate_bw_factors: bucket 1/100 (var=0)
+  populate_bw_factors: bucket 51/100 (var=2)
+  populate_bw_factors: bucket 100/100 (var=94)
+  populate_bw skipped 82/83 non-NN clusters
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 24, "strategy": "subsumption", "route": "wmb", "status": "OK", "clusters": 83, "merged": 4, "max_elim": 14, "pop_up": 1, "pop_dn": 1, "bad_upstream": 0, "bad_upstream_ex": []}
+Populating backward factor LISTS via tree-collect (no per-bucket elim)...
+  fwd: bucket 1/100 (var=0)
+  fwd: bucket 100/100 (var=94)
+  populate_bw skipped 82/83 non-NN clusters
+  bwd distribute: 99/100 buckets processed (factor lists stored, lazy elim)
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 24, "strategy": "subsumption", "route": "tree_collect", "status": "OK", "clusters": 83, "merged": 4, "max_elim": 14, "pop_up": 1, "pop_dn": 1, "bad_upstream": 0, "bad_upstream_ex": []}
+Populating backward factors using WMB approximations...
+  populate_bw_factors: bucket 1/100 (var=0)
+  populate_bw_factors: bucket 51/100 (var=2)
+  populate_bw_factors: bucket 100/100 (var=94)
+  populate_bw skipped 12/17 non-NN clusters
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 24, "strategy": "non_subsumption", "route": "wmb", "status": "OK", "clusters": 17, "merged": 5, "max_elim": 21, "pop_up": 5, "pop_dn": 5, "bad_upstream": 0, "bad_upstream_ex": []}
+Populating backward factor LISTS via tree-collect (no per-bucket elim)...
+  fwd: bucket 1/100 (var=0)
+  fwd: bucket 100/100 (var=94)
+  populate_bw skipped 12/17 non-NN clusters
+  bwd distribute: 99/100 buckets processed (factor lists stored, lazy elim)
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 24, "strategy": "non_subsumption", "route": "tree_collect", "status": "OK", "clusters": 17, "merged": 5, "max_elim": 21, "pop_up": 5, "pop_dn": 5, "bad_upstream": 0, "bad_upstream_ex": []}
+Populating backward factors using WMB approximations...
+  populate_bw_factors: bucket 1/100 (var=0)
+  populate_bw_factors: bucket 51/100 (var=2)
+  populate_bw_factors: bucket 100/100 (var=94)
+  populate_bw skipped 94/94 non-NN clusters
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 24, "strategy": "reduce_nn", "route": "wmb", "status": "OK", "clusters": 94, "merged": 2, "max_elim": 5, "pop_up": 0, "pop_dn": 0, "bad_upstream": 0, "bad_upstream_ex": []}
+Populating backward factor LISTS via tree-collect (no per-bucket elim)...
+  fwd: bucket 1/100 (var=0)
+  fwd: bucket 100/100 (var=94)
+  populate_bw skipped 94/94 non-NN clusters
+  bwd distribute: 99/100 buckets processed (factor lists stored, lazy elim)
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 24, "strategy": "reduce_nn", "route": "tree_collect", "status": "OK", "clusters": 94, "merged": 2, "max_elim": 5, "pop_up": 0, "pop_dn": 0, "bad_upstream": 0, "bad_upstream_ex": []}
+Populating backward factors using WMB approximations...
+  populate_bw_factors: bucket 1/100 (var=0)
+  populate_bw_factors: bucket 51/100 (var=2)
+  populate_bw_factors: bucket 100/100 (var=94)
+  populate_bw skipped 6/7 non-NN clusters
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 24, "strategy": "sub+nonsub", "route": "wmb", "status": "OK", "clusters": 7, "merged": 5, "max_elim": 24, "pop_up": 1, "pop_dn": 1, "bad_upstream": 0, "bad_upstream_ex": []}
+Populating backward factor LISTS via tree-collect (no per-bucket elim)...
+  fwd: bucket 1/100 (var=0)
+  fwd: bucket 100/100 (var=94)
+  populate_bw skipped 6/7 non-NN clusters
+  bwd distribute: 99/100 buckets processed (factor lists stored, lazy elim)
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 24, "strategy": "sub+nonsub", "route": "tree_collect", "status": "OK", "clusters": 7, "merged": 5, "max_elim": 24, "pop_up": 1, "pop_dn": 1, "bad_upstream": 0, "bad_upstream_ex": []}
+Populating backward factors using WMB approximations...
+  populate_bw_factors: bucket 1/100 (var=0)
+  populate_bw_factors: bucket 51/100 (var=2)
+  populate_bw_factors: bucket 100/100 (var=94)
+  populate_bw skipped 94/96 non-NN clusters
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 24, "strategy": "merge_degree", "route": "wmb", "status": "OK", "clusters": 96, "merged": 2, "max_elim": 4, "pop_up": 2, "pop_dn": 2, "bad_upstream": 0, "bad_upstream_ex": []}
+Populating backward factor LISTS via tree-collect (no per-bucket elim)...
+  fwd: bucket 1/100 (var=0)
+  fwd: bucket 100/100 (var=94)
+  populate_bw skipped 94/96 non-NN clusters
+  bwd distribute: 99/100 buckets processed (factor lists stored, lazy elim)
+  WMB forward partitions during backward factor population: 6 (upper bound)
+{"bound": 24, "strategy": "merge_degree", "route": "tree_collect", "status": "OK", "clusters": 96, "merged": 2, "max_elim": 4, "pop_up": 2, "pop_dn": 2, "bad_upstream": 0, "bad_upstream_ex": []}
+
+BUILD MATRIX: 36/36 OK
+bad_upstream nonzero: 0

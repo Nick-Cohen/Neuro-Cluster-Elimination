@@ -1,0 +1,51 @@
+{
+ "case": "cpu_grid_plain",
+ "golden": {
+  "log_z_repr": "305.3193054199219",
+  "epochs": [
+   10
+  ],
+  "n_nn_clusters": 1,
+  "local_errors": [],
+  "bucket_order_digest": "5e354a03ac73569d"
+ },
+ "checks": {
+  "A_unperturbed": {
+   "log_z_repr": "305.3193054199219",
+   "match_log_z": true,
+   "match_epochs": true,
+   "match_local_errors": true,
+   "matches_golden": true
+  },
+  "B_repeat": {
+   "log_z_repr": "305.3193054199219",
+   "match_log_z": true,
+   "match_epochs": true,
+   "match_local_errors": true,
+   "matches_golden": true,
+   "identical_to_A": true
+  },
+  "G1_crn_key_perturbed": {
+   "log_z_repr": "303.9815368652344",
+   "match_log_z": false,
+   "match_epochs": true,
+   "match_local_errors": true,
+   "matches_golden": false
+  },
+  "G2_one_ulp_factor": {
+   "log_z_repr": "305.3193054199219",
+   "match_log_z": true,
+   "match_epochs": true,
+   "match_local_errors": true,
+   "matches_golden": true
+  },
+  "I1_extra_global_draw": {
+   "log_z_repr": "305.3193054199219",
+   "match_log_z": true,
+   "match_epochs": true,
+   "match_local_errors": true,
+   "matches_golden": true
+  }
+ },
+ "verdict": "PROBLEM"
+}

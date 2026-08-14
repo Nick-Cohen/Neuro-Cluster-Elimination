@@ -1,0 +1,25 @@
+{
+ "case": "cuda_pedigree_masked",
+ "emax": 16,
+ "log_z": "-58.972801208496094",
+ "stats": {
+  "FastFactor._get_slices_prepared": {
+   "compared": 14176,
+   "bit_equal": 14176,
+   "max_dev": 0.0,
+   "shape_mismatch": 0
+  },
+  "FactorNN._get_slices": {
+   "compared": 727,
+   "bit_equal": 727,
+   "max_dev": 0.0,
+   "shape_mismatch": 0
+  },
+  "FactorNN._eval_elim_block": {
+   "compared": 1152,
+   "bit_equal": 1152,
+   "max_dev": 0.0,
+   "shape_mismatch": 0
+  }
+ }
+}

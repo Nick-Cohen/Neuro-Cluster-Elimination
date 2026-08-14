@@ -1,0 +1,100 @@
+Populating backward factors using WMB approximations...
+  populate_bw_factors: bucket 1/100 (var=0)
+  populate_bw_factors: bucket 51/100 (var=2)
+  populate_bw_factors: bucket 100/100 (var=94)
+{"bound": 10, "strategy": "subsumption", "route": "wmb", "status": "OK", "checked": 84, "up_mismatch": 0, "dn_mismatch": 0, "worst_up": 0.000152587890625, "worst_dn": 0.000152587890625, "examples": []}
+Populating backward factor LISTS via tree-collect (no per-bucket elim)...
+  fwd: bucket 1/100 (var=0)
+  fwd: bucket 100/100 (var=94)
+  bwd distribute: 99/100 buckets processed (factor lists stored, lazy elim)
+{"bound": 10, "strategy": "subsumption", "route": "tree_collect", "status": "OK", "checked": 84, "up_mismatch": 0, "dn_mismatch": 0, "worst_up": 0.000152587890625, "worst_dn": 0.00018310546875, "examples": []}
+Populating backward factors using WMB approximations...
+  populate_bw_factors: bucket 1/100 (var=0)
+  populate_bw_factors: bucket 51/100 (var=2)
+  populate_bw_factors: bucket 100/100 (var=94)
+{"bound": 10, "strategy": "non_subsumption", "route": "wmb", "status": "OK", "checked": 38, "up_mismatch": 0, "dn_mismatch": 0, "worst_up": 0.000152587890625, "worst_dn": 0.0001068115234375, "examples": []}
+Populating backward factor LISTS via tree-collect (no per-bucket elim)...
+  fwd: bucket 1/100 (var=0)
+  fwd: bucket 100/100 (var=94)
+  bwd distribute: 99/100 buckets processed (factor lists stored, lazy elim)
+{"bound": 10, "strategy": "non_subsumption", "route": "tree_collect", "status": "OK", "checked": 38, "up_mismatch": 0, "dn_mismatch": 0, "worst_up": 0.000152587890625, "worst_dn": 0.000152587890625, "examples": []}
+Populating backward factors using WMB approximations...
+  populate_bw_factors: bucket 1/100 (var=0)
+  populate_bw_factors: bucket 51/100 (var=2)
+  populate_bw_factors: bucket 100/100 (var=94)
+{"bound": 10, "strategy": "reduce_nn", "route": "wmb", "status": "OK", "checked": 94, "up_mismatch": 0, "dn_mismatch": 0, "worst_up": 0.000152587890625, "worst_dn": 0.000152587890625, "examples": []}
+Populating backward factor LISTS via tree-collect (no per-bucket elim)...
+  fwd: bucket 1/100 (var=0)
+  fwd: bucket 100/100 (var=94)
+  bwd distribute: 99/100 buckets processed (factor lists stored, lazy elim)
+{"bound": 10, "strategy": "reduce_nn", "route": "tree_collect", "status": "OK", "checked": 94, "up_mismatch": 0, "dn_mismatch": 0, "worst_up": 0.000152587890625, "worst_dn": 0.00018310546875, "examples": []}
+Populating backward factors using WMB approximations...
+  populate_bw_factors: bucket 1/100 (var=0)
+  populate_bw_factors: bucket 51/100 (var=2)
+  populate_bw_factors: bucket 100/100 (var=94)
+{"bound": 10, "strategy": "sub+nonsub", "route": "wmb", "status": "OK", "checked": 27, "up_mismatch": 0, "dn_mismatch": 0, "worst_up": 0.000152587890625, "worst_dn": 0.0001068115234375, "examples": []}
+Populating backward factor LISTS via tree-collect (no per-bucket elim)...
+  fwd: bucket 1/100 (var=0)
+  fwd: bucket 100/100 (var=94)
+  bwd distribute: 99/100 buckets processed (factor lists stored, lazy elim)
+{"bound": 10, "strategy": "sub+nonsub", "route": "tree_collect", "status": "OK", "checked": 27, "up_mismatch": 0, "dn_mismatch": 0, "worst_up": 0.000152587890625, "worst_dn": 0.000152587890625, "examples": []}
+Populating backward factors using WMB approximations...
+  populate_bw_factors: bucket 1/100 (var=0)
+  populate_bw_factors: bucket 51/100 (var=2)
+  populate_bw_factors: bucket 100/100 (var=94)
+{"bound": 10, "strategy": "merge_degree", "route": "wmb", "status": "OK", "checked": 96, "up_mismatch": 0, "dn_mismatch": 0, "worst_up": 0.000152587890625, "worst_dn": 0.000152587890625, "examples": []}
+Populating backward factor LISTS via tree-collect (no per-bucket elim)...
+  fwd: bucket 1/100 (var=0)
+  fwd: bucket 100/100 (var=94)
+  bwd distribute: 99/100 buckets processed (factor lists stored, lazy elim)
+{"bound": 10, "strategy": "merge_degree", "route": "tree_collect", "status": "OK", "checked": 96, "up_mismatch": 0, "dn_mismatch": 0, "worst_up": 0.000152587890625, "worst_dn": 0.00018310546875, "examples": []}
+Populating backward factors using WMB approximations...
+  populate_bw_factors: bucket 1/100 (var=0)
+  populate_bw_factors: bucket 51/100 (var=2)
+  populate_bw_factors: bucket 100/100 (var=94)
+{"bound": 16, "strategy": "subsumption", "route": "wmb", "status": "OK", "checked": 83, "up_mismatch": 0, "dn_mismatch": 0, "worst_up": 6.103515625e-05, "worst_dn": 0.000152587890625, "examples": []}
+Populating backward factor LISTS via tree-collect (no per-bucket elim)...
+  fwd: bucket 1/100 (var=0)
+  fwd: bucket 100/100 (var=94)
+  bwd distribute: 99/100 buckets processed (factor lists stored, lazy elim)
+{"bound": 16, "strategy": "subsumption", "route": "tree_collect", "status": "OK", "checked": 83, "up_mismatch": 0, "dn_mismatch": 0, "worst_up": 6.103515625e-05, "worst_dn": 0.00018310546875, "examples": []}
+Populating backward factors using WMB approximations...
+  populate_bw_factors: bucket 1/100 (var=0)
+  populate_bw_factors: bucket 51/100 (var=2)
+  populate_bw_factors: bucket 100/100 (var=94)
+{"bound": 16, "strategy": "non_subsumption", "route": "wmb", "status": "OK", "checked": 26, "up_mismatch": 0, "dn_mismatch": 0, "worst_up": 0.000152587890625, "worst_dn": 0.0001068115234375, "examples": []}
+Populating backward factor LISTS via tree-collect (no per-bucket elim)...
+  fwd: bucket 1/100 (var=0)
+  fwd: bucket 100/100 (var=94)
+  bwd distribute: 99/100 buckets processed (factor lists stored, lazy elim)
+{"bound": 16, "strategy": "non_subsumption", "route": "tree_collect", "status": "OK", "checked": 26, "up_mismatch": 0, "dn_mismatch": 0, "worst_up": 0.000152587890625, "worst_dn": 0.000152587890625, "examples": []}
+Populating backward factors using WMB approximations...
+  populate_bw_factors: bucket 1/100 (var=0)
+  populate_bw_factors: bucket 51/100 (var=2)
+  populate_bw_factors: bucket 100/100 (var=94)
+{"bound": 16, "strategy": "reduce_nn", "route": "wmb", "status": "OK", "checked": 94, "up_mismatch": 0, "dn_mismatch": 0, "worst_up": 0.000152587890625, "worst_dn": 0.000152587890625, "examples": []}
+Populating backward factor LISTS via tree-collect (no per-bucket elim)...
+  fwd: bucket 1/100 (var=0)
+  fwd: bucket 100/100 (var=94)
+  bwd distribute: 99/100 buckets processed (factor lists stored, lazy elim)
+{"bound": 16, "strategy": "reduce_nn", "route": "tree_collect", "status": "OK", "checked": 94, "up_mismatch": 0, "dn_mismatch": 0, "worst_up": 0.000152587890625, "worst_dn": 0.00018310546875, "examples": []}
+Populating backward factors using WMB approximations...
+  populate_bw_factors: bucket 1/100 (var=0)
+  populate_bw_factors: bucket 51/100 (var=2)
+  populate_bw_factors: bucket 100/100 (var=94)
+{"bound": 16, "strategy": "sub+nonsub", "route": "wmb", "status": "OK", "checked": 16, "up_mismatch": 0, "dn_mismatch": 0, "worst_up": 6.103515625e-05, "worst_dn": 9.1552734375e-05, "examples": []}
+Populating backward factor LISTS via tree-collect (no per-bucket elim)...
+  fwd: bucket 1/100 (var=0)
+  fwd: bucket 100/100 (var=94)
+  bwd distribute: 99/100 buckets processed (factor lists stored, lazy elim)
+{"bound": 16, "strategy": "sub+nonsub", "route": "tree_collect", "status": "OK", "checked": 16, "up_mismatch": 0, "dn_mismatch": 0, "worst_up": 6.103515625e-05, "worst_dn": 0.000152587890625, "examples": []}
+Populating backward factors using WMB approximations...
+  populate_bw_factors: bucket 1/100 (var=0)
+  populate_bw_factors: bucket 51/100 (var=2)
+  populate_bw_factors: bucket 100/100 (var=94)
+{"bound": 16, "strategy": "merge_degree", "route": "wmb", "status": "OK", "checked": 96, "up_mismatch": 0, "dn_mismatch": 0, "worst_up": 0.000152587890625, "worst_dn": 0.000152587890625, "examples": []}
+Populating backward factor LISTS via tree-collect (no per-bucket elim)...
+  fwd: bucket 1/100 (var=0)
+  fwd: bucket 100/100 (var=94)
+  bwd distribute: 99/100 buckets processed (factor lists stored, lazy elim)
+{"bound": 16, "strategy": "merge_degree", "route": "tree_collect", "status": "OK", "checked": 96, "up_mismatch": 0, "dn_mismatch": 0, "worst_up": 0.000152587890625, "worst_dn": 0.00018310546875, "examples": []}
