@@ -164,8 +164,7 @@ def test_stop_waits_for_exit():
 
 
 def test_ensure_drops_cards_not_free():
-    """A card that stops being free must lose its ballast -- this is what keeps
-    ballast off a card that is running a job."""
+    """A card that has left our control entirely must lose its ballast."""
     pool = B.BallastPool(enabled=True)
     stopped, started = [], []
     pool.stop = lambda i, timeout=None: (stopped.append(i), True)[1]
@@ -174,6 +173,21 @@ def test_ensure_drops_cards_not_free():
     pool.ensure([3])
     assert stopped == [0]
     assert started == []
+
+
+def test_ensure_keeps_paused_worker_on_a_running_job():
+    """REGRESSION. `ensure(free)` used to tear down the PAUSED worker on a card
+    running one of our jobs (it is not "free"), and the next call then started a
+    fresh UNPAUSED worker on that same card -- GEMM racing a job that was being
+    timed. Caught only end-to-end; this pins it."""
+    pool = B.BallastPool(enabled=True)
+    stopped, started = [], []
+    pool.stop = lambda i, timeout=None: (stopped.append(i), True)[1]
+    pool.start = lambda i: (started.append(i), True)[1]
+    pool.active_indices = lambda: {3}
+    pool.ensure([], keep_indices=[3])
+    assert stopped == [], 'paused worker on a running job must survive'
+    assert started == [], 'must never start an UNPAUSED worker on a busy card'
 
 
 def test_disabled_pool_is_inert():
@@ -191,6 +205,179 @@ def _free_non_retired_gpu():
         if not g.retired and g.idle:
             return g.index
     return None
+
+
+# --------------------------------------------------------------------------
+# Handoff: ballast covers the runner's CPU setup and yields before GPU work
+# --------------------------------------------------------------------------
+def test_handoff_info_none_when_no_ballast():
+    pool = B.BallastPool(enabled=True)
+    assert pool.handoff_info(0) is None
+
+
+def test_handoff_info_reports_pid_and_control_files(tmp_path):
+    pool = B.BallastPool(enabled=True, log_dir=str(tmp_path))
+    fp = _FakeProc()
+    pool.procs[3] = {'proc': fp, 'started': time.time(), 'log': None}
+    info = pool.handoff_info(3)
+    assert info is not None
+    pid, pause_file, paused_marker = info
+    assert pid == fp.pid
+    assert pause_file == pool.pause_file_for(3)
+    assert paused_marker == pool.paused_marker_for(3)
+    fp.terminate()
+    assert pool.handoff_info(3) is None, 'a dead worker must not be handed off'
+
+
+def test_resume_clears_pause_file(tmp_path):
+    pool = B.BallastPool(enabled=True, log_dir=str(tmp_path))
+    os.makedirs(str(tmp_path), exist_ok=True)
+    with open(pool.pause_file_for(0), 'w') as fh:
+        fh.write('x')
+    pool.resume(0)
+    assert not os.path.exists(pool.pause_file_for(0))
+
+
+def test_ballast_survives_on_cards_running_our_jobs(tmp_path, monkeypatch):
+    """A card running a job holds a PAUSED worker. It must not be torn down, or
+    it could not resume when the job ends and the next job would have nothing
+    to hand off to."""
+    from nce.scheduler.scheduler import Dispatcher
+    from nce.scheduler.jobs import JobQueue
+    from nce.scheduler import scheduler as S
+
+    q = JobQueue(str(tmp_path / 'q.json'))
+    d = Dispatcher(q, str(tmp_path / 'out'), ballast=True)
+    fp = _FakeProc()
+    d.ballast.procs[3] = {'proc': fp, 'started': time.time(), 'log': None}
+    d.running['GPU-x'] = {'proc': _FakeProc(), 'job_id': 'j', 'started': 0.0,
+                          'log': None, 'gpu_index': 3, 'name': 'n'}
+    monkeypatch.setattr(S, 'dispatchable_gpus', lambda **kw: [])
+    stopped = []
+    d.ballast.stop = lambda i, timeout=None: (stopped.append(i), True)[1]
+    d._ballast_idle_cards()
+    assert stopped == [], 'ballast on a card running our job must be kept alive'
+
+
+def test_start_clears_stale_stop_file(tmp_path):
+    """A stop-file left by the previous job would kill the next ballast worker
+    on its first check, silently disabling ballast for the rest of the sweep."""
+    pool = B.BallastPool(enabled=True, log_dir=str(tmp_path))
+    stale = pool.stop_file_for(0)
+    os.makedirs(str(tmp_path), exist_ok=True)
+    with open(stale, 'w') as fh:
+        fh.write('stale')
+    assert os.path.exists(stale)
+    started = {}
+    real_popen = subprocess.Popen
+
+    def fake_popen(cmd, **kw):
+        started['cmd'] = cmd
+        started['stop_file_existed'] = os.path.exists(stale)
+        return _FakeProc()
+
+    subprocess.Popen = fake_popen
+    try:
+        pool.start(0)
+    finally:
+        subprocess.Popen = real_popen
+    assert started['stop_file_existed'] is False, 'stale stop-file not cleared'
+    assert '--stop-file' in started['cmd']
+
+
+def test_reap_drops_exited_workers():
+    pool = B.BallastPool(enabled=True)
+    fp = _FakeProc()
+    pool.procs[1] = {'proc': fp, 'started': time.time(), 'log': None}
+    assert pool.reap() == []
+    fp.terminate()
+    assert pool.reap() == [1]
+    assert 1 not in pool.procs
+
+
+def test_pause_ballast_refuses_without_attestation(tmp_path):
+    """If ballast never confirms it stopped, the runner must RAISE, not run.
+
+    A job timed against a card that is also running ballast is silently wrong,
+    which is worse than a failed job.
+    """
+    from nce.scheduler import runner as R
+    pf = str(tmp_path / 'pause')
+    with pytest.raises(RuntimeError, match='did not confirm pause'):
+        R.pause_ballast(pf, str(tmp_path / 'paused'), 0, timeout=0.5)
+    assert os.path.exists(pf), 'the pause-file must still have been written'
+
+
+def test_pause_ballast_returns_on_attestation(tmp_path):
+    """Only the worker's own marker clears the job to start."""
+    from nce.scheduler import runner as R
+    import threading
+    pf, pm = str(tmp_path / 'pause'), str(tmp_path / 'paused')
+
+    def attest():
+        time.sleep(0.1)
+        with open(pm, 'w') as fh:
+            fh.write('ok')
+
+    t = threading.Thread(target=attest)
+    t.start()
+    try:
+        info = R.pause_ballast(pf, pm, 0, timeout=5)
+    finally:
+        t.join()
+    assert info['ballast_pause_s'] >= 0
+
+
+def test_pause_ballast_ignores_stale_marker(tmp_path):
+    """A marker left from the previous job must not clear this one instantly."""
+    from nce.scheduler import runner as R
+    pf, pm = str(tmp_path / 'pause'), str(tmp_path / 'paused')
+    with open(pm, 'w') as fh:
+        fh.write('stale')
+    with pytest.raises(RuntimeError, match='did not confirm pause'):
+        R.pause_ballast(pf, pm, 0, timeout=0.5)
+
+
+def test_dispatch_hands_off_warm_card(tmp_path, monkeypatch):
+    """The scheduler must pass the stop-file/pid to the runner and must NOT
+    stop ballast before launching -- otherwise the card idles through setup."""
+    from nce.scheduler.scheduler import Dispatcher
+    from nce.scheduler.jobs import JobQueue, JobSpec
+
+    q = JobQueue(str(tmp_path / 'q.json'))
+    q.add([JobSpec(problem_key='grids/grid10x10.f10', merge_strategy='nomerge',
+                   merge_bound=None, seed=1)])
+    d = Dispatcher(q, str(tmp_path / 'out'), ballast=True)
+    fp = _FakeProc()
+    d.ballast.procs[3] = {'proc': fp, 'started': time.time(), 'log': None}
+
+    seen = {}
+    monkeypatch.setattr('subprocess.Popen',
+                        lambda cmd, **kw: (seen.update(cmd=cmd), _FakeProc())[1])
+
+    class G:
+        index, uuid = 3, 'GPU-x'
+    d._launch(q.pending()[0], G())
+
+    assert '--ballast-pause-file' in seen['cmd']
+    assert '--ballast-paused-marker' in seen['cmd']
+    assert d.ballast.pause_file_for(3) in seen['cmd']
+    assert fp.terminated is False, 'ballast must NOT be stopped before launch'
+
+
+# --------------------------------------------------------------------------
+# Model-cache guard
+# --------------------------------------------------------------------------
+def test_cache_assertion_names_the_variable(tmp_path, monkeypatch):
+    from nce.scheduler import models as M
+    monkeypatch.setenv('NCE_MODEL_CACHE', str(tmp_path / 'nope'))
+    with pytest.raises(RuntimeError, match='NCE_MODEL_CACHE'):
+        M.assert_cache_configured()
+    empty = tmp_path / 'empty'
+    empty.mkdir()
+    monkeypatch.setenv('NCE_MODEL_CACHE', str(empty))
+    with pytest.raises(RuntimeError, match='no .uai files'):
+        M.assert_cache_configured()
 
 
 @pytest.mark.skipif(_free_non_retired_gpu() is None,

@@ -111,6 +111,18 @@ class Dispatcher:
             cmd += ['--base-config', self.base_config]
         if self.no_checkpoint:
             cmd += ['--no-checkpoint']
+        # BALLAST HANDOFF. The card is handed over WARM, with ballast still on
+        # it, and the runner drops ballast itself immediately before its first
+        # GPU work (runner.yield_ballast). Stopping ballast here instead would
+        # leave the card idle for the whole of the runner's CPU-bound setup --
+        # measured at 8-9 s, over which a card falls from ~83 C toward ~49 C --
+        # which is precisely the cold start this exists to remove.
+        handoff = self.ballast.handoff_info(gpu.index)
+        if handoff is not None:
+            _pid, pause_file, paused_marker = handoff
+            cmd += ['--ballast-pause-file', pause_file,
+                    '--ballast-paused-marker', paused_marker]
+        cmd += ['--launched-at', repr(time.time())]
         log_path = os.path.join(d, 'runner.log')
         log = open(log_path, 'ab')
         log.write(('\n=== launch %s on cuda:%d (%s) ===\n'
@@ -148,6 +160,11 @@ class Dispatcher:
                   % (status, rec['name'], elapsed, rec['gpu_index'], note),
                   flush=True)
             del self.running[uuid]
+            # The job paused ballast before it touched the GPU; now that the
+            # card is free again, let ballast feed it. Done here rather than at
+            # end of sweep so the card starts re-warming the instant the job
+            # ends, not one poll interval later.
+            self.ballast.resume(rec['gpu_index'])
 
     def _validate_pending(self) -> None:
         """Block jobs whose model is missing/corrupt BEFORE they hold a GPU."""
@@ -177,22 +194,40 @@ class Dispatcher:
         if self.only_gpus is not None:
             free = [g for g in free if g.index in self.only_gpus]
         pending = self.queue.pending()
+        # Ballast every free card BEFORE dispatching. Ordering matters: a worker
+        # must already exist on the card for `_launch` to hand it to the runner,
+        # and the runner is what keeps the card warm through its own setup. With
+        # a saturated queue there is no idle window in which ballast could
+        # otherwise ever start, so ballasting only after dispatch (the previous
+        # ordering) meant ballast never ran at all and every job's setup window
+        # stayed uncovered.
+        self.ballast.ensure([g.index for g in free],
+                            keep_indices=[rec['gpu_index']
+                                          for rec in self.running.values()])
         launched = 0
         for gpu, spec in zip(free, pending):
-            # Yield the card before the job touches it. If ballast will not let
-            # go, skip this card entirely rather than launch onto a busy GPU.
-            if not self.ballast.stop(gpu.index):
-                continue
+            # NOTE: ballast is deliberately NOT stopped here. The card is handed
+            # over warm and the runner pauses ballast itself, in the last
+            # CPU-only instant before it touches the GPU. See _launch.
             self._launch(spec, gpu)
             launched += 1
-        # Ballast every dispatchable card that did NOT just receive a job, so it
-        # is at working temperature when it does. Recomputed after dispatch so a
-        # card we just launched onto is never in the set.
+        # Cards that did not receive a job keep (or gain) ballast.
         self._ballast_idle_cards()
         return launched
 
     def _ballast_idle_cards(self) -> None:
-        """Run ballast on dispatchable cards that carry no job of ours."""
+        """Keep a ballast worker on every card we own.
+
+        "Own" means free-and-dispatchable OR currently running one of our jobs.
+        The second half is essential: a card running a job has a ballast worker
+        that the runner PAUSED, and that worker must stay alive so it can resume
+        the instant the job ends and so the NEXT job has something to hand off
+        to. Dropping it here (the obvious reading of "ballast idle cards") would
+        kill the worker the running job just paused, and no job would ever have
+        its setup window covered.
+
+        Ballast is only torn down on cards that have left our control entirely.
+        """
         if not self.ballast.enabled:
             return
         busy = self._busy_uuids()
@@ -200,10 +235,43 @@ class Dispatcher:
                 if g.uuid not in busy]
         if self.only_gpus is not None:
             free = [g for g in free if g.index in self.only_gpus]
-        self.ballast.ensure(g.index for g in free)
+        self.ballast.ensure([g.index for g in free],
+                            keep_indices=[rec['gpu_index']
+                                          for rec in self.running.values()])
 
-    def run(self, once: bool = False, max_jobs: int = None) -> None:
+    def warm_cards(self, seconds: float) -> None:
+        """Bring every dispatchable card to equilibrium BEFORE the first job.
+
+        Ballast covers the gaps between jobs and each job's own setup window, so
+        with it enabled the only job that can still start cold is the FIRST one
+        on each card -- `sweep()` would otherwise dispatch in the same pass that
+        starts ballast. This closes that last case.
+
+        `seconds` is the caller's, not invented here. Doc 59 MEASURED
+        time-to-equilibrium as 330 s on gpu0 and 180 s on gpu3 and recommends a
+        360 s warm-up; this is opt-in because it delays the first job by that
+        much and that is a scheduling decision, not a default I should impose.
+        """
+        if not self.ballast.enabled or seconds <= 0:
+            return
+        free = [g for g in dispatchable_gpus(ignore_pids=self.ballast.pids())]
+        if self.only_gpus is not None:
+            free = [g for g in free if g.index in self.only_gpus]
+        if not free:
+            return
+        for g in free:
+            self.ballast.start(g.index)
+        print('[warmup] holding %d card(s) at load for %.0fs before the first '
+              'dispatch: %s' % (len(free), seconds,
+                                ','.join('cuda:%d' % g.index for g in free)),
+              flush=True)
+        time.sleep(seconds)
+        print('[warmup] done', flush=True)
+
+    def run(self, once: bool = False, max_jobs: int = None,
+            warmup_s: float = 0.0) -> None:
         self._validate_pending()
+        self.warm_cards(warmup_s)
         started = 0
         try:
             try:
@@ -272,6 +340,14 @@ def main(argv=None) -> int:
     p.add_argument('--base-config', default=None)
     p.add_argument('--python', default=None)
     p.add_argument('--no-checkpoint', action='store_true')
+    p.add_argument('--warmup-s', type=float, default=0.0,
+                   help='hold every dispatchable card at load for this long '
+                        'before the FIRST dispatch. Ballast covers inter-job '
+                        'gaps and each job\'s setup, so only the first job per '
+                        'card can still start cold. Doc 59 measured '
+                        'time-to-equilibrium at 330 s (gpu0) / 180 s (gpu3) and '
+                        'recommends 360. Off by default: it delays the first '
+                        'job, which is a scheduling decision.')
     p.add_argument('--no-ballast', action='store_true',
                    help='disable thermal ballast on idle cards. Ballast is ON '
                         'by default: without it every job starts cold and the '
@@ -288,6 +364,10 @@ def main(argv=None) -> int:
     if not args.out_dir:
         p.error('--out-dir is required unless --status')
 
+    # Fail before a single job is dispatched, naming the variable, rather than
+    # letting an unattended sweep BLOCK every job on a missing model cache.
+    print('model cache: %s' % modelval.assert_cache_configured())
+
     q = JobQueue(args.queue)
     d = Dispatcher(q, args.out_dir, python=args.python,
                    base_config=args.base_config, threads=args.threads,
@@ -297,7 +377,7 @@ def main(argv=None) -> int:
                    ballast=not args.no_ballast)
     print('Scheduler starting. %s' % q.summary())
     print(describe())
-    d.run(once=args.once, max_jobs=args.max_jobs)
+    d.run(once=args.once, max_jobs=args.max_jobs, warmup_s=args.warmup_s)
     return 0
 
 

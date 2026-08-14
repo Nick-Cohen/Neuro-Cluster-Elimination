@@ -40,6 +40,8 @@ def main(argv=None) -> int:
     p.add_argument('--no-validate', action='store_true')
     args = p.parse_args(argv)
 
+    modelval.assert_cache_configured()
+
     base = {}
     if args.base_config:
         with open(args.base_config) as fh:

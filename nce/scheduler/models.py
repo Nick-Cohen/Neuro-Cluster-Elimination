@@ -46,8 +46,57 @@ def cache_root() -> str:
     worktree was BLOCKED as "model missing" while the loader would have found
     it perfectly well via the override.
     """
+    env = os.environ.get('NCE_MODEL_CACHE')
+    if env:
+        # Resolve WITHOUT importing catalog_utils. Importing it pulls in
+        # nce.benchmark_problems.__init__, which eagerly builds benchmark sets
+        # and therefore needs a working cache -- so validating a broken cache
+        # would itself crash on the broken cache. Chicken and egg; the env var
+        # is authoritative anyway, exactly as in catalog_utils.get_catalog.
+        return env
     from nce.benchmark_problems import catalog_utils
-    return os.environ.get('NCE_MODEL_CACHE') or catalog_utils._DEFAULT_CACHE
+    return catalog_utils._DEFAULT_CACHE
+
+
+def assert_cache_configured(root: str = None) -> str:
+    """Fail NOW, naming the variable, if the model cache is not usable.
+
+    `.model_cache` is untracked and gitignored on this lineage, so a fresh
+    worktree has an empty one and `dbn/*` cannot be re-downloaded. Without this
+    check a sweep starts happily and every job fails ~8 s later with a per-job
+    "model missing" -- which, launched unattended overnight, means waking up to
+    a queue of BLOCKED jobs and no runs. The whole point is to make forgetting
+    `NCE_MODEL_CACHE` impossible rather than merely documented.
+
+    Returns the resolved root so callers can log it.
+    """
+    root = root or cache_root()
+    env_set = bool(os.environ.get('NCE_MODEL_CACHE'))
+    hint = ('NCE_MODEL_CACHE is NOT set, so the cache resolved to the path '
+            'derived from the package location.'
+            if not env_set else
+            'NCE_MODEL_CACHE is set to %r.' % os.environ.get('NCE_MODEL_CACHE'))
+
+    if not os.path.isdir(root):
+        raise RuntimeError(
+            'Model cache directory does not exist: %s\n  %s\n'
+            '  Set NCE_MODEL_CACHE to a populated cache, e.g.\n'
+            '      export NCE_MODEL_CACHE=/home/cohenn1/NCE/.model_cache\n'
+            '  Note dbn/* cannot be re-downloaded, so never delete or '
+            'symlink over a populated cache.' % (root, hint))
+
+    n_uai = 0
+    for dirpath, _dirnames, filenames in os.walk(root):
+        n_uai += sum(1 for f in filenames if f.endswith('.uai'))
+        if n_uai:
+            break
+    if n_uai == 0:
+        raise RuntimeError(
+            'Model cache at %s contains no .uai files.\n  %s\n'
+            '  Set NCE_MODEL_CACHE to a populated cache, e.g.\n'
+            '      export NCE_MODEL_CACHE=/home/cohenn1/NCE/.model_cache\n'
+            '  Note dbn/* cannot be re-downloaded.' % (root, hint))
+    return root
 
 
 def model_paths(problem_key: str, root: str = None) -> Dict[str, str]:

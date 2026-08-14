@@ -92,7 +92,9 @@ BALLAST_STOP_TIMEOUT_S = float(os.environ.get('NCE_BALLAST_STOP_TIMEOUT_S', '30'
 # ---------------------------------------------------------------------------
 # Worker: `python -m nce.scheduler.ballast --gpu N`
 # ---------------------------------------------------------------------------
-def _worker(gpu: int, stop_file: Optional[str], report_every: float) -> int:
+def _worker(gpu: int, stop_file: Optional[str], report_every: float,
+            pause_file: Optional[str] = None,
+            paused_marker: Optional[str] = None) -> int:
     # Guard BEFORE torch touches the device.
     assert_not_retired(gpu)
 
@@ -112,14 +114,58 @@ def _worker(gpu: int, stop_file: Optional[str], report_every: float) -> int:
 
     dev = torch.device('cuda:0')  # remapped by CUDA_VISIBLE_DEVICES
     n = BALLAST_MATRIX_DIM
-    a = torch.randn(n, n, device=dev, dtype=torch.float32)
-    b = torch.randn(n, n, device=dev, dtype=torch.float32)
+
+    def _alloc():
+        return (torch.randn(n, n, device=dev, dtype=torch.float32),
+                torch.randn(n, n, device=dev, dtype=torch.float32))
+
+    a, b = _alloc()
     print('[ballast] cuda:%d up: %d x %dx%d fp32 GEMM loop (pid %d)'
           % (gpu, BALLAST_BATCH, n, n, os.getpid()), flush=True)
 
+    def _mark_paused(state):
+        """Attest, from inside the worker, that no more kernels are queued."""
+        if not paused_marker:
+            return
+        if state:
+            with open(paused_marker, 'w') as fh:
+                fh.write('%f\n' % time.time())
+        else:
+            try:
+                os.remove(paused_marker)
+            except OSError:
+                pass
+
     last_report = time.time()
     iters = 0
+    paused = False
     while not stopping['flag']:
+        # ---- PAUSE: stop feeding the card, but keep the process alive -----
+        # Exiting instead would mean a fresh process (python + torch import +
+        # CUDA context ~5 s) before the NEXT job's setup could be covered --
+        # far too slow, since with a saturated queue the next job is dispatched
+        # ~0.4 s after the last one finishes. So ballast idles in place: it
+        # frees its matrices and stops submitting work, holding only the bare
+        # CUDA context. No kernels queued => no SM contention => no perturbation
+        # of the job that is about to be timed. (Verified, doc 60 section 6.4.)
+        if pause_file and os.path.exists(pause_file):
+            if not paused:
+                del a, b
+                torch.cuda.synchronize()
+                torch.cuda.empty_cache()
+                paused = True
+                _mark_paused(True)
+                print('[ballast] cuda:%d paused (context held, no work queued)'
+                      % gpu, flush=True)
+            time.sleep(0.05)
+            if stop_file and os.path.exists(stop_file):
+                break
+            continue
+        if paused:
+            a, b = _alloc()
+            paused = False
+            _mark_paused(False)
+            print('[ballast] cuda:%d resumed' % gpu, flush=True)
         for _ in range(BALLAST_BATCH):
             c = a @ b
         # One sync per batch bounds the yield latency: without it the queue
@@ -128,6 +174,10 @@ def _worker(gpu: int, stop_file: Optional[str], report_every: float) -> int:
         torch.cuda.synchronize()
         del c
         iters += 1
+        # The stop-file is the RUNNER's channel (see runner.yield_ballast): it
+        # is how a job about to touch the GPU tells ballast to get off the card.
+        # It is checked every batch, right after the sync, so the flag can never
+        # be observed while work is still queued.
         if stop_file and os.path.exists(stop_file):
             break
         now = time.time()
@@ -170,7 +220,57 @@ class BallastPool:
     def active_indices(self) -> set:
         return {i for i, rec in self.procs.items() if rec['proc'].poll() is None}
 
+    def reap(self) -> list:
+        """Drop records for workers that have already exited.
+
+        A handed-off worker exits on the runner's stop-file, not on a stop()
+        call from us, so without this its record (and its open log fd) would
+        linger and `start()` would overwrite it, leaking the descriptor.
+        """
+        gone = [i for i, rec in self.procs.items() if rec['proc'].poll() is not None]
+        for i in gone:
+            self._close(i)
+        return gone
+
     # -- lifecycle ---------------------------------------------------------
+    def stop_file_for(self, gpu_index: int) -> str:
+        """Path the RUNNER touches to make ballast yield this card.
+
+        Deterministic and per-card so the runner can be told it on its command
+        line and needs no other channel back to the scheduler.
+        """
+        d = self.log_dir or os.path.join(os.path.sep, 'tmp')
+        return os.path.join(d, 'ballast-cuda%d.stop' % gpu_index)
+
+    def pause_file_for(self, gpu_index: int) -> str:
+        d = self.log_dir or os.path.join(os.path.sep, 'tmp')
+        return os.path.join(d, 'ballast-cuda%d.pause' % gpu_index)
+
+    def paused_marker_for(self, gpu_index: int) -> str:
+        d = self.log_dir or os.path.join(os.path.sep, 'tmp')
+        return os.path.join(d, 'ballast-cuda%d.paused' % gpu_index)
+
+    def handoff_info(self, gpu_index: int):
+        """(pid, pause_file, paused_marker) for a live worker, else None.
+
+        This is what `Dispatcher._launch` passes to the runner so the runner can
+        keep the card warm through its own CPU-bound setup and take the card
+        itself, immediately before its first GPU work.
+        """
+        rec = self.procs.get(gpu_index)
+        if rec is None or rec['proc'].poll() is not None:
+            return None
+        return (rec['proc'].pid, self.pause_file_for(gpu_index),
+                self.paused_marker_for(gpu_index))
+
+    def resume(self, gpu_index: int) -> None:
+        """Let ballast start feeding the card again after a job has finished."""
+        for p in (self.pause_file_for(gpu_index),):
+            try:
+                os.remove(p)
+            except OSError:
+                pass
+
     def start(self, gpu_index: int) -> bool:
         if not self.enabled:
             return False
@@ -179,14 +279,30 @@ class BallastPool:
         assert_not_retired(gpu_index)
         if gpu_index in self.procs and self.procs[gpu_index]['proc'].poll() is None:
             return False
-        cmd = [self.python, '-m', 'nce.scheduler.ballast', '--gpu', str(gpu_index)]
-        log = None
+        stop_file = self.stop_file_for(gpu_index)
         if self.log_dir:
             os.makedirs(self.log_dir, exist_ok=True)
+        # Stale control files left by a previous job would either kill the new
+        # worker on its first check or start it already paused, silently
+        # disabling ballast for the rest of the sweep. Clear them before
+        # starting, never after.
+        for stale in (stop_file, self.pause_file_for(gpu_index),
+                      self.paused_marker_for(gpu_index)):
+            try:
+                os.remove(stale)
+            except OSError:
+                pass
+        cmd = [self.python, '-m', 'nce.scheduler.ballast', '--gpu', str(gpu_index),
+               '--stop-file', stop_file,
+               '--pause-file', self.pause_file_for(gpu_index),
+               '--paused-marker', self.paused_marker_for(gpu_index)]
+        log = None
+        if self.log_dir:
             log = open(os.path.join(self.log_dir, 'ballast-cuda%d.log' % gpu_index), 'ab')
         proc = subprocess.Popen(cmd, stdout=log or subprocess.DEVNULL,
                                 stderr=subprocess.STDOUT, cwd=self.cwd)
-        self.procs[gpu_index] = {'proc': proc, 'started': time.time(), 'log': log}
+        self.procs[gpu_index] = {'proc': proc, 'started': time.time(), 'log': log,
+                                 'stop_file': stop_file}
         print('[ballast] cuda:%d <- ballast (pid %d)' % (gpu_index, proc.pid),
               flush=True)
         return True
@@ -238,19 +354,35 @@ class BallastPool:
             except Exception:
                 pass
 
-    def ensure(self, free_indices: Iterable[int]) -> None:
-        """Ballast exactly the given job-free cards; drop ballast anywhere else.
+    def ensure(self, free_indices: Iterable[int],
+               keep_indices: Iterable[int] = ()) -> None:
+        """Start ballast on job-free cards; keep it alive on cards we still own.
 
-        `free_indices` must be cards the scheduler knows carry no job. This
-        method never widens that set, which is what makes requirement 3
-        (no perturbation of a running job) structural rather than best-effort.
+        Two sets, and conflating them is a real bug I shipped and had to catch
+        end-to-end:
+
+        `free_indices`  cards with no job -- START a worker here.
+        `keep_indices`  cards running one of OUR jobs. Their worker has been
+                        PAUSED by the runner and must be left completely alone:
+                        not stopped (it has to resume the instant the job ends,
+                        and the next job needs something to hand off to) and
+                        emphatically not (re)started, since a fresh worker comes
+                        up UNPAUSED and would run GEMM against a job that is
+                        being timed.
+
+        Anything in neither set has left our control and is torn down. This
+        method never starts a worker on a card outside `free_indices`, which is
+        what makes "ballast never perturbs a running job" structural rather than
+        best-effort.
         """
         if not self.enabled:
             return
-        want = {i for i in free_indices if i not in RETIRED_GPU_INDICES}
-        for idx in list(self.active_indices() - want):
+        self.reap()
+        free = {i for i in free_indices if i not in RETIRED_GPU_INDICES}
+        keep = {i for i in keep_indices if i not in RETIRED_GPU_INDICES}
+        for idx in list(self.active_indices() - free - keep):
             self.stop(idx)
-        for idx in sorted(want - self.active_indices()):
+        for idx in sorted(free - self.active_indices()):
             self.start(idx)
 
 
@@ -260,9 +392,15 @@ def main(argv=None) -> int:
     ap.add_argument('--gpu', type=int, required=True)
     ap.add_argument('--stop-file', default=None,
                     help='exit when this path appears (secondary to SIGTERM)')
+    ap.add_argument('--pause-file', default=None,
+                    help='while this path exists, hold the context but queue no '
+                         'work (the runner uses this to take the card)')
+    ap.add_argument('--paused-marker', default=None,
+                    help='written by this worker once it has actually stopped')
     ap.add_argument('--report-every', type=float, default=60.0)
     args = ap.parse_args(argv)
-    return _worker(args.gpu, args.stop_file, args.report_every)
+    return _worker(args.gpu, args.stop_file, args.report_every,
+                   args.pause_file, args.paused_marker)
 
 
 if __name__ == '__main__':
