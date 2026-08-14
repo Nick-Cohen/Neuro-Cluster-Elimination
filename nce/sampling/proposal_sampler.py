@@ -325,12 +325,19 @@ def proposal_scope_for_bucket(bucket, reference_gm):
     and before elimination has moved a single message; once a neighbour has been
     merged, the messages actually arriving at an unmerged bucket can span
     variables the cache never predicted, and `build_proposal_tree` then raises
-    `KeyError: <label>` on the missing domain size (measured on `dbn/rbm_20`
-    under reduce-NN: 11/11 NN clusters). Doc 10's defect-4 fix covered the
-    merged branch of this same function and left the single-var branch alone;
-    `bd44e4b` diagnosed it but repaired it only inside
+    `KeyError: <label>` on the missing domain size. Doc 10's defect-4 fix covered
+    the merged branch of this same function and left the single-var branch
+    alone; `bd44e4b` diagnosed it (citing 11/11 NN clusters on `dbn/rbm_20`
+    under reduce-NN) but repaired it only inside
     `memorization_table._proposal_tree_over_scope`, deliberately not touching
-    the shipped `proposal_sampling` path. It is repaired here now.
+    the shipped `proposal_sampling` path.
+
+    CAVEAT, doc 57: I could not reproduce that divergence. Probing every NN
+    cluster on grid10x10.f10 (rnn4), grid10x10.f10.wrap (rnn8, jt8), pedigree1
+    (rnn6) and dbn/rbm_20 (rnn8) found ZERO buckets where the cache differs from
+    the live scope. This change removes a real hazard -- reading a
+    pre-elimination artefact at elimination time -- but it is defensive, and it
+    is NOT what made `proposal_sampling=True` start working.
 
     Exposed separately from build_proposal_for_bucket so the scope can be
     asserted without building a tree.
@@ -398,6 +405,15 @@ def build_proposal_for_bucket(bucket, reference_gm, ecl=None, temperature=1.0):
     # Include all elim_vars in domain_sizes for the elimination step
     for lab in elim_var_labels:
         domain_sizes[lab] = reference_gm.matching_var(lab).states
+
+    # Any label the backward chain carries that is neither in the separator nor
+    # an elim var still needs a domain size, or build_proposal_tree raises
+    # `KeyError: <label>` when it records a level for it. Mirrors the guard
+    # `memorization_table._proposal_tree_over_scope` already carries (bd44e4b).
+    for f in all_factors:
+        for lab in f.labels:
+            if lab not in domain_sizes:
+                domain_sizes[lab] = reference_gm.matching_var(lab).states
 
     # Eliminate elim_var(s) from combined factors to get factors over message_scope
     message_scope_factors = reference_gm._wmb_eliminate_to_scope(

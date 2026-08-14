@@ -30,21 +30,20 @@ for key in ('grids/grid10x10.f10', 'grids/grid10x10.f10.wrap'):
         cfg = prepare_config(dict(BASE, memorize_sample_frac=sf,
                                   memorize_frac=mf), strict=False)
         used = []
-        real = mt._crn.no_replacement_generator
+        old = mt._crn
+        real = old.no_replacement_generator
 
         class _Shim:
             def __getattr__(self, n):
-                return getattr(mt._crn, n)
+                return getattr(old, n)
 
             def no_replacement_generator(self, config, scope, doms, device,
                                          draw_index=0, role=None):
                 g = real(config, scope, doms, device, draw_index, role)
-                before = g.get_state().clone()
-                used.append([before, g])
+                used.append([g.get_state().clone(), g])
                 return g
 
         shim = _Shim()
-        old = mt._crn
         mt._crn = shim
         try:
             with contextlib.redirect_stdout(io.StringIO()):
@@ -53,6 +52,9 @@ for key in ('grids/grid10x10.f10', 'grids/grid10x10.f10.wrap'):
         finally:
             mt._crn = old
         n_used = sum(1 for b, g in used if not torch.equal(b, g.get_state()))
+        bad = [r.get('error') for r in gm.memorization_log if not r.get('ok')]
+        if bad:
+            print('   FAILED:', bad[0])
         widths = [r['width'] for r in gm.memorization_log if r.get('ok')]
         nfill = sum(r.get('n_scope_vars_not_in_tree', 0)
                     for r in gm.memorization_log if r.get('ok'))
