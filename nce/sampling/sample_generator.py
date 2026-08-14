@@ -273,21 +273,36 @@ class SampleGenerator:
                 _rec.note(sg_path='small', sg_a_chunk=a_chunk, sg_e_chunk=elim_prod,
                           sg_elim_prod=elim_prod, sg_n_assignments=n,
                           sg_n_chunks=(n + a_chunk - 1) // max(1, a_chunk))
+            # Everything FastFactor._get_slices does except projecting/indexing the
+            # chunk is invariant across chunks, so build it once per factor instead
+            # of once per (factor, chunk). Bit-identical -- the same ops on the same
+            # values, merely not recomputed. A cluster here can hold hundreds of
+            # small table factors and hundreds of chunks, so this is the difference
+            # between O(F) and O(F x chunks) Python bookkeeping. FactorNN returns
+            # None from _slice_plan and keeps the unprepared path.
+            plans = [f._slice_plan(self.elim_vars, self.elim_domain_sizes,
+                                   self.message_scope) for f in fx]
             outs = []
             for start in range(0, n, a_chunk):
                 ca = assignments[start:start + a_chunk]
                 uv = torch.zeros((len(ca),) + unsummed_shape, device=dev, requires_grad=False)
                 if _pf is None:
-                    for f in fx:
-                        uv += f._get_slices(assignments=ca, elim_vars=self.elim_vars,
-                                            elim_domain_sizes=self.elim_domain_sizes,
-                                            message_scope=self.message_scope)
+                    for f, plan in zip(fx, plans):
+                        if plan is None:
+                            uv += f._get_slices(assignments=ca, elim_vars=self.elim_vars,
+                                                elim_domain_sizes=self.elim_domain_sizes,
+                                                message_scope=self.message_scope)
+                        else:
+                            uv += f._get_slices_prepared(plan, ca)
                 else:
-                    for _fi, f in enumerate(fx):
+                    for _fi, (f, plan) in enumerate(zip(fx, plans)):
                         _t0 = _pf.tic()
-                        uv += f._get_slices(assignments=ca, elim_vars=self.elim_vars,
-                                            elim_domain_sizes=self.elim_domain_sizes,
-                                            message_scope=self.message_scope)
+                        if plan is None:
+                            uv += f._get_slices(assignments=ca, elim_vars=self.elim_vars,
+                                                elim_domain_sizes=self.elim_domain_sizes,
+                                                message_scope=self.message_scope)
+                        else:
+                            uv += f._get_slices_prepared(plan, ca)
                         _pf.toc_factor(_fi, _t0)
                 outs.append(torch.logsumexp(uv * ln10, dim=tuple(range(1, uv.dim()))) / ln10)
             return torch.cat(outs, dim=0)

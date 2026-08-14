@@ -148,6 +148,20 @@ class FactorNN(FastFactor):
             return torch.zeros((n_rows, n_labels), dtype=torch.int64, device=src.device)
         return src.index_select(1, sel)
 
+    def _slice_plan(self, elim_vars, elim_domain_sizes, message_scope):
+        """No prepared path for NN factors -- callers must fall back to `_get_slices`.
+
+        `FastFactor._slice_plan` hoists a *table* factor's permute/reshape work, which
+        is meaningless here: this class computes its slices with a network forward
+        pass, not by indexing `self.tensor` (which may be None).
+
+        Note (merge of perf/table-path + perf/elim-block-projection): `FactorNN`
+        overrides `_get_slices` outright, so the prepared path is unreachable here in
+        any case; returning None keeps the small-path caller on that override rather
+        than on `FastFactor._get_slices_prepared`, which would index `self.tensor`.
+        """
+        return None
+
     @staticmethod
     def elim_extent(labels, elim_vars, elim_domain_sizes):
         """(present_pos, k^{e_f}) for a factor with `labels` in a cluster eliminating
