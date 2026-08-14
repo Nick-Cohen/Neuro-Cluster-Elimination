@@ -19,10 +19,20 @@ def _get_backward_factors(gm, bucket_var, backward_factors=None):
     if backward_factors is None:
         gm.eliminate_variables(up_to=bucket_var, exact=True)
         backward_factors = []
-        for var in gm.elim_order[gm.elim_order.index(gm.matching_var(bucket_var))+1:]:
-            bucket = gm.buckets[var]
-            bucket_factors = bucket.factors
-            for factor in bucket_factors:
+        # MERGE-AWARE: a merged cluster removes its absorbed members from
+        # gm.buckets but leaves them in gm.elim_order, so indexing
+        # gm.buckets[var] per elim-order entry raises KeyError under every
+        # merge strategy (measured on grid10x10.f10: reduce-NN, subsumption and
+        # merge_degree all raise). Walk the surviving buckets instead. Same
+        # defect class as doc 10 defect 2 in get_senders_receivers.
+        downstream = set(gm.elim_order[gm.elim_order.index(gm.matching_var(bucket_var))+1:])
+        for var in gm.elim_order:
+            if var not in downstream:
+                continue
+            bucket = gm.buckets.get(var)
+            if bucket is None:
+                continue
+            for factor in bucket.factors:
                 backward_factors.append(factor.to_exact())
     return backward_factors
 
@@ -66,13 +76,23 @@ def get_backward_message(gm, bucket_var, backward_factors=None, iB = 100, backwa
     else:
         message = None
 
-    # Handle edge cases - use 0-dim tensor for scalar factors (empty labels)
+    # Handle edge cases - use 0-dim tensor for scalar factors (empty labels).
+    # These early returns must still honour return_factor_list: every caller
+    # that passes return_factor_list=True feeds the result straight into
+    # SampleGenerator.sample_tensor_product, which iterates it. Returning a bare
+    # FastFactor there is a contract violation. It is reachable today: a merged
+    # cluster can have an EMPTY separator (bucket_scope == []), which is exactly
+    # the first branch -- measured on grid10x10.f10 under non-subsumption
+    # merging, cluster 96 (n_elim=10).
+    def _edge(f):
+        payload = [f] if return_factor_list else f
+        result = (payload, message)
+        return result + (0,) if return_partitions else result
+
     if bucket_scope == []:
-        result = (FastFactor(torch.tensor(0.0, device=gm.device, requires_grad=False), []), message)
-        return result + (0,) if return_partitions else result
+        return _edge(FastFactor(torch.tensor(0.0, device=gm.device, requires_grad=False), []))
     if backward_factors == []:
-        result = (FastFactor(torch.tensor(0.0, device=gm.device, requires_grad=False), []), message)
-        return result + (0,) if return_partitions else result
+        return _edge(FastFactor(torch.tensor(0.0, device=gm.device, requires_grad=False), []))
 
     # Separate scalar factors (empty labels) from non-scalar factors.
     # Scalar factors are constants in logspace - we need to accumulate them
@@ -87,8 +107,7 @@ def get_backward_message(gm, bucket_var, backward_factors=None, iB = 100, backwa
 
     # If all factors were scalar, return the accumulated constant as the backward message
     if not backward_factors_filtered:
-        result = (FastFactor(scalar_constant, []), message)
-        return result + (0,) if return_partitions else result
+        return _edge(FastFactor(scalar_constant, []))
 
     # Compute elimination order for downstream factors
     downstream_elim_order = wtminfill_order(backward_factors_filtered, variables_not_eliminated=bucket_scope)
@@ -96,6 +115,17 @@ def get_backward_message(gm, bucket_var, backward_factors=None, iB = 100, backwa
     # Create a copy of the config for the downstream GM
     downstream_config = copy.deepcopy(gm.config)
     downstream_config['populate_bw_factors'] = False
+    # Don't re-merge inside the downstream (backward) GM. FastGM.__init__
+    # dispatches FOUR independent merge passes and this config is a verbatim
+    # copy of the primary GM's, so every merge strategy was re-running here on
+    # a graph that is not the primary bucket tree. That silently changes which
+    # variables WMB partitions over at `backward_ecl`, i.e. it changes the
+    # VALUE of the backward message. Same defect class as doc 10 defect 1 in
+    # _create_population_copy and doc 44 5.2 in build_proposal_tree.
+    for _flag in ('use_join_tree_merge', 'use_reduce_nn_merge',
+                  'use_non_subsumption_merge'):
+        downstream_config[_flag] = False
+    downstream_config['merge_degree'] = 0
 
     # Override approximation method if specified
     if approximation_method is not None:
