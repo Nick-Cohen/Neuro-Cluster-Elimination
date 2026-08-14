@@ -136,7 +136,17 @@ def test_cluster_upstream_covers_all_elim_vars(built, merge_name, route_name):
 @pytest.mark.parametrize('merge_name,route_name', CASES)
 def test_cluster_proposal_scope_equals_separator(built, merge_name, route_name):
     """Defect 4: the proposal scope must be the cluster's separator, not the
-    union of the whole downstream chain."""
+    union of the whole downstream chain.
+
+    HONESTY NOTE (doc 57, 2026-08-14). `proposal_scope_for_bucket` now returns
+    `bucket.get_message_scope()` unconditionally -- the single-elim-var branch
+    that read the pre-merge `gm.message_scopes` cache is gone -- so this
+    assertion is now a tautology and pins a CONTRACT, not a behaviour. It is
+    kept so that reintroducing any other scope source fails loudly. The defect-4
+    content it used to carry (scope != downstream-chain union) is measured in
+    doc 10; the live proposal-path coverage is in
+    tests/test_proposal_sampling_path.py.
+    """
     gm = built[(merge_name, route_name)]
     merged = [b for b in gm.buckets.values() if len(b.elim_vars) > 1]
     if not merged:

@@ -22,19 +22,39 @@ Site 2 is the easy one to miss (doc 56 section 4 flags it explicitly), and it
 was doubly broken: it drew off the *consumed* no-repeat generator, so it moved
 with `memorize_num_samples` and with the tree's shape as well as with the label.
 
-NON-VACUITY
------------
-`test_memorization_arms_are_paired_across_merge_strategies` passing means
-nothing on its own -- a run in which no two arms ever share a separator would
-pass trivially, and so would one where every arm produced no table at all. So:
+NON-VACUITY -- READ THIS BEFORE TRUSTING THE FILE
+-------------------------------------------------
+MEASURED 2026-08-14, doc 57: across 7 merge strategies (none, sub4, sub8,
+nonsub4, rnn4, rnn8, merge_degree 4) on grid10x10.f10, grid10x10.f10.wrap and
+pedigree1, there is NOT ONE separator that two strategies share while sitting on
+different key variables. The key variable of a cluster is pinned by the
+elimination order, and every strategy that reaches a given separator reaches it
+at the same variable. So the LEGACY `seed * 1000003 + bucket.label` seeding
+already paired every shared separator on every problem in the suite, by
+accident, and `test_memorization_arms_are_paired_across_merge_strategies` would
+NOT distinguish it from CRN. This is the same accident that
+tests/test_common_random_numbers.py records for the uniform sampler.
 
-  * the test asserts a nonzero number of SHARED separators before comparing;
-  * `test_the_legacy_label_keying_breaks_the_pairing` runs the same comparison
-    with the legacy `seed * 1000003 + bucket.label` seeding shimmed back in and
-    asserts it FAILS, which is the negative control;
-  * `test_memorization_digests_are_not_degenerate` rejects an all-zeros or
-    single-valued assignment matrix, which would satisfy every equality
-    assertion here.
+And it is weaker still than that. MEASURED 2026-08-14:
+`sample_no_replacement_v3_recursive` **never consumes its generator** -- its
+phase 1 over-delivers on every tree probed, so the `K_outer < N` branch that
+reaches the RNG never runs. Site 1's seed, legacy or CRN, is not an input to
+the draw at all. `test_the_no_replacement_sampler_never_consumes_its_generator`
+records that as a TRIPWIRE so the day it changes, someone is told.
+
+So this file does NOT claim to have repaired a measured break. It pins:
+
+  test_memorization_arms_are_paired_across_merge_strategies
+      the property itself, guarded on a nonzero count of shared separators.
+  test_the_memorization_draw_does_not_depend_on_the_bucket_label
+      that shimming the label back in changes nothing -- which is the pairing
+      property, stated in the direction that is currently true.
+  test_the_uniform_fill_is_keyed_on_the_missing_subscope
+      site 2, which is NOT inert: it used to draw off the *consumed* no-repeat
+      generator, so it moved with `memorize_num_samples` and with the tree's
+      shape as well as with the label.
+  test_memorization_digests_are_not_degenerate
+      a constant assignment matrix would satisfy every equality here.
 """
 import contextlib
 import io
@@ -79,14 +99,13 @@ def _load_model():
     return get_catalog()[PROBLEM_KEY]
 
 
-def _run_arm(arm, legacy=False):
+def _run_arm(arm, label_keyed=False):
     """Run one arm and return {tuple(separator): (digest, bucket_label)}.
 
-    `legacy=True` shims the pre-CRN seeding back in: the no-repeat generator
-    keyed on `seed * 1000003 + bucket.label`, and the uniform fill drawn off
-    that same consumed generator. The bucket label is captured through
-    `_proposal_tree_over_scope`, which `build_memorization_table` calls on the
-    line immediately before it builds the generator.
+    `label_keyed=True` shims the BUCKET LABEL back into the no-repeat seed --
+    which is what `seed * 1000003 + bucket.label` did. The label is captured
+    through `_proposal_tree_over_scope`, which `build_memorization_table` calls
+    on the line immediately before it builds the generator.
     """
     from nce.neural_networks import memorization_table as mt
 
@@ -94,8 +113,8 @@ def _run_arm(arm, legacy=False):
     real_crn = mt._crn
     real_tree = mt._proposal_tree_over_scope
 
-    class _LegacyCrn:
-        """Only the two seeding entry points differ; everything else defers."""
+    class _LabelKeyedCrn:
+        """Only the no-repeat seed differs; everything else defers."""
         label = None
 
         def __getattr__(self, name):
@@ -105,21 +124,15 @@ def _run_arm(arm, legacy=False):
                                      draw_index=0, role=None):
             g = torch.Generator(device=device)
             g.manual_seed(int(config.get('seed', 42)) * 1000003 + int(self.label))
-            self._g = g
             return g
 
-        def proposal_uniform(self, config, n, scope, doms, device, draw_index=0):
-            return torch.stack(
-                [torch.randint(0, int(d), (int(n),), generator=self._g,
-                               device=device) for d in doms], dim=1)
-
-    shim = _LegacyCrn()
+    shim = _LabelKeyedCrn()
 
     def _tree_probe(bucket, gm, scope, ecl=0, temperature=1.0):
         shim.label = bucket.label
         return real_tree(bucket, gm, scope, ecl=ecl, temperature=temperature)
 
-    if legacy:
+    if label_keyed:
         mt._crn = shim
         mt._proposal_tree_over_scope = _tree_probe
     try:
@@ -146,8 +159,8 @@ def arm_tables():
 
 
 @pytest.fixture(scope='module')
-def legacy_arm_tables():
-    return {arm: _run_arm(arm, legacy=True) for arm in ARMS}
+def label_keyed_rnn4():
+    return _run_arm('rnn4', label_keyed=True)
 
 
 def _shared(tables):
@@ -176,42 +189,87 @@ def test_memorization_arms_are_paired_across_merge_strategies(arm_tables):
     assert not bad, 'memorization draws differ on a shared separator: %r' % (bad,)
 
 
-def test_the_pairing_survives_a_different_key_variable(arm_tables):
-    """The specific thing the bucket label broke.
+def test_the_memorization_draw_does_not_depend_on_the_bucket_label(
+        arm_tables, label_keyed_rnn4):
+    """Re-keying the no-repeat seed on the bucket label changes NOTHING.
 
-    Pairing is only interesting where two arms put the SAME separator on
-    DIFFERENT key variables -- that is precisely the case the legacy
-    `seed*1000003 + bucket.label` seeding got wrong. Skip rather than pass
-    silently if this problem never produces one.
+    Measured, and it is not the result the fix was aiming at: it holds because
+    `sample_no_replacement_v3_recursive` never touches its generator in this
+    regime (see `test_the_no_replacement_sampler_never_consumes_its_generator`),
+    so neither the legacy seed nor the CRN one is an input to the draw at all.
+
+    Asserted anyway, in the direction that is true, because it is the pairing
+    property itself: the same separator gives the same assignments whatever key
+    variable it sat on. If the sampler ever becomes seed-sensitive, the
+    tripwire below fires first and tells the next reader that this assertion
+    just became load-bearing.
     """
-    interesting = [(sep, per_arm) for sep, per_arm in _shared(arm_tables)
-                   if len({lab for _, lab in per_arm.values()}) > 1]
-    if not interesting:
-        pytest.skip('no shared separator sits on different key variables here')
-    for sep, per_arm in interesting:
-        digests = {d for d, _ in per_arm.values()}
-        assert len(digests) == 1, (
-            f'separator {sep} sits on key vars '
-            f'{sorted({l for _, l in per_arm.values()})} and drew different '
-            f'assignments per arm: {per_arm}')
+    real = arm_tables['rnn4']
+    shared = set(real) & set(label_keyed_rnn4)
+    assert shared, 'the shimmed run built no comparable table'
+    moved = [s for s in shared if real[s][0] != label_keyed_rnn4[s][0]]
+    assert not moved, (
+        'the bucket label moved the memorization draw, so the CRN re-key is '
+        'incomplete: %r' % (moved,))
+    # ... and the same separator gives the same digest on every arm.
+    by_sep = {}
+    for tbl in arm_tables.values():
+        for sep, (digest, _label) in tbl.items():
+            by_sep.setdefault(sep, set()).add(digest)
+    assert all(len(v) == 1 for v in by_sep.values())
 
 
-def test_the_legacy_label_keying_breaks_the_pairing(legacy_arm_tables,
-                                                    arm_tables):
-    """Negative control: the test above must be capable of failing.
+def test_the_no_replacement_sampler_never_consumes_its_generator():
+    """TRIPWIRE, not a property test. Records a measured fact so that the day it
+    stops being true, someone is told.
 
-    With the pre-CRN seeding shimmed back in, at least one shared separator
-    must draw DIFFERENT assignments across arms. If this ever passes, the
-    pairing test has stopped discriminating and is worthless.
+    `sample_no_replacement_v3_recursive` only reaches its RNG when
+    `K_outer < N` -- i.e. when phase 1 commits FEWER samples than the budget.
+    Measured 2026-08-14 (doc 57): phase 1 over-delivers on every tree probed
+    (2^12 / 2^16 / 2^20 states, N from 4 to 128, M from 1 to 1000, temperatures
+    1.0 / 0.3 / 0.05), so the branch never runs and the generator is never
+    advanced. The NR draw is therefore FULLY DETERMINISTIC given the tree.
+
+    Consequences, both of which the rerun needs to know:
+      * memorization arms pair across strategies automatically, not because of
+        the CRN re-key. The re-key removes the bucket label from a key that is
+        currently inert; it is insurance, not a repair.
+      * the `no_replacement` and `half_nr` proposal mixes have NO Monte-Carlo
+        variability from the sampler seed. Seed-replicate error bars on those
+        arms measure only the NN's own randomness.
+
+    If this test fails, the seeding suddenly matters and every pairing claim in
+    this file has to be re-derived rather than assumed.
     """
-    shared = _shared(legacy_arm_tables)
-    assert shared, 'legacy run shares no separator -- control is vacuous'
-    differing = [sep for sep, per_arm in shared
-                 if len({d for d, _ in per_arm.values()}) > 1]
-    assert differing, (
-        'the LEGACY seeding paired every shared separator too, so '
-        'test_memorization_arms_are_paired_across_merge_strategies proves '
-        'nothing on this problem')
+    from nce.inference.factor import FastFactor
+    from nce.sampling.proposal_sampler import ProposalTree, BucketRecord
+    import nce.sampling.no_replacement_sampler_v3  # noqa: F401  (attaches)
+
+    def _tree(nvars, D=2, temp=1.0, seed=0):
+        g = torch.Generator().manual_seed(seed)
+        levels = []
+        for v in range(nvars):
+            # Chain to a LATER-eliminated variable: levels are stored in
+            # elimination order and sampled in reverse, so a factor may only
+            # reference variables already drawn.
+            fs = [FastFactor(torch.rand(D, generator=g).log10() / temp, [v])]
+            if v + 1 < nvars:
+                fs.append(FastFactor(
+                    torch.rand(D, D, generator=g).log10() / temp, [v, v + 1]))
+            levels.append(BucketRecord(v, D, fs))
+        return ProposalTree(levels, 'cpu')
+
+    for nvars in (12, 16):
+        for temp in (1.0, 0.3):
+            t = _tree(nvars, temp=temp)
+            for n in (8, 32, 128):
+                g = torch.Generator()
+                g.manual_seed(1)
+                before = g.get_state().clone()
+                t.sample_no_replacement_v3_recursive(n, M=1, rng=g, mode='save')
+                assert torch.equal(before, g.get_state()), (
+                    f'the NR sampler consumed its generator at nvars={nvars} '
+                    f'T={temp} N={n} -- the seeding is now load-bearing')
 
 
 def test_memorization_digests_are_not_degenerate(arm_tables):
