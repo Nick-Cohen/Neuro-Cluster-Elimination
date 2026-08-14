@@ -345,6 +345,13 @@ class SampleGenerator:
             A = len(ca)
             tables = {}
             for _fi, _ppos_t, _st_t, _kf in _tabled:
+                # _eval_elim_block, which this replaces, calls net.eval() so that a
+                # masked net masks at inference. _get_slices/_elim_table never has,
+                # so the table must do it here or the streamed value silently changes
+                # for masked_net configs (caught by the doc-51 whole-path A/B: 5038 of
+                # 10240 values off, max 12.2 in log10). NOT pushed into _elim_table:
+                # that would also change the dense _get_slices path's behaviour.
+                fx[_fi].net.eval()
                 _tab, _, _ = fx[_fi]._elim_table(ca, self.elim_vars,
                                                  self.elim_domain_sizes,
                                                  self.message_scope)
