@@ -34,8 +34,10 @@ from nce.scheduler.gpus import (GpuInfo, query_gpus, dispatchable_gpus,
                                 assert_not_retired, describe,
                                 RETIRED_GPU_INDICES)
 from nce.scheduler.jobs import JobSpec, JobQueue, build_grid, NEEDS_ATTENTION
-from nce.scheduler.reaper import (Reaper, job_liveness, process_identity,
-                                  orphan_ballast)
+# NOTE: `reaper` is deliberately NOT imported here. It is a __main__ entry point
+# (`python -m nce.scheduler.reaper`), and importing it from the package __init__
+# makes runpy load it twice -- once as `nce.scheduler.reaper` via this line and
+# once as `__main__` -- which it warns about. Import it by module path.
 from nce.scheduler.provenance import RunManifest, capture
 from nce.scheduler.timing import collect_timings, TimingCollector
 from nce.scheduler.checkpoint import (CheckpointStore, checkpointed_elimination,
@@ -46,7 +48,6 @@ __all__ = [
     'GpuInfo', 'query_gpus', 'dispatchable_gpus', 'assert_not_retired',
     'describe', 'RETIRED_GPU_INDICES',
     'JobSpec', 'JobQueue', 'build_grid', 'NEEDS_ATTENTION',
-    'Reaper', 'job_liveness', 'process_identity', 'orphan_ballast',
     'RunManifest', 'capture',
     'collect_timings', 'TimingCollector',
     'CheckpointStore', 'checkpointed_elimination', 'journal_fingerprint',

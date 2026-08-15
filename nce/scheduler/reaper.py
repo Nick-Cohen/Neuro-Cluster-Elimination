@@ -530,10 +530,23 @@ def main(argv=None) -> int:
     r = Reaper(out_dir=args.out_dir, max_retries=args.max_reap_retries)
     if not args.apply:
         for row in r.scan(q):
-            print('  %-8s %s\n           %s'
-                  % (row['state'].upper(), row['spec'].name, row['reason']))
+            state = row['state']
+            extra = ''
+            if state == DEAD:
+                fin = finished_outcome(row['rec'], args.out_dir, row['spec'])
+                if fin is not None:
+                    state, extra = 'FINISHED', ' -> would be marked %s' % fin[0]
+            print('  %-8s %s\n           %s%s'
+                  % (state.upper(), row['spec'].name, row['reason'], extra))
         print('(dry run -- pass --apply to repair)')
         return 0
+
+    # `--apply` is for a queue whose scheduler is GONE. A running scheduler
+    # reaps its own queue every sweep and, unlike this CLI, knows which jobs are
+    # its own children; a second writer could re-queue a job it is about to mark
+    # done. Say so rather than let it be discovered.
+    print('NOTE: only use --apply when the scheduler for this queue is dead. A '
+          'live scheduler already reaps this queue on every sweep.')
     res = r.sweep(q, apply=True)
     print('reaped=%d recovered=%d parked=%d still-alive=%d unknown=%d'
           % (len(res['reaped']), len(res['recovered']), len(res['parked']),

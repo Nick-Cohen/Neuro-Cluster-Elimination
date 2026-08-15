@@ -99,6 +99,11 @@ def test_recycled_pid_is_not_mistaken_for_the_original_job(tmp_path):
     original.kill()
     original.wait()
 
+    # A genuinely recycled PID is reissued only after the PID counter has wrapped
+    # -- millions of ticks later on this box -- so its start time always differs.
+    # The pause reproduces that; without it the impostor can land inside the SAME
+    # 10 ms clock tick as the original, which real PID reuse cannot do.
+    time.sleep(0.1)
     impostor = _sleeper(marker='totally-unrelated')
     try:
         # The impostor is a DIFFERENT process; make the record name its pid while
@@ -112,6 +117,30 @@ def test_recycled_pid_is_not_mistaken_for_the_original_job(tmp_path):
         assert state == rp.DEAD, (
             'reaper treated a recycled pid as the original job: %s' % reason)
         assert 'PID REUSE' in reason
+    finally:
+        impostor.kill()
+        impostor.wait()
+
+
+def test_same_tick_collision_is_never_reported_alive(tmp_path):
+    """The one corner where start time alone is ambiguous, handled safely.
+
+    `starttime` has clock-tick (10 ms) granularity, so two processes started in
+    the same tick share it. Real PID reuse cannot produce that -- a PID is
+    reissued only after the counter wraps, millions of ticks later -- but the
+    reaper must still not claim ALIVE if it ever happened. The cmdline check
+    catches it and the verdict is UNKNOWN (never reaped), which stalls one job
+    for a human rather than double-booking a card.
+    """
+    q = _q(tmp_path)
+    spec = q.pending()[0]
+    impostor = _sleeper(marker='totally-unrelated')
+    try:
+        ident = rp.process_identity(impostor.pid)      # identical by construction
+        state, _ = rp.job_liveness({'pid': impostor.pid, 'proc_identity': ident},
+                                   spec.job_id)
+        assert state != rp.ALIVE
+        assert state == rp.UNKNOWN
     finally:
         impostor.kill()
         impostor.wait()
