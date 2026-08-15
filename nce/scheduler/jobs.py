@@ -86,22 +86,52 @@ class JobSpec:
 
         Merge strategy is expressed through the flags the codebase actually
         consumes. `extra_config` is applied LAST so a caller can always override.
+
+        The mapping is taken verbatim from the June-2026 reduce-NN study's own
+        per-arm YAML (`notebooks/June-2026/claude_experiments/
+        reduce_nn_experiment/configs/*.yaml`), because the paper rerun must
+        reproduce those arms exactly:
+
+            nomerge          use_reduce_nn_merge: false           ('nomerge')
+            reduce_nn        use_reduce_nn_merge + backtrack      ('rnnD')
+            subsumption      use_join_tree_merge                  ('subD')
+            non_subsumption  use_non_subsumption_merge            ('nonsubD')
+            merge_degree     merge_degree: D                      (not in the paper set)
+
+        `reduce_nn_backtrack` is NOT optional for the rnn arm: every rnn YAML in
+        the study sets it, and `reduce_nn_merge(backtrack=False)` is a
+        structurally different merge (it stops at the first bound reaching the
+        minimum NN count instead of binary-searching down to the smallest one).
+        Omitting it here would have produced an arm that is not the paper's.
         """
         cfg = dict(base or {})
         cfg['seed'] = self.seed
         if self.merge_strategy == 'reduce_nn':
             cfg['use_reduce_nn_merge'] = True
             cfg['max_merge_bound'] = self.merge_bound
+            cfg['reduce_nn_backtrack'] = True
         elif self.merge_strategy == 'nomerge':
             cfg['use_reduce_nn_merge'] = False
-        elif self.merge_strategy == 'merge_degree':
-            cfg['use_reduce_nn_merge'] = False
+        elif self.merge_strategy == 'subsumption':
+            cfg['use_join_tree_merge'] = True
             cfg['max_merge_bound'] = self.merge_bound
+        elif self.merge_strategy == 'non_subsumption':
+            cfg['use_non_subsumption_merge'] = True
+            cfg['max_merge_bound'] = self.merge_bound
+        elif self.merge_strategy == 'merge_degree':
+            # `merge_degree` is read by FastGM as the degree itself; setting
+            # only `max_merge_bound` (the previous mapping here) selected NO
+            # merge pass at all, since every pass is gated on its own
+            # use_*_merge flag. That made this arm a silent duplicate of
+            # 'nomerge'. Not used by the paper rerun, but fixed so it cannot
+            # mislead a later sweep.
+            cfg['merge_degree'] = self.merge_bound
         else:
             raise ValueError(
                 'Unknown merge_strategy %r. Known: reduce_nn, nomerge, '
-                'merge_degree. Add it here rather than smuggling it through '
-                'extra_config, so it stays part of the job identity.'
+                'subsumption, non_subsumption, merge_degree. Add it here '
+                'rather than smuggling it through extra_config, so it stays '
+                'part of the job identity.'
                 % (self.merge_strategy,))
         cfg.update(self.extra_config)
         return cfg
