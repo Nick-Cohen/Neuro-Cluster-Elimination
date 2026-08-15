@@ -26,13 +26,16 @@ provenance   RunManifest: seeds, git, resolved config, GPU UUID, libs, timing
 timing       sample-generation vs NN-training split, per problem and network
 checkpoint   cluster-level message journal; bit-identical resume
 runner       executes one job in its own process (pins CUDA_VISIBLE_DEVICES)
+reaper       returns jobs stuck at `running` (dead scheduler) to the queue
 scheduler    the dispatch loop
 """
 
 from nce.scheduler.gpus import (GpuInfo, query_gpus, dispatchable_gpus,
                                 assert_not_retired, describe,
                                 RETIRED_GPU_INDICES)
-from nce.scheduler.jobs import JobSpec, JobQueue, build_grid
+from nce.scheduler.jobs import JobSpec, JobQueue, build_grid, NEEDS_ATTENTION
+from nce.scheduler.reaper import (Reaper, job_liveness, process_identity,
+                                  orphan_ballast)
 from nce.scheduler.provenance import RunManifest, capture
 from nce.scheduler.timing import collect_timings, TimingCollector
 from nce.scheduler.checkpoint import (CheckpointStore, checkpointed_elimination,
@@ -42,7 +45,8 @@ from nce.scheduler import models
 __all__ = [
     'GpuInfo', 'query_gpus', 'dispatchable_gpus', 'assert_not_retired',
     'describe', 'RETIRED_GPU_INDICES',
-    'JobSpec', 'JobQueue', 'build_grid',
+    'JobSpec', 'JobQueue', 'build_grid', 'NEEDS_ATTENTION',
+    'Reaper', 'job_liveness', 'process_identity', 'orphan_ballast',
     'RunManifest', 'capture',
     'collect_timings', 'TimingCollector',
     'CheckpointStore', 'checkpointed_elimination', 'journal_fingerprint',

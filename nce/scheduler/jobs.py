@@ -24,6 +24,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import time
 from dataclasses import dataclass, field, asdict, replace
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -188,6 +189,11 @@ def build_grid(problem_keys: List[str],
 # ---------------------------------------------------------------------------
 PENDING, RUNNING, DONE, FAILED, BLOCKED = (
     'pending', 'running', 'done', 'failed', 'blocked')
+# Parked by the reaper after it has already given the job its one retry. Nothing
+# dispatches it (dispatch reads `pending()` only) and `--status` prints it, so a
+# job that keeps dying stops the loop instead of consuming the sweep. A human
+# clears it by setting the status back to `pending`.
+NEEDS_ATTENTION = 'needs_attention'
 TERMINAL = (DONE, FAILED)
 
 
@@ -252,10 +258,31 @@ class JobQueue:
         rec.update(fields)
         self.save()
 
-    def mark_running(self, job_id: str, gpu_uuid: str, pid: int) -> None:
+    def mark_running(self, job_id: str, gpu_uuid: str, pid: int,
+                     proc_identity: Dict[str, Any] = None,
+                     started_at: float = None) -> None:
+        """Record that `pid` is now running this job.
+
+        `proc_identity` is what makes the stale-`running` reaper safe against
+        PID REUSE. A PID alone is not an identity: this box churns PIDs in the
+        3.9M range and this sweep runs for days, so a dead runner's PID WILL be
+        reissued, and a reaper that trusted the bare number would see an
+        impostor and conclude a dead job was alive -- never firing, which is the
+        stall it exists to prevent. The identity pairs the PID with the
+        process's start time (field 22 of /proc/<pid>/stat) and the boot id, and
+        both are checked before a job is ever declared alive. See
+        `nce.scheduler.reaper`.
+
+        `started_at` is bookkeeping only: it lets the reaper tell a `result.json`
+        belonging to THIS attempt from one left by a previous attempt. It is
+        never used as a timeout -- reaping is on process liveness alone.
+        """
         rec = self._state['jobs'][job_id]
         rec['attempts'] = rec.get('attempts', 0) + 1
-        self.set_status(job_id, RUNNING, gpu_uuid=gpu_uuid, pid=pid)
+        self.set_status(job_id, RUNNING, gpu_uuid=gpu_uuid, pid=pid,
+                        proc_identity=proc_identity,
+                        started_at=started_at if started_at is not None
+                        else time.time())
 
     def counts(self) -> Dict[str, int]:
         c: Dict[str, int] = {}
