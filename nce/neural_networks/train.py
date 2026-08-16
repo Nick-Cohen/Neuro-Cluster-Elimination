@@ -267,6 +267,37 @@ class Trainer:
         if self.data_preprocessor.bw_normalizing_constant is not None:
             print(f"  bw_normalizing_constant (bw at argmax(y+bw)): {self.data_preprocessor.bw_normalizing_constant:.4f}")
 
+        # --- WMB residual: optimiser compensation for the output multiplier -----
+        # Under wmb_residual_norm='residual' the wrapper computes
+        #     y_hat = s*inner(x) + col,   s = net_scale = scale_r/scale_y  (< 1),
+        # and DataLoader.load builds `col` so that, exactly,
+        #     y_norm = s*r_norm + col   =>   y_hat - y_norm = s*(g - r_norm).
+        # With loss = mean(w*(y_hat - y_norm)^2) and w a function of the TARGET only
+        # (neurobe_weighted_mse), the objective seen by the inner net is EXACTLY
+        #     L(phi) = s^2 * Ltilde(phi),   Ltilde = mean(w*(g - r_norm)^2),
+        # i.e. s^2 times the same weighted MSE it would face if trained directly on
+        # its own normalised target r_norm. So every gradient is scaled by s^2.
+        #
+        # Adam: m_t = s^2*M_t and v_t = s^4*V_t exactly, so
+        #     dphi = -lr * s^2*Mhat / (s^2*sqrt(Vhat) + eps)
+        #          = -lr *     Mhat / (    sqrt(Vhat) + eps/s^2).
+        # Adam is therefore EXACTLY invariant to the multiplier except through eps,
+        # which it inflates to eps/s^2. The exact compensation is eps -> s^2*eps.
+        # No-op unless this is a residual run with a fitted residual normaliser.
+        _rs = float(getattr(self.net, 'scale', 1.0) or 1.0)
+        if self.config.get('wmb_residual_eps_compensate', False) \
+                and getattr(self.dataloader, 'base_factors', None) is not None \
+                and _rs != 1.0 and not isinstance(self.optimizer, list) \
+                and getattr(self, 'opt_compensation', None) is None:  # apply once
+            for _g in self.optimizer.param_groups:
+                if 'eps' in _g:
+                    _g['eps'] = float(_g['eps']) * _rs * _rs
+            _g0 = self.optimizer.param_groups[0]
+            self.opt_compensation = {'net_scale': _rs, 'lr': float(_g0['lr']),
+                                     'eps': float(_g0.get('eps', float('nan')))}
+            print(f"  [WMBResidual] optimiser compensation: net_scale={_rs:.6g} -> "
+                  f"eps={_g0.get('eps', float('nan')):.6g}")
+
         # Compute global_max_targets for UKL numerical stability
         # CRITICAL: This must be computed ONCE from all training data and used for ALL batches
         # Using per-batch max causes gradient inconsistency and training divergence

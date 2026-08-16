@@ -132,8 +132,70 @@ class Net(nn.Module):
             if param.grad is not None:
                 total_grad += abs(param.grad.sum())
         
-        return total_grad 
-    
+        return total_grad
+
+
+class WMBResidualNet(nn.Module):
+    """Training-time wrapper that reconstructs the message from a residual net.
+
+    Used only when ``wmb_residual`` is enabled. The inner ``Net`` predicts the
+    *residual* in normalized units; the WMB base value at each sample rides
+    along as the LAST column of the input ``x`` (appended by
+    ``DataLoader.load``), already scaled into the same normalized units.
+
+        forward(x) = self.scale * inner(x[:, :-1]) + x[:, -1:]
+
+    ``scale`` is 1.0 under ``wmb_residual_norm='message'`` (the normaliser stays
+    fitted to y, so the inner net's units already are y's units). Under
+    ``wmb_residual_norm='residual'`` a second normaliser is fitted to the
+    residual r, the inner net outputs ``r_norm`` in *residual* units, and
+
+        y_norm = (r*ln10 + base*ln10 - off_y)/scale_y
+               = r_norm*(scale_r/scale_y) + (off_r + base*ln10 - off_y)/scale_y
+
+    so ``scale = scale_r/scale_y`` and the trailing column carries the whole
+    affine offset. ``DataLoader.load`` sets both, once, on the first load.
+
+    Because every ``self.net(...)`` call site in ``Trainer`` receives batches
+    built by ``DataLoader.load``, wrapping the net makes *all* losses, all
+    validation losses and all early-stopping checks operate on the
+    reconstructed message ``y_hat = NN_residual + wmb_base`` against the
+    original target ``y`` -- which also keeps the ``neurobe_weighted_mse``
+    importance weights keyed on the true message ``y`` rather than on the
+    residual.
+
+    The factor emitted downstream is ``FactorNN(inner, ...)`` (the residual
+    alone), multiplied back by the WMB base factors that the cluster emits
+    alongside it.
+    """
+
+    def __init__(self, inner: nn.Module, scale: float = 1.0):
+        super().__init__()
+        self.inner = inner
+        # Plain float, not a buffer/parameter: it is a fixed unit conversion set
+        # once from the fitted normaliser stats, never trained.
+        self.scale = float(scale)
+
+    @property
+    def masked_net(self):
+        return getattr(self.inner, 'masked_net', False)
+
+    @property
+    def device(self):
+        return self.inner.device
+
+    @property
+    def bucket(self):
+        return self.inner.bucket
+
+    @property
+    def gm(self):
+        return self.inner.gm
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.scale * self.inner(x[:, :-1]) + x[:, -1:]
+
+
 class Memorizer(Net):
     def __init__(self, bucket, all_x, all_y):
         # Call parent nn.Module constructor first

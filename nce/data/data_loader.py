@@ -27,7 +27,46 @@ class DataLoader:
 
         # Backward factors - set externally by get_backward_message() via bucket.compute_message_nn()
         self.bw_factors = None
-        
+
+        # --- WMB base as a learning signal (doc 63 / Q60) -------------------
+        # Both mechanisms are driven by the same object: the cluster's WMB base
+        # factors, set externally by bucket.compute_message_nn().
+        #
+        # RESIDUAL arm (`wmb_residual`): `base_factors` is set and `load()`
+        # appends ONE trailing column carrying the affine offset that turns the
+        # inner net's output into the reconstructed message, consumed additively
+        # by nce.neural_networks.net.WMBResidualNet.
+        #
+        # INPUT arm (`wmb_input`): `wmb_spec` is set and `load()` appends the
+        # spec's feature columns as ordinary net INPUTS. The target stays the
+        # true message, so the net learns how much to trust the base rather than
+        # being forced to trust it.
+        #
+        # The two are mutually exclusive; bucket.compute_message_nn() enforces it.
+        self.base_factors = None
+        # Set by bucket.compute_message_nn() for the INPUT arm. The spec itself is
+        # built lazily on the first load(), because it freezes the target
+        # normaliser's affine constants and those only exist once
+        # DataPreprocessor.normalize() has seen the first batch of message values.
+        self.wmb_input_mode = 'off'
+        self.wmb_base_factors = None
+        self.wmb_spec = None
+        # Diagnostics filled in by load(): stats of the log10 residual r = y - base.
+        self.residual_stats = None
+        # 'message' (default) keeps the normaliser fitted to y; 'residual' fits a
+        # SECOND DataPreprocessor to r itself (doc 02 s2.2 option 3).
+        self.residual_norm = 'message'
+        # Set on the first load() when residual_norm == 'residual'. This is the
+        # preprocessor that FactorNN must use to undo-normalise the emitted factor.
+        self.residual_dp = None
+        # The WMBResidualNet wrapper, so load() can install the unit-conversion
+        # scale once the residual normaliser has been fitted. Set by bucket.py.
+        self.residual_net = None
+
+    def _affine(self, p):
+        from nce.data.wmb_features import affine_of
+        return affine_of(p)
+
     # def __len__(self):
     #     """Required: Returns the total number of samples"""
     #     return len(self.assignments)
@@ -87,6 +126,92 @@ class DataLoader:
 
         # One-hot encode assignments
         x = self.data_preprocessor.one_hot_encode(self.bucket, assignments)
+
+        # --- WMB-as-INPUT (doc 63 / Q60) ------------------------------------
+        # Append the spec's feature columns as ordinary net inputs. The target
+        # `normalized_y` is untouched: the net still predicts the TRUE message,
+        # it simply gets to see the cheap bound while doing so. The clamp bounds
+        # are fitted on this first (training) load and then frozen, so the
+        # FactorNN reproduces these columns exactly at evaluation time.
+        if self.wmb_input_mode != 'off' and self.wmb_base_factors:
+            if self.wmb_spec is None:
+                from nce.data.wmb_features import WMBFeatureSpec
+                off_y, scale_y = self._affine(self.data_preprocessor)
+                self.wmb_spec = WMBFeatureSpec(
+                    self.wmb_base_factors, self.wmb_input_mode,
+                    off_y, scale_y, list(self.sample_generator.message_scope))
+            self.wmb_spec.fit(assignments)
+            feats = self.wmb_spec.columns(assignments, dtype=x.dtype, device=x.device)
+            x = torch.cat([x, feats], dim=1)
+
+        # --- WMB RESIDUAL (doc 02 / doc 31 arm 5) ---------------------------
+        # Append an extra trailing column of x carrying the affine offset that
+        # turns the inner net's output into the RECONSTRUCTED message in
+        # y-normalised units, so WMBResidualNet computes
+        #     y_hat_norm = scale * inner(x[:, :-1]) + x[:, -1:]
+        # and every loss / validation / early-stopping site in Trainer compares
+        # y_hat_norm against y_norm. The importance weights of
+        # neurobe_weighted_mse therefore stay keyed on the message mass, never
+        # on the correction.
+        #
+        # Write the two normalisers as affine maps in natural-log space:
+        #     y_norm = (y*ln10 - off_y) / scale_y
+        #     r_norm = (r*ln10 - off_r) / scale_r
+        # Since y = r + base (log10 space),
+        #     y_norm = r_norm*(scale_r/scale_y) + (off_r + base*ln10 - off_y)/scale_y
+        # =>  net scale  = scale_r/scale_y
+        #     trailing col = (off_r + base*ln10 - off_y)/scale_y
+        if self.base_factors is not None:
+            import math
+            base_values = self.sample_generator.sample_tensor_product(self.base_factors, assignments)
+            dp = self.data_preprocessor
+            ln10 = math.log(10.0)
+            off_y, scale_y = self._affine(dp)
+
+            if self.residual_norm == 'residual':
+                if self.residual_dp is None:
+                    # Fit the second normaliser to r, once, on this (training) load.
+                    from nce.data.data_preprocessor import DataPreprocessor
+                    r_fit = (mess_values.reshape(-1) - base_values.reshape(-1))
+                    rdp = DataPreprocessor(
+                        y=None, bw=None, lower_dim=dp.lower_dim, device=dp.device,
+                        use_bw_approx=False, normalization_mode=dp.normalization_mode,
+                        dtype=dp.dtype,
+                    )
+                    rdp._initialize_normalizing_constant(r_fit, None)
+                    self.residual_dp = rdp
+                off_r, scale_r = self._affine(self.residual_dp)
+                net_scale = scale_r / scale_y
+                if self.residual_net is not None:
+                    self.residual_net.scale = float(net_scale)
+                col = ((base_values.reshape(-1) * ln10) + (off_r - off_y)) / scale_y
+            else:
+                net_scale = 1.0
+                col = base_values.reshape(-1) * (ln10 / scale_y)
+
+            base_col = col.reshape(-1, 1).to(dtype=x.dtype, device=x.device)
+            x = torch.cat([x, base_col], dim=1)
+            # Diagnostics: the log10 residual actually being learned.
+            with torch.no_grad():
+                r = mess_values.reshape(-1) - base_values.reshape(-1)
+                fin = torch.isfinite(r)
+                if fin.any():
+                    rf = r[fin]
+                    yf = mess_values.reshape(-1)[fin]
+                    self.residual_stats = {
+                        'r_max': float(rf.max()), 'r_min': float(rf.min()),
+                        'r_mean': float(rf.mean()),
+                        'r_std': float(rf.std()) if rf.numel() > 1 else 0.0,
+                        'sd_y': float(yf.std()) if yf.numel() > 1 else 0.0,
+                        'y_range': float(yf.max() - yf.min()),
+                        'n': int(rf.numel()),
+                        'frac_positive': float((rf > 1e-6).float().mean()),
+                        'norm_mode': self.residual_norm,
+                        'net_scale': float(net_scale),
+                        'off_y': float(off_y), 'scale_y': float(scale_y),
+                        'off_r': float(self._affine(self.residual_dp)[0]) if self.residual_dp else None,
+                        'scale_r': float(self._affine(self.residual_dp)[1]) if self.residual_dp else None,
+                    }
 
         return x, normalized_y, normalized_bw
 

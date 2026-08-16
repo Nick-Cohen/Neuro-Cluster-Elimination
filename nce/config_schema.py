@@ -70,6 +70,16 @@ NESTED_SECTIONS = OrderedDict([
         'dt_convergence_threshold':  _field('dt_convergence_threshold', default=None),
         'quantization_states':       _field('quantization_states', default=None),
         'activation':                _field('activation', default='tanh'),
+        # --- WMB base as a learning signal (doc 63 / Q60) -------------------
+        # Mutually exclusive ways of handing the cluster's WMB estimate to the net.
+        # 'wmb_residual' subtracts it (target = exact - WMB); 'wmb_input' feeds it
+        # as extra INPUT columns and leaves the target as the true message.
+        'wmb_residual':              _field('wmb_residual', default=False),
+        'wmb_residual_norm':         _field('wmb_residual_norm', default='message'),
+        'wmb_residual_eps_compensate': _field('wmb_residual_eps_compensate', default=False),
+        # 'off' | 'combined' (one column: the WMB estimate)
+        #       | 'partitions' (1 + k columns: estimate + each mini-bucket partition)
+        'wmb_input':                 _field('wmb_input', default='off'),
     }),
     ('training', {
         'num_epochs':                    _field('num_epochs', default=_REQUIRED),

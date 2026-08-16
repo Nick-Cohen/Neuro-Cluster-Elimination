@@ -407,8 +407,101 @@ class FastBucket:
             if nbe_result['source'] == 'nbe':
                 print(f"Bucket {self.label}: NBE num_samples (eps={nbe_result['epsilon']}, n_min={nbe_result['n_min']}): total={nbe_result['total']}, train={nbe_result['n_train']}, val={nbe_result['n_val']}")
 
+            # --- WMB base as a learning signal (doc 63 / Q60) ---------------
+            # Both arms need the cluster's WMB base factors, and the INPUT arm
+            # needs them BEFORE the net is built because they set its input
+            # width. Compute once, here, and freeze the list order: that order
+            # is the column order of the 'partitions' features and must be
+            # identical at training and at evaluation time.
+            wmb_residual = self.config.get('wmb_residual', False) and not use_memorizer
+            wmb_input = self.config.get('wmb_input', 'off') if not use_memorizer else 'off'
+            if wmb_residual and wmb_input != 'off':
+                raise ValueError(
+                    "wmb_residual and wmb_input are mutually exclusive: the first "
+                    "subtracts the WMB base from the target, the second feeds it "
+                    "as an input and leaves the target alone.")
+            if (wmb_residual or wmb_input != 'off') and \
+                    self.config.get('use_memorization_table', False):
+                # HybridMemorizerNet splices a lookup table over the net keyed on
+                # the one-hot input alone; it has no notion of the extra WMB
+                # columns and would silently mis-key them.
+                raise ValueError(
+                    "use_memorization_table is not supported together with "
+                    "wmb_residual / wmb_input.")
+            base_factors = None
+            n_wmb_features = 0
+            if wmb_residual or wmb_input != 'off':
+                import time as _wt
+                _wt0 = _wt.time()
+                ecl = self.gm.ecl if self.gm.ecl else 2 ** 20
+                # Under `stream_nn_exact` an upstream cluster's message stays in
+                # this bucket as a lazy FactorNN. compute_wmb_message sorts and
+                # multiplies factors through `.tensor`, and the feature/offset
+                # columns are built with FastFactor._get_values which also indexes
+                # `.tensor` -- both hit None on a FactorNN. Densify for the
+                # duration of the base computation (to_exact() is an exact
+                # evaluation of the net over its own table, so nothing is
+                # approximated here beyond what the net already is), then restore.
+                _orig_factors = self.factors
+                _n_nn = sum(1 for f in _orig_factors if getattr(f, 'is_nn', False))
+                try:
+                    if _n_nn:
+                        self.factors = [f.to_exact() if getattr(f, 'is_nn', False) else f
+                                        for f in _orig_factors]
+                    base_factors = self.compute_wmb_message(self.gm.iB, ecl=ecl)
+                    # Detach pass-through factors from the live bucket
+                    # (compute_wmb_message returns them by reference).
+                    base_factors = [f.to_exact() if getattr(f, 'is_nn', False)
+                                    else FastFactor(f.tensor.clone(), list(f.labels))
+                                    for f in base_factors]
+                finally:
+                    self.factors = _orig_factors
+                if wmb_input == 'combined':
+                    n_wmb_features = 1
+                elif wmb_input == 'partitions':
+                    n_wmb_features = 1 + len(base_factors)
+                if not hasattr(self.gm, 'wmb_base_stats'):
+                    self.gm.wmb_base_stats = []
+                self.gm.wmb_base_stats.append({
+                    'bucket': self.label,
+                    'arm': 'residual' if wmb_residual else f'input_{wmb_input}',
+                    'num_base_factors': len(base_factors),
+                    'num_nn_base_factors': _n_nn,
+                    'base_entries': int(sum(f.tensor.numel() for f in base_factors
+                                            if f.tensor is not None)),
+                    'n_wmb_features': n_wmb_features,
+                    'build_seconds': _wt.time() - _wt0,
+                })
+                print(f"  [WMB-base] bucket {self.label}: {len(base_factors)} base "
+                      f"factors ({_n_nn} densified from NN), "
+                      f"{n_wmb_features} input features, {_wt.time() - _wt0:.3f}s",
+                      flush=True)
+
+            # The INPUT arm widens the net's first layer by the feature count.
+            self._wmb_extra_inputs = n_wmb_features
             net = Net(self, hidden_sizes=hidden_sizes)
-            t = Trainer(net=net, bucket=self, stats=self.stats)
+
+            # The residual arm trains through a wrapper that reconstructs the
+            # message (y_hat = scale*inner + base) so every loss, validation and
+            # early-stopping check in Trainer still compares against the true y.
+            # The INPUT arm needs no wrapper: the net predicts y directly, it just
+            # has extra input columns.
+            if wmb_residual:
+                from nce.neural_networks.net import WMBResidualNet
+                train_net = WMBResidualNet(net)
+            else:
+                train_net = net
+            t = Trainer(net=train_net, bucket=self, stats=self.stats)
+
+            if wmb_input != 'off':
+                # DataLoader builds the spec lazily on the first load (it needs the
+                # fitted target normaliser) and then freezes it.
+                t.dataloader.wmb_input_mode = wmb_input
+                t.dataloader.wmb_base_factors = base_factors
+            elif wmb_residual:
+                t.dataloader.base_factors = base_factors
+                t.dataloader.residual_norm = self.config.get('wmb_residual_norm', 'message')
+                t.dataloader.residual_net = train_net
 
             # Handle use_bw_approx mode
             if self.config.get('use_bw_approx', False):
@@ -558,7 +651,22 @@ class FastBucket:
                           f"eval {_mstats['eval_seconds']:.1f}s)")
 
             # Create FactorNN with trained network (no bw_inv needed - loss handles backward message)
-            nn_message_factor = FactorNN(net, t.data_preprocessor, losses=t.losses)
+            # WMB arms:
+            #  - INPUT: `net` predicts the message but needs the WMB feature columns
+            #    appended to every input row, so the frozen spec rides along on the
+            #    factor and is replayed at evaluation time.
+            #  - RESIDUAL: `net` is the INNER net and represents the residual alone,
+            #    undo-normalised by whichever preprocessor it was trained against;
+            #    the cluster emits it alongside the base factors (see the return).
+            _out_dp = t.data_preprocessor
+            if wmb_residual and getattr(t.dataloader, 'residual_dp', None) is not None:
+                _out_dp = t.dataloader.residual_dp
+            nn_message_factor = FactorNN(net, _out_dp, losses=t.losses,
+                                         wmb_spec=getattr(t.dataloader, 'wmb_spec', None))
+            if wmb_residual and getattr(t.dataloader, 'residual_stats', None):
+                self.gm.wmb_base_stats[-1].update(t.dataloader.residual_stats)
+            if wmb_input != 'off' and getattr(t.dataloader, 'wmb_spec', None) is not None:
+                self.gm.wmb_base_stats[-1].update(t.dataloader.wmb_spec.stats())
 
             # Save error tracking data to FastGM (bucket gets destroyed after elimination)
             if hasattr(t, 'error_tracking_data') and t.error_tracking_data:
@@ -599,6 +707,11 @@ class FastBucket:
                         iB=100, backward_ecl=2**30,
                         approximation_method='wmb', return_factor_list=False)
                     approx_fw = nn_message_factor.to_exact()
+                    if wmb_residual:
+                        # The emitted message is base * residual (a log-space sum);
+                        # the local error must be measured on the RECONSTRUCTED message.
+                        for _bf in base_factors:
+                            approx_fw = approx_fw * _bf.to_exact()
                     # Doc 44 diagnostic: what FRACTION OF THE EXACT MESSAGE MASS do
                     # the memorized entries carry? K/2^w counts entries; this counts
                     # what they are worth. Read-only, no RNG, both arms unaffected.
@@ -681,6 +794,12 @@ class FastBucket:
 
             except Exception as e:
                 print(f"Warning: Could not generate comparison plot: {e}")
+
+        # The residual arm's net represents `exact - WMB`, so the cluster's message
+        # is that net TIMES the base it was measured against. The input arm's net
+        # represents the message itself and needs no companion factors.
+        if wmb_residual:
+            return [*base_factors, nn_message_factor]
 
         return nn_message_factor
 
@@ -1266,6 +1385,9 @@ class FastBucket:
                 out += nstates - 1
             else:
                 out += nstates
+        # WMB-as-input (doc 63 / Q60) appends feature columns after the one-hot
+        # block; set by compute_message_nn() before the Net is constructed.
+        out += int(getattr(self, '_wmb_extra_inputs', 0))
         return out
 
     def _create_mini_buckets(self, iB: int, ecl: int = None) -> List[List[FastFactor]]:

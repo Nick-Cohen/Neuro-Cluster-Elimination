@@ -9,7 +9,7 @@ class FactorNN(FastFactor):
     """
     A subclass of FastFactor that integrates a neural network for more flexible message computation.
     """
-    def __init__(self, net, data_processor, losses=None):
+    def __init__(self, net, data_processor, losses=None, wmb_spec=None):
         labels = net.bucket.get_message_scope()
         super().__init__(None, labels)
         self.is_nn = True
@@ -19,7 +19,30 @@ class FactorNN(FastFactor):
         self.device = self.gm.device
         self.domain_sizes = [self.gm.matching_var(label).states for label in self.labels]
         self.losses = losses
-        
+        # WMB-as-input (doc 63 / Q60): the frozen recipe for the extra input
+        # columns this net was TRAINED with. Every evaluation site must replay it,
+        # otherwise the net is queried with a different input than it was fitted on.
+        self.wmb_spec = wmb_spec
+        if wmb_spec is not None and list(wmb_spec.labels) != list(self.labels):
+            raise ValueError(
+                f"WMB feature spec scope {wmb_spec.labels} does not match factor "
+                f"scope {self.labels}; the feature columns would be mis-keyed.")
+
+    def _augment(self, one_hot, cols, offsets):
+        """Append the frozen WMB feature columns to a batch of one-hot rows.
+
+        `cols` is the (..., n_labels) int64 column-index matrix that produced
+        `one_hot`, still offset by `offsets`; subtracting them recovers the raw
+        assignment coordinates in `self.labels` order -- the exact ordering the
+        spec was fitted against.
+        """
+        if self.wmb_spec is None:
+            return one_hot
+        coords = (cols - offsets).reshape(-1, cols.shape[-1])
+        feats = self.wmb_spec.columns(coords, dtype=one_hot.dtype,
+                                      device=one_hot.device)
+        return torch.cat([one_hot, feats], dim=1)
+
     def eliminate(self, elim_labels, elimination_scheme='sum'):
         """
         Create a fast factor with labels = self.labels - elim_labels and an empty tensor of the appropriate size.
@@ -248,6 +271,7 @@ class FactorNN(FastFactor):
             cols = torch.where(is_msg_t, msg_cols.unsqueeze(0), elim_cols.unsqueeze(1))
             one_hot = self._one_hot_from_cols(cols, offsets, oh_width, oh_lower,
                                               param_dtype, dev)
+            one_hot = self._augment(one_hot, cols, offsets)
 
             values = self.data_processor.undo_normalization(self.net(one_hot))
             chunks_out.append(values.view(n_elim, chunk_n).T.detach())
@@ -376,6 +400,7 @@ class FactorNN(FastFactor):
             cols = torch.where(is_msg_t, msg_cols.unsqueeze(0), elim_cols.unsqueeze(1))
             one_hot = self._one_hot_from_cols(cols, offsets, oh_width, oh_lower,
                                               param_dtype, dev)
+            one_hot = self._augment(one_hot, cols, offsets)
             vals = self.data_processor.undo_normalization(self.net(one_hot))
             out[:, b0:b1] = vals.view(b, A).T
         if inv is not None:
@@ -433,7 +458,7 @@ class FactorNN(FastFactor):
     
     def to_exact(self):
         """Convert FactorNN to FastFactor."""
-        result = FactorNN.nn_to_FastFactor(fastGM=self.gm, jit_file = None, net = self.net, device=self.device, debug=False, data_processor=self.data_processor)
+        result = FactorNN.nn_to_FastFactor(fastGM=self.gm, jit_file = None, net = self.net, device=self.device, debug=False, data_processor=self.data_processor, wmb_spec=self.wmb_spec)
         return result
 
     def get_factor_complexity(self):
@@ -457,7 +482,7 @@ class FactorNN(FastFactor):
         assert self.labels == sorted(self.labels), "Labels must be sorted"
     
     @staticmethod    
-    def nn_to_FastFactor(fastGM, jit_file = None, net = None, device='cuda', debug=False, data_processor=None):
+    def nn_to_FastFactor(fastGM, jit_file = None, net = None, device='cuda', debug=False, data_processor=None, wmb_spec=None):
         if jit_file is None and net is None or jit_file is not None and net is not None:
             raise ValueError("Exactly one of a JIT file or a PyTorch net must be provided")
         if debug:
@@ -527,6 +552,15 @@ class FactorNN(FastFactor):
                         cols.append((ci == cat_arange[i][1:]).to(param_dtype))
                 chunk_inputs = (torch.cat(cols, dim=1) if cols
                                 else torch.zeros((end - start, 0), dtype=param_dtype, device=device))
+                if wmb_spec is not None:
+                    # Replay the training-time WMB feature columns. `coords` is
+                    # already the per-variable assignment in `scope` order, which
+                    # is the order the spec was fitted against.
+                    coord_mat = torch.stack(coords, dim=1)
+                    chunk_inputs = torch.cat(
+                        [chunk_inputs,
+                         wmb_spec.columns(coord_mat, dtype=param_dtype, device=device)],
+                        dim=1)
                 flat_out[start:end] = model(chunk_inputs).reshape(-1)
 
         outputs = flat_out.reshape(tuple(domain_list))
@@ -571,6 +605,15 @@ class MessageGenerator:
             domain_sizes: List of ints (domain size per scope variable)
             lower_dim: Bool — whether n-1 one-hot encoding was used
         """
+        _cfg = getattr(getattr(net, 'bucket', None), 'config', None) or {}
+        if _cfg.get('wmb_input', 'off') != 'off' or _cfg.get('wmb_residual', False):
+            # MessageGenerator rebuilds a bare Sequential from weights alone; it
+            # cannot reconstruct the WMB feature columns (nor the base factors the
+            # residual arm multiplies back), so it would silently emit a wrong
+            # message. Fail loudly instead.
+            raise ValueError(
+                "MessageGenerator does not support wmb_input / wmb_residual nets: "
+                "the WMB base factors are not part of the saved state.")
         self.state_dict = {k: v.detach().cpu() for k, v in net.state_dict().items()}
         self.hidden_sizes = self._infer_hidden_sizes(net)
         self.activation = self._infer_activation(net)
