@@ -617,6 +617,45 @@ class FastBucket:
             # Sample no-repeat assignments from the WMB proposal tree, evaluate the
             # TRUE message value there, keep the top-K as an exact lookup table and
             # splice it over the trained net. Additive: off unless the flag is set.
+            # --- Constraint audit for the memorization-selection arms (doc 64) ---
+            # The claim under test is that `memorize_selection` changes ONLY which
+            # entries are memorized -- not the NN training target and not the
+            # preprocessor's normalisation. Structurally that holds because the
+            # table is built after t.train() has returned, but a structural
+            # argument is not evidence, so snapshot the normalisation state here
+            # and re-check it after the table is built.
+            def _preproc_snapshot(dp):
+                def _f(v):
+                    if v is None:
+                        return None
+                    return float(v.item()) if hasattr(v, 'item') else float(v)
+                return {
+                    'normalization_mode': getattr(dp, 'normalization_mode', None),
+                    'ln_min': _f(getattr(dp, 'ln_min', None)),
+                    'ln_max': _f(getattr(dp, 'ln_max', None)),
+                    'ln_range': _f(getattr(dp, 'ln_range', None)),
+                    'normalizing_constant': _f(getattr(dp, 'normalizing_constant', None)),
+                    'bw_normalizing_constant': _f(getattr(dp, 'bw_normalizing_constant', None)),
+                    'use_bw_approx': bool(getattr(dp, 'use_bw_approx', False)),
+                }
+
+            if not hasattr(self.gm, 'preproc_audit'):
+                self.gm.preproc_audit = []
+            _pre_snap = _preproc_snapshot(t.data_preprocessor)
+            _audit = {
+                'bucket': self.label,
+                'message_scope': list(self.get_message_scope()),
+                'epochs_trained': int(getattr(self, 'epochs_trained', -1)),
+                'final_train_loss': float(t.losses[-1][1]) if t.losses else None,
+                'final_val_loss': float(t.val_losses[-1][1]) if t.val_losses else None,
+                # The training target is fully determined by the message values and
+                # this normaliser; both are fixed before any selection happens.
+                'preproc_before_memorization': _pre_snap,
+                # Whether the training path ever saw a backward message at all.
+                'dataloader_bw_factors_set': getattr(t.dataloader, 'bw_factors', None) is not None,
+                'dataloader_bw_modifier_set': getattr(t.dataloader, 'bw_modifier', None) is not None,
+            }
+
             if self.config.get('use_memorization_table', False):
                 import time as _mt
                 import math as _math
@@ -649,6 +688,18 @@ class FastBucket:
                           f"frac={_mstats['memorized_fraction']:.4g} "
                           f"(sample {_mstats['sample_seconds']:.1f}s, "
                           f"eval {_mstats['eval_seconds']:.1f}s)")
+
+            # Close the constraint audit: the normalisation the net was trained
+            # against must be byte-identical after the table was built.
+            _post_snap = _preproc_snapshot(t.data_preprocessor)
+            _audit['preproc_after_memorization'] = _post_snap
+            _audit['preproc_unchanged'] = (_pre_snap == _post_snap)
+            if not _audit['preproc_unchanged']:
+                raise RuntimeError(
+                    f"bucket {self.label}: memorization changed the preprocessor's "
+                    f"normalisation ({_pre_snap} -> {_post_snap}); the fw_true/fw_bw "
+                    f"comparison would be confounded.")
+            self.gm.preproc_audit.append(_audit)
 
             # Create FactorNN with trained network (no bw_inv needed - loss handles backward message)
             # WMB arms:

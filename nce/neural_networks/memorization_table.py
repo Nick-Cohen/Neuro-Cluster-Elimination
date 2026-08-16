@@ -312,15 +312,67 @@ def build_memorization_table(bucket, trainer, config):
     y_log10 = trainer.sample_generator.compute_message_values(assignments)
     score = y_log10
     if stats['selection'] == 'fw_bw':
+        # Selection by forward alone memorises the entries with the largest
+        # message value; what actually matters for log Z is the entry's
+        # CONTRIBUTION, forward x backward. Score on that instead.
+        #
+        # The hard part is getting a backward message without enabling
+        # `use_bw_approx`, which doc 57 showed gates THREE things at once:
+        #   (1) attaching bw factors to the dataloader,
+        #   (2) flipping DataPreprocessor.use_bw_approx (the normalising
+        #       constant becomes logsumexp(y+bw) - logsumexp(bw)), and
+        #   (3) making `bw_hat` non-None in the loss, which literally rewrites
+        #       `outputs` and `targets`.
+        # Turning the flag on to obtain (1) also buys (2) and (3), so the arm
+        # would no longer be a pure selection change and the comparison would be
+        # confounded. `FastBucket.get_backward_factor_list()` (doc 54) returns
+        # exactly (1) and nothing else: it reads the already-populated
+        # `approximate_downstream_factors`, sets no trainer state, and -- because
+        # it always passes a non-None `backward_factors` -- never takes
+        # `_get_backward_factors`' branch that mutates the live GM.
+        #
+        # Note this only affects WHICH entries are chosen. `y_sel` below is
+        # always the true FORWARD value, and `dp.normalize(y_final, None)` is
+        # called with bw_vals=None, so neither the stored values nor the
+        # preprocessor's constants can move.
         bw_factors = getattr(trainer.dataloader, 'bw_factors', None)
         bw_mod = getattr(trainer.dataloader, 'bw_modifier', None)
         bw_list = bw_factors if bw_factors is not None else (
             [bw_mod] if bw_mod is not None else None)
+        bw_source = 'dataloader' if bw_list is not None else None
+        if bw_list is None:
+            # Independent approximate backward factors, built from the existing
+            # cluster structure, without touching the training path.
+            try:
+                bw_list = bucket.get_backward_factor_list()
+                if bw_list is not None:
+                    bw_source = 'get_backward_factor_list'
+            except Exception as _bwe:
+                stats['bw_error'] = f"{type(_bwe).__name__}: {_bwe}"
+                bw_list = None
         if bw_list is not None:
             bw_log10 = trainer.sample_generator.compute_backward_values(
                 assignments, backward_factors=bw_list)
             score = y_log10 + bw_log10
             stats['selection_effective'] = 'fw_bw'
+            stats['bw_source'] = bw_source
+            stats['bw_num_factors'] = len(bw_list)
+            with torch.no_grad():
+                _f = torch.isfinite(bw_log10)
+                stats['bw_finite_frac'] = float(_f.float().mean())
+                if _f.any():
+                    stats['bw_range_log10'] = [float(bw_log10[_f].min()),
+                                               float(bw_log10[_f].max())]
+                # How much does the backward actually re-order the entries? If
+                # this is ~1.0 the two arms memorise the same set and a null
+                # result means "no difference to make", not "no benefit".
+                _k = min(int(_budget(msg_size,
+                                     config.get('memorize_top_k', 0),
+                                     config.get('memorize_frac', 0.0))),
+                         int(score.numel()))
+                _a = set(torch.topk(y_log10, _k).indices.tolist())
+                _b = set(torch.topk(score, _k).indices.tolist())
+                stats['topk_overlap_frac'] = len(_a & _b) / max(1, _k)
         else:
             stats['selection_effective'] = 'fw_true (no bw available)'
     t_eval = time.time() - t0
