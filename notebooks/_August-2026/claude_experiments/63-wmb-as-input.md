@@ -1,14 +1,60 @@
 # 63 — Q60: giving the network the WMB estimate as INPUT
 
-> ## Verdict
-> **The prediction fails. WMB-as-input loses to residual learning on grids by −0.50 dex
-> and does not significantly beat it on RBMs.** Nick's *mechanism* is confirmed — the net
-> does learn to trust WMB where it ranks well and to ignore it where it does not — but the
-> mechanism buys nothing, because on grids "learning to trust" through a tanh MLP is a
-> strictly worse way to use WMB than the residual arm's exact additive path, and on RBMs
-> "learning to ignore" just returns you to baseline. **This closes the direction as posed.**
-> The `partitions` variant adds nothing anywhere (null on all four cells).
-> One repair is well-motivated and untested (§4).
+> ## Verdict — READ THIS FIRST (endpoint corrected 2026-08-22)
+> **The headline below (§2, "input loses to residual on grids by −0.55 dex") rests on an
+> endpoint that does not survive scrutiny, and end-to-end log Z does not support it.**
+> On the *same four cells*, measuring **|log Z − reference|**:
+> - `grid20x20.f10` agrees in direction (input worse, Δ = −1.39) — but the per-seed ranges
+>   **overlap**, so it is not resolvable at 3 seeds;
+> - `grid10x10.f10.wrap` **reverses**: end-to-end has `input` *better* than residual
+>   (Δ = +0.12), where the local metric said it was 0.445 dex worse at p = 1.7e−02;
+> - **not one comparison, on any cell, has separated per-seed ranges.**
+>
+> So the honest current state is **"the four-cell experiment cannot resolve these arms
+> end-to-end"**, not "the prediction fails decisively". The `p = 1.6e−09` in §2 comes from
+> treating clusters within a run as independent units; they are not (they share an
+> elimination and the same trained upstream messages), which inflates significance
+> without the end-to-end answer moving. §3's mechanism finding (the net learns a +0.82
+> sensitivity on grids, +0.02 on RBMs) is a direct measurement and **stands unaffected**.
+>
+> **Status: full-benchmark re-run IN FLIGHT** (21 configs, gpu1, launched 2026-08-22).
+> Final per-family verdicts land when it completes; see §0.
+
+---
+
+## 0. Full-benchmark extension (in flight)
+
+Extended from 4 cells to the **21 non-grid40 configs** of the reduce-NN benchmark set:
+pedigree ×6 (iB=20), grid-small ×6 (iB=10), rbm ×6 (iB=20), rbm ×3 (iB=10). Pedigree was
+untested here and is the largest gap. `grid40x40` is **deliberately excluded**: measured
+from the live sweep, `grid40x40.f15.wrap` at sub D=10 costs 41,734 s per run, so 8 configs
+× 21 runs ≈ 1,948 GPU-hours ≈ 81 days on one card — a separate decision, not something to
+slip in.
+
+Each group uses **its own** iB/ecl from the benchmark set (`ecl = 2**iB + 1`); the old
+`63_drive.sh` hardcoded `--ib 10 --ecl 1025` and could not express this, so the queue is
+now `q60_queue.py` — restartable (it indexes completed runs by `(problem, iB, merge, D,
+arm, seed)` read out of each JSON, so relaunching never redoes work) and watchdogged by
+`scripts/q60_watchdog.sh`, because this box kills multi-day detached processes.
+
+**Endpoint change, applied to every table below §2.** Primary is now
+**end-to-end |log Z − reference|**, per problem, mean over 3 seeds, **with the per-seed
+range shown**, and significance judged by whether those ranges separate — plus a sign test
+over *cells*, which is the one sign test that is legitimate here since distinct benchmark
+problems are independent. Per-cluster local error is retained as **secondary** and
+disagreements are flagged. References are `results_for_writeup/problem_overview_table.csv`
+`ref_log10Z` where `ref_kind == 'exact'` (17 problems); `rbm_ferro_20` has no exact
+reference and is reported reference-free.
+
+> **Reference discrepancy to resolve:** for `pedigree51` the overview table gives
+> **−73.87** (`exact`) while `benchmark_set.json` gives **−77.27** and the catalog PR is
+> `nan`. That is a 3.4-unit gap on a problem whose arms will differ by ~1. Per instruction
+> the overview table is used, but no `pedigree51` conclusion should be drawn until Nick
+> confirms which reference is right.
+
+Analysis: `q60_e2e_analyze.py --exp 63 /tmp/claude-58902/res63`.
+
+---
 
 Branch `exp/wmb-input-and-fwbw` off `frozen-rerun-v3` (`5d3c8d4`), pushed.
 **gpu1 only**, strictly sequential, 44 runs + 4 calibration, zero failures.
@@ -46,7 +92,10 @@ Metric: paired per-cluster `|signed_local_error|`, unit `(problem, seed, bucket)
 
 ---
 
-## 2. Result — `input` vs `residual` (PRE-REGISTERED PRIMARY, seeds 42+43)
+## 2. Result — `input` vs `residual` (SUPERSEDED local-error endpoint, seeds 42+43)
+
+> Retained for the record. This is the **secondary** endpoint now; see the
+> verdict block and §0 for why, and for the end-to-end numbers that replace it.
 
 | cell | family | n | win/loss | **gain dex** | p_sign | p_wilcoxon |
 |---|---|---|---|---|---|---|
