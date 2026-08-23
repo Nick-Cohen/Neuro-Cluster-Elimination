@@ -68,10 +68,13 @@ flagged. References: `results_for_writeup/problem_overview_table.csv` `ref_log10
 `ref_kind == 'exact'` (17 problems). `rbm_ferro_20` has no exact reference and is reported
 reference-free.
 
-> **Reference discrepancy to resolve:** `pedigree51` is **−73.87** (`exact`) in the overview
-> table but **−77.27** in `benchmark_set.json`, with catalog PR `nan` — a 3.4-unit gap on a
-> problem whose arms will differ by ~1. The overview table is used per instruction; draw no
-> `pedigree51` conclusion until Nick confirms which reference is right.
+> **`pedigree51` reference — RESOLVED, not an open question.** `−73.871` is correct and
+> supersedes `−77.27`; Nick confirmed 2026-08-22 ("the higher value one is the correct one"),
+> and the correction is already on the record in `docs/25` U10 (exact-solver validated,
+> checked against pedigree13 to 4e-6) and `docs/27` §8, which treats `−77.27` as the
+> *pre-correction* value. The overview table this analysis reads already carries `−73.871`,
+> so **no result here was affected**. The stale `−77.27` in
+> `reduce_nn_experiment/benchmark_set.json` has been corrected to match.
 
 ## 2. Constraints held
 

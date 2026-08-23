@@ -46,11 +46,13 @@ disagreements are flagged. References are `results_for_writeup/problem_overview_
 `ref_log10Z` where `ref_kind == 'exact'` (17 problems); `rbm_ferro_20` has no exact
 reference and is reported reference-free.
 
-> **Reference discrepancy to resolve:** for `pedigree51` the overview table gives
-> **−73.87** (`exact`) while `benchmark_set.json` gives **−77.27** and the catalog PR is
-> `nan`. That is a 3.4-unit gap on a problem whose arms will differ by ~1. Per instruction
-> the overview table is used, but no `pedigree51` conclusion should be drawn until Nick
-> confirms which reference is right.
+> **`pedigree51` reference — RESOLVED, not an open question.** `−73.871` is correct and
+> supersedes `−77.27`; Nick confirmed 2026-08-22 ("the higher value one is the correct one"),
+> and the correction is already on the record in `docs/25` U10 (exact-solver validated,
+> checked against pedigree13 to 4e-6) and `docs/27` §8, which treats `−77.27` as the
+> *pre-correction* value. The overview table this analysis reads already carries `−73.871`,
+> so **no result here was affected**. The stale `−77.27` in
+> `reduce_nn_experiment/benchmark_set.json` has been corrected to match.
 
 Analysis: `q60_e2e_analyze.py --exp 63 /tmp/claude-58902/res63`.
 

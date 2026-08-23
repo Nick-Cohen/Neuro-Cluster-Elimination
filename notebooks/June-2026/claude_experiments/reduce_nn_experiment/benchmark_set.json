@@ -1,0 +1,60 @@
+{
+  "description": "Reduce-NN re-sweep benchmark set (recorded 2026-06-10). ref_logZ are user-provided (log10 Z). ecl = 2**iB + 1. Run with new flags: reduce_nn_backtrack, stream_nn_exact, NCE_SAMPLE_BLOCK_LOG2/ACHUNK.",
+  "ecl_rule": "ecl = 2**iB + 1   (iB=20 -> 1048577, iB=10 -> 1025)",
+  "groups": [
+    {
+      "group": "pedigree", "iB": 20, "ecl": 1048577,
+      "problems": [
+        {"key": "pedigree/pedigree13", "k": 3, "nv": 888, "w": 33, "ref_logZ": -31.18,  "catalog_pr": -31.177564},
+        {"key": "pedigree/pedigree41", "k": 5, "nv": 885, "w": 32, "ref_logZ": -76.04,  "catalog_pr": -76.038947},
+        {"key": "pedigree/pedigree51", "k": 5, "nv": 871, "w": 35, "ref_logZ": -73.871, "catalog_pr": null, "note": "catalog PR is nan; -73.871 from the exact-solver correction (docs 25 U10 / 27), superseding the stale -77.27 table value"},
+        {"key": "pedigree/pedigree34", "k": 5, "nv": 922, "w": 33, "ref_logZ": -64.23,  "catalog_pr": -64.229236},
+        {"key": "pedigree/pedigree7",  "k": 4, "nv": 867, "w": 34, "ref_logZ": -64.82,  "catalog_pr": -64.824451},
+        {"key": "pedigree/pedigree19", "k": 5, "nv": 693, "w": 28, "ref_logZ": -59.020, "catalog_pr": -59.024896}
+      ]
+    },
+    {
+      "group": "grid40x40", "iB": 20, "ecl": 1048577,
+      "problems": [
+        {"key": "grids/grid40x40.f10",      "k": 2, "nv": 1600, "w": 55,  "ref_logZ": 5490, "catalog_pr": null},
+        {"key": "grids/grid40x40.f5",       "k": 2, "nv": 1600, "w": 55,  "ref_logZ": 2800, "catalog_pr": null},
+        {"key": "grids/grid40x40.f2",       "k": 2, "nv": 1600, "w": 55,  "ref_logZ": 1220, "catalog_pr": null},
+        {"key": "grids/grid40x40.f15",      "k": 2, "nv": 1600, "w": 55,  "ref_logZ": 8200, "catalog_pr": null},
+        {"key": "grids/grid40x40.f10.wrap", "k": 2, "nv": 1600, "w": 114, "ref_logZ": 5637, "catalog_pr": null},
+        {"key": "grids/grid40x40.f5.wrap",  "k": 2, "nv": 1600, "w": 114, "ref_logZ": 2819, "catalog_pr": null},
+        {"key": "grids/grid40x40.f2.wrap",  "k": 2, "nv": 1600, "w": 114, "ref_logZ": 1231, "catalog_pr": null},
+        {"key": "grids/grid40x40.f15.wrap", "k": 2, "nv": 1600, "w": 114, "ref_logZ": 8230, "catalog_pr": null}
+      ]
+    },
+    {
+      "group": "grid-small", "iB": 10, "ecl": 1025,
+      "problems": [
+        {"key": "grids/grid10x10.f10.wrap", "k": 2, "nv": 100, "w": 21, "ref_logZ": 333.32,  "catalog_pr": 333.321335},
+        {"key": "grids/grid10x10.f10",      "k": 2, "nv": 100, "w": 13, "ref_logZ": 303.086, "catalog_pr": 303.085957},
+        {"key": "grids/grid20x20.f2",       "k": 2, "nv": 400, "w": 27, "ref_logZ": 291.733, "catalog_pr": 291.732653},
+        {"key": "grids/grid20x20.f10",      "k": 2, "nv": 400, "w": 27, "ref_logZ": 1311.98, "catalog_pr": 1311.983857},
+        {"key": "grids/grid20x20.f5",       "k": 2, "nv": 400, "w": 27, "ref_logZ": 665.12,  "catalog_pr": 665.116467},
+        {"key": "grids/grid20x20.f15",      "k": 2, "nv": 400, "w": 27, "ref_logZ": 1962.98, "catalog_pr": 1962.977036}
+      ]
+    },
+    {
+      "group": "rbm", "iB": 20, "ecl": 1048577,
+      "problems": [
+        {"key": "dbn/rbm_20",        "k": 2, "nv": 40, "w": 20, "ref_logZ": 58.53,  "catalog_pr": 58.530663},
+        {"key": "dbn/rbm_21",        "k": 2, "nv": 42, "w": 21, "ref_logZ": 63.15,  "catalog_pr": 63.146712},
+        {"key": "dbn/rbm_22",        "k": 2, "nv": 44, "w": 22, "ref_logZ": 66.55,  "catalog_pr": 66.553783},
+        {"key": "dbn/rbm_ferro_20",  "k": 2, "nv": 40, "w": 20, "ref_logZ": 151.16, "catalog_pr": 151.155399},
+        {"key": "dbn/rbm_ferro_21",  "k": 2, "nv": 42, "w": 21, "ref_logZ": 152.62, "catalog_pr": 152.616509},
+        {"key": "dbn/rbm_ferro_22",  "k": 2, "nv": 44, "w": 22, "ref_logZ": 166.11, "catalog_pr": 166.110704}
+      ]
+    },
+    {
+      "group": "rbm", "iB": 10, "ecl": 1025,
+      "problems": [
+        {"key": "dbn/rbm_20", "k": 2, "nv": 40, "w": 20, "ref_logZ": 58.53, "catalog_pr": 58.530663},
+        {"key": "dbn/rbm_21", "k": 2, "nv": 42, "w": 21, "ref_logZ": 63.15, "catalog_pr": 63.146712},
+        {"key": "dbn/rbm_22", "k": 2, "nv": 44, "w": 22, "ref_logZ": 66.55, "catalog_pr": 66.553783}
+      ]
+    }
+  ]
+}
