@@ -34,6 +34,7 @@ NESTED_SECTIONS = OrderedDict([
     ('inference', {
         'exact_computation_limit': _field('ecl', default=0),
         'ecl':                     _field('ecl', default=0),
+        'merge_bound_mode':        _field('merge_bound_mode', default='bits'),
         'i_bound':                 _field('iB', default=0),
         'iB':                      _field('iB', default=0),
         'ib2':                     _field('ib2', default=None),
@@ -207,6 +208,12 @@ NEUROBE_DEFAULTS = {
     'nbe_early_stopping': False,
     'lower_dim': True,
     'sampling_scheme': 'all',
+    # Merge bounds are log2 of the product of the eliminated variables' domain
+    # sizes, not a count of variables. Identical on binary problems; on the
+    # pedigrees (k_max=5) a 10-variable eliminator spans 2^10..2^23, so the
+    # variable count was not a bound on work at all. 'vars' restores the old
+    # reading for anyone who wants the i-bound stated the literature's way.
+    'merge_bound_mode': 'bits',
     'iB': 25,
     'debug': False,
     'traced_losses': [],

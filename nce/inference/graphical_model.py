@@ -586,6 +586,50 @@ class FastGM:
         scope.update(v.label for v in b.elim_vars)
         return scope
 
+
+    # ------------------------------------------------------------------ #
+    # Bound arithmetic: bounds are in BITS, not variables.
+    # ------------------------------------------------------------------ #
+    def _states_of(self):
+        """label -> domain size, for every variable in the model."""
+        return {v.label: self.matching_var(v.label).states for v in self.vars}
+
+    def _within_merge_bound(self, labels, bound, states, mode='bits'):
+        """Is a cluster eliminating `labels` inside `bound`?
+
+        The bound is log2 of the PRODUCT OF THE DOMAIN SIZES of the eliminated
+        variables -- the real size of the block the cluster has to enumerate --
+        not a count of variables. For binary domains the two agree exactly
+        (prod = 2^n, so prod > 2^D iff n > D), which is why every result on the
+        all-binary grids and RBMs is unaffected; they diverge as soon as a
+        variable has more than two states. On the pedigrees (k_max = 5) a
+        10-variable eliminator can be anywhere from 2^10 to 2^23, so a
+        "bound of 10" was silently buying up to 8,000x more work on those
+        problems than on the grids it was being compared against.
+
+        Compared as exact integers (prod vs 2**bound), never in floating point,
+        so the binary case reduces to the old test bit for bit.
+
+        mode='vars' restores the old variable-count reading. It is kept because
+        the i-bound is stated in variables in the mini-bucket literature and
+        people reading the code expect to be able to ask for that.
+        """
+        if bound is None:
+            return True
+        if mode == 'vars':
+            return len(labels) <= int(bound)
+        prod = 1
+        cap = 1 << int(bound)
+        for l in labels:
+            prod *= int(states[l])
+            if prod > cap:           # early out: these products get large fast
+                return False
+        return True
+
+    @property
+    def _merge_bound_mode(self):
+        return self.config.get('merge_bound_mode', 'bits')
+
     def merge_join_tree(self, verbose=False, max_merge_bound=None, max_cluster_size=None):
         """Merge buckets along the bucket tree wherever the join-tree subsumption
         condition holds: a child whose scope-at-elim-time contains its parent's
@@ -606,6 +650,7 @@ class FastGM:
         if max_cluster_size is not None and max_merge_bound is None:
             max_merge_bound = max_cluster_size
 
+        _states = self._states_of()
         # Initialise scope cache on each bucket
         for key_var, b in self.buckets.items():
             b._scope_at_elim = set(self.message_scopes.get(key_var.label, []))
@@ -625,9 +670,12 @@ class FastGM:
                 if parent_bucket is None or parent_bucket is cur_bucket:
                     break
                 parent_scope = parent_bucket._scope_at_elim
-                # Optional safeguard: cap the number of elim_vars per cluster (merge bound).
-                merged_size = len(set(cur_bucket.elim_vars + parent_bucket.elim_vars))
-                if max_merge_bound is not None and merged_size > int(max_merge_bound):
+                # Merge bound: log2 of the product of the eliminated variables'
+                # domain sizes (see _within_merge_bound). NOT a variable count.
+                merged_labels = {v.label for v in cur_bucket.elim_vars} | \
+                                {v.label for v in parent_bucket.elim_vars}
+                if not self._within_merge_bound(merged_labels, max_merge_bound,
+                                                _states, self._merge_bound_mode):
                     break
                 if cur_scope >= parent_scope:
                     # Absorb cur into parent
@@ -674,6 +722,7 @@ class FastGM:
 
         Pre-condition: calculate_message_scopes() has been called.
         """
+        _states = self._states_of()
         for key_var, b in self.buckets.items():
             b._scope_at_elim = set(self.message_scopes.get(key_var.label, []))
             b._scope_at_elim.update(v.label for v in b.elim_vars)
@@ -691,8 +740,10 @@ class FastGM:
                 if parent_bucket is None or parent_bucket is cur_bucket:
                     break
                 parent_scope = parent_bucket._scope_at_elim
-                merged_size = len(set(cur_bucket.elim_vars + parent_bucket.elim_vars))
-                if max_merge_bound is not None and merged_size > int(max_merge_bound):
+                merged_labels = {v.label for v in cur_bucket.elim_vars} | \
+                                {v.label for v in parent_bucket.elim_vars}
+                if not self._within_merge_bound(merged_labels, max_merge_bound,
+                                                _states, self._merge_bound_mode):
                     break
                 if cur_scope >= parent_scope:
                     break  # subsumption (free) merge -> NOT taken in this mode
@@ -919,7 +970,8 @@ class FastGM:
                 pvar = min(cand, key=lambda kv: pos[kv])
                 pb = self.buckets[pvar]
                 p_elim = {v.label for v in pb.elim_vars}
-                if D is not None and len(elim | p_elim) > D:
+                if not self._within_merge_bound(elim | p_elim, D, states,
+                                                self._merge_bound_mode):
                     return None
                 p_is_nn = is_nn(set(pb._scope_at_elim), p_elim)
                 elim |= p_elim; scope |= pb._scope_at_elim
