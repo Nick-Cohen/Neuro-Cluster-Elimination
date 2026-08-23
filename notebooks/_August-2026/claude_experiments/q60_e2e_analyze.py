@@ -95,10 +95,24 @@ def main():
     ap.add_argument('--exp', type=int, required=True, choices=[63, 64])
     ap.add_argument('roots', nargs='+')
     ap.add_argument('--out', default=None)
+    # doc 63 also has a 2000-epoch sweep on disk -- a DELIBERATE separate
+    # more-epochs experiment, not part of this comparison. The paper protocol is
+    # 500 (config_schema default; the rerun never overrides it, verified across
+    # all 835 runs). Mixing the two inside one cell would compare arms trained to
+    # different budgets, so filter rather than glob everything.
+    ap.add_argument('--num-epochs', type=int, default=500,
+                    help='keep only runs at this epoch budget (0 = keep all)')
     args = ap.parse_args()
 
     refs = load_refs()
     runs = [r for r in load_runs(args.roots) if r['arm'] in ARMS[args.exp]]
+    if args.num_epochs:
+        n_before = len(runs)
+        runs = [r for r in runs if int(r.get('num_epochs', 0)) == args.num_epochs]
+        if n_before != len(runs):
+            print(f"[epochs] kept {len(runs)} of {n_before} runs at "
+                  f"num_epochs={args.num_epochs}; {n_before - len(runs)} at other "
+                  f"budgets excluded (see --num-epochs)")
 
     lines = []
 

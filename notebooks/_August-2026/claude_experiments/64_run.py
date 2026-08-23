@@ -35,6 +35,10 @@ def main():
     ap.add_argument('--D', type=int, default=10)
     ap.add_argument('--seed', type=int, default=42)
     ap.add_argument('--arm', required=True, choices=['base', 'fw_true', 'fw_bw'])
+    # Local error is the SECONDARY endpoint (end-to-end log Z is primary), and it costs
+    # ~22 s/cluster -- ~23% of a pedigree run. The queue turns it on for seed 42 only,
+    # which keeps the diagnostic while dropping two thirds of its cost.
+    ap.add_argument('--local-error', type=int, default=1)
     # doc 50's recommendation: memorize 10% of entries, constant 2:1 oversample.
     ap.add_argument('--mem-frac', type=float, default=0.1)
     ap.add_argument('--sample-frac', type=float, default=0.2)
@@ -55,7 +59,7 @@ def main():
         stream_nn_exact=True, dope_factors=True,
         device='cuda', seed=args.seed, approximation_method='nn',
         verbose_merge=False, num_epochs=args.num_epochs,
-        compute_local_error=True,
+        compute_local_error=bool(args.local_error),
         # Backward factors are POPULATED for every arm, including fw_true and
         # base, so the arms differ only in whether the selection rule reads them.
         # (populate_bw_factors does not enable use_bw_approx; doc 57.)

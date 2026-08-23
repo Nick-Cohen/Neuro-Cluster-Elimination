@@ -49,7 +49,13 @@ ARMS63 = ['base', 'residual', 'input', 'parts']
 ARMS64 = ['base', 'fw_true', 'fw_bw']
 SEEDS = [42, 43, 44]
 MERGE, D = 'sub', 10
-EPOCHS63, EPOCHS64 = 2000, 500      # each doc's own established protocol -- untouched
+# 500 for both: the study default (config_schema DEFAULTS['num_epochs']), set by Nick
+# 2026-08-23. doc 63 previously ran 2000, which was BINDING -- its base disagreed with
+# the paper rerun on 5 of 14 overlapping cells because those clusters were still
+# improving when a 500-epoch budget cut them off. Everything doc 63 produced at 2000 is
+# superseded and archived, not reused; see index_done, which now keys on num_epochs so
+# a 2000-epoch run can never satisfy a 500-epoch job.
+EPOCHS63, EPOCHS64 = 500, 500
 
 
 def slug(problem):
@@ -101,7 +107,7 @@ def index_done(root):
         try:
             r = json.loads(f.read_text())
             done[(r['problem'], int(r['iB']), r['merge'], int(r['D']),
-                  r['arm'], int(r['seed']))] = str(f)
+                  r['arm'], int(r['seed']), int(r['num_epochs']))] = str(f)
         except Exception:
             continue
     return done
@@ -131,7 +137,8 @@ def main():
     roots = {63: args.root63, 64: args.root64}
     done = {63: index_done(roots[63]), 64: index_done(roots[64])}
     todo = [s for s in order
-            if (s['problem'], s['ib'], MERGE, D, s['arm'], s['seed']) not in done[s['exp']]]
+            if (s['problem'], s['ib'], MERGE, D, s['arm'], s['seed'], s['epochs'])
+            not in done[s['exp']]]
 
     n_skip = len(order) - len(todo)
     hdr = (f"[q60] planned={len(order)} already_done={n_skip} todo={len(todo)}")
@@ -154,7 +161,7 @@ def main():
         log.write(f"\n===== q60 queue start {time.strftime('%FT%T')} {hdr} =====\n")
         log.flush()
         for n, s in enumerate(todo, 1):
-            key = (s['problem'], s['ib'], MERGE, D, s['arm'], s['seed'])
+            key = (s['problem'], s['ib'], MERGE, D, s['arm'], s['seed'], s['epochs'])
             # cheap incremental re-check (the initial index is authoritative; each
             # completed run is folded in below, so no rglob per iteration)
             if key in done[s['exp']]:
@@ -167,8 +174,10 @@ def main():
                    '--seed', str(s['seed']), '--ib', str(s['ib']), '--ecl', str(s['ecl']),
                    '--merge', MERGE, '--D', str(D), '--num-epochs', str(s['epochs']),
                    '--tag', tag, '--outdir', str(odir)]
-            if s['exp'] == 63:
-                cmd += ['--local-error', '1']
+            # Secondary endpoint, ~22 s/cluster (~23% of a pedigree run). Seed 42 only:
+            # enough to keep the per-cluster diagnostic that exposed the memorization
+            # collapse, without paying for it three times over.
+            cmd += ['--local-error', '1' if s['seed'] == 42 else '0']
             log.write(f"=== {time.strftime('%FT%T')} [{n}/{len(todo)}] doc{s['exp']} "
                       f"{s['problem']} iB{s['ib']} {s['arm']} s{s['seed']} ===\n")
             log.flush()
