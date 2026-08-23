@@ -385,6 +385,39 @@ def build_memorization_table(bucket, trainer, config):
     finite = torch.isfinite(y_sel)
     sel, y_sel = sel[finite], y_sel[finite]
 
+    # ---- 3b. how much MASS did we actually catch? ------------------------ #
+    # The memoriser is a hedge against LOW-ENTROPY messages: cases where a
+    # handful of entries hold most of the probability mass, which uniform
+    # training samples are unlikely ever to draw. So the diagnostic that matters
+    # is not "what fraction of entries did we cover" -- that necessarily falls as
+    # messages grow, and is expected to -- but "what fraction of the MASS did the
+    # kept entries hold". A cap of 100k entries covering 0.16% of a 2^26 message
+    # is doing its job if those 100k carry most of the mass, and is not doing its
+    # job if the message is near-uniform (in which case there was nothing to
+    # hedge and the NN was already fine).
+    #
+    # Computed over the SAMPLED POOL, not the full message: these samples come
+    # from the WMB proposal without replacement, so this is the captured share of
+    # the sampled mass, not an unbiased estimate of the true share. It is still
+    # the right shape -- near 1.0 means concentrated and caught, near k/n means
+    # flat -- and it needs no extra message evaluations.
+    with torch.no_grad():
+        _fin = torch.isfinite(y_log10)
+        if _fin.any():
+            _m = float(y_log10[_fin].max())
+            _lin_all = torch.exp((y_log10[_fin] - _m) * math.log(10.0))
+            _ysel_fin = y_sel[torch.isfinite(y_sel)]
+            _lin_sel = torch.exp((_ysel_fin - _m) * math.log(10.0))
+            _tot = float(_lin_all.sum())
+            stats['mass_captured_frac_of_sampled'] = (
+                float(_lin_sel.sum()) / _tot if _tot > 0 else None)
+            # Concentration of the sampled pool itself, as a reference point:
+            # what share sits in the top 10 and top 100 entries.
+            _srt, _ = torch.sort(_lin_all, descending=True)
+            stats['sampled_mass_top10'] = float(_srt[:10].sum()) / _tot if _tot > 0 else None
+            stats['sampled_mass_top100'] = float(_srt[:100].sum()) / _tot if _tot > 0 else None
+            stats['entries_kept_frac_of_sampled'] = float(_ysel_fin.numel()) / float(_fin.sum())
+
     # Sort by key and drop duplicates (the NR sampler should not emit any, but a
     # duplicate would silently corrupt the (key, value) pairing).
     keys_all = pack_assignments(assignments[sel], domain_sizes)

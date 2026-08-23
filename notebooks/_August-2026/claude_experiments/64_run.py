@@ -42,6 +42,16 @@ def main():
     # doc 50's recommendation: memorize 10% of entries, constant 2:1 oversample.
     ap.add_argument('--mem-frac', type=float, default=0.1)
     ap.add_argument('--sample-frac', type=float, default=0.2)
+    # ABSOLUTE caps. _budget() takes min(msg_size, abs_cap?, frac*msg_size) but only
+    # includes abs_cap if it is TRUTHY, and this experiment passed 0 for both -- so
+    # the only surviving term was frac*msg_size. A fraction of the message is not a
+    # cap; it is a constant multiple of the thing you are trying to bound. The largest
+    # grid/RBM cluster is 2^20, pedigree reaches 2^26, so pedigree was asking the
+    # memoriser for 64x the work per cluster. Defaults below pin the budget to what a
+    # 2^20 cluster gets, which is what "capped" was meant to mean; pass 0 to restore
+    # the unbounded proportional behaviour.
+    ap.add_argument('--mem-top-k', type=int, default=104858)        # 0.1 * 2**20
+    ap.add_argument('--mem-num-samples', type=int, default=209716)  # 0.2 * 2**20
     ap.add_argument('--bw-ecl', type=int, default=1024)
     ap.add_argument('--num-epochs', type=int, default=500)
     ap.add_argument('--tag', default='run')
@@ -80,8 +90,8 @@ def main():
             use_memorization_table=True,
             memorize_frac=args.mem_frac,
             memorize_sample_frac=args.sample_frac,
-            memorize_top_k=0,
-            memorize_num_samples=0,
+            memorize_top_k=args.mem_top_k,
+            memorize_num_samples=args.mem_num_samples,
             memorize_selection=args.arm,
         )
 
@@ -107,6 +117,7 @@ def main():
         'problem': args.problem, 'arm': args.arm, 'seed': args.seed,
         'iB': args.ib, 'ecl': args.ecl, 'merge': args.merge, 'D': args.D,
         'mem_frac': args.mem_frac, 'sample_frac': args.sample_frac,
+        'mem_top_k': args.mem_top_k, 'mem_num_samples': args.mem_num_samples,
         'bw_ecl': args.bw_ecl, 'num_epochs': args.num_epochs,
         'log_z': float(gm.log_partition_function), 'ref_logZ': ref,
         'wall_seconds': wall,
